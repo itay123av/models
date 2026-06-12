@@ -1,0 +1,2030 @@
+﻿<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#eef2ff">
+<title>מודלים חישוביים — סדנה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#ffffff;
+  --bg:#eef2ff;
+  --panel:#ffffff;
+  --ink:#1e293b;
+  --ink-strong:#312e81;
+  --muted:#64748b;
+  --line:#e3e8f4;
+  --indigo:#4f46e5;
+  --indigo-2:#818cf8;
+  --indigo-soft:#eef2ff;
+  --green:#16a34a;
+  --green-soft:#dcfce7;
+  --red:#ef4444;
+  --red-soft:#fee2e2;
+  --amber:#d97706;
+  --amber-soft:#fef3c7;
+  --dot:#dbe1f3;
+  --shadow:0 10px 34px rgba(49,46,129,.12);
+  --shadow-sm:0 2px 10px rgba(49,46,129,.08);
+  --r:16px; --r-sm:11px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Heebo',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:15px; overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+.ic{width:1.1em;height:1.1em;flex-shrink:0;vertical-align:-2px}
+.app{position:fixed; inset:0}
+
+/* ─── FLOATING CARDS ─── */
+.float{position:fixed; z-index:20; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 16px 46px rgba(49,46,129,.17)}
+.float-head{display:flex; align-items:center; gap:9px; padding:11px 15px; border-bottom:1px solid var(--line); cursor:grab; user-select:none; touch-action:none; font-weight:800; color:var(--ink-strong); font-size:15px}
+.float-head:active{cursor:grabbing}
+.grip{width:13px; height:13px; flex-shrink:0; background-image:radial-gradient(var(--muted) 1.3px, transparent 1.5px); background-size:5px 5px; opacity:.6}
+.float-body{padding:14px 15px}
+.brand-icon{width:34px;height:34px; background:linear-gradient(135deg,var(--indigo),var(--indigo-2)); border-radius:10px;
+  display:grid; place-items:center; color:#fff; font-size:18px; font-weight:800; box-shadow:0 6px 18px rgba(79,70,229,.35); flex-shrink:0}
+.brand-float{top:16px; left:16px; display:flex; align-items:center; gap:11px; padding:9px 16px 9px 13px}
+.bf-title{font-weight:800; color:var(--ink-strong); font-size:16px}
+.panel-float{top:58px; right:14px; width:264px; max-height:calc(100dvh - 74px); display:flex; flex-direction:column}
+.panel-float .float-body{overflow-y:auto; padding:12px 13px}
+.cp-model{display:flex; align-items:center; gap:8px}
+.cp-model .mtype{font-size:10px; font-weight:800; color:#fff; background:var(--indigo); padding:3px 8px; border-radius:999px; letter-spacing:.5px}
+.cp-model .mname{font-weight:800; color:var(--ink-strong); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.cp-iconbtn{width:28px;height:28px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:7px;display:grid;place-items:center}
+.cp-iconbtn:hover{background:var(--indigo-soft); color:var(--indigo)}
+.cp-sel:not(:empty){margin-top:13px; padding-top:13px; border-top:1px solid var(--line)}
+.cp-sec{margin-top:11px}
+.cp-h{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:800; margin-bottom:9px; display:flex; align-items:center; gap:6px}
+.cp-row{display:flex; gap:8px; flex-wrap:wrap}
+.cp-row .btn{flex:1; min-width:0; padding-left:10px; padding-right:10px}
+.btn-step{background:var(--indigo); color:#fff; border-color:transparent}
+.btn-step:hover{background:#4338ca; color:#fff}
+.tape-float{bottom:18px; left:50%; transform:translateX(-50%); max-width:min(72vw,720px)}
+.tape-float .float-body{padding:12px 14px}
+.stack-float{top:74px; left:16px; max-width:min(42vw,380px)}
+.stack-float .float-body{padding:11px 13px; max-height:calc(100vh - 210px); overflow:auto}
+.stk-hint{margin-top:8px; font-size:10.5px; color:var(--muted); text-align:center; line-height:1.4}
+.cfg-card.idle{opacity:.9}
+.pda-sub{font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 16px}
+.pda-box{width:80px;height:54px;text-align:center;font-size:18px;font-weight:700;color:var(--ink-strong);border:1.5px solid var(--line);border-radius:13px;background:#fff;font-family:'Courier New',monospace}
+.pda-box::placeholder{color:#b8c0d6;font-weight:500;font-size:14px;font-family:'Heebo',sans-serif}
+.pda-box:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.16)}
+.pda-quick{display:flex;justify-content:center;gap:11px}
+.pda-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#f4f6fb;font-size:16px;font-weight:700;color:var(--ink-strong);cursor:pointer;font-family:'Courier New',monospace}
+.pda-chip span{font-size:12px;font-weight:500;color:var(--muted);font-family:'Heebo',sans-serif}
+.pda-chip:hover{border-color:var(--indigo);background:#eef0fb}
+.pda-chip.sm{padding:0 14px;height:48px;font-size:15px}
+.pda-lbl{font-size:12.5px;font-weight:700;color:var(--ink-strong);margin-bottom:7px;text-align:right}
+.pda-row{display:flex;align-items:center;gap:9px}
+.pda-box.wide{width:auto;flex:1;height:48px;font-size:17px}
+.pda-modes{display:flex;gap:8px}
+.pda-mode{flex:1;padding:11px 6px;border:1.5px solid var(--line);border-radius:12px;background:#f4f6fb;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Heebo',sans-serif}
+.pda-mode:hover{border-color:var(--indigo)}
+.pda-mode.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.pda-oplbl{font-size:12px;color:var(--muted);white-space:nowrap;min-width:96px;text-align:right}
+.pda-hint{margin-top:11px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;background:#f4f6fb;border-radius:9px;padding:8px 10px}
+/* ── פענוח AI: הדגשת ביטחון נמוך + תצוגת חיתוך ── */
+.pda-box.lowconf{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 3px rgba(217,119,6,.18)}
+.pda-modes.lowconf{outline:2px solid var(--amber);outline-offset:3px;border-radius:13px}
+.conf-badge{display:inline-flex;align-items:center;align-self:center;gap:3px;font-size:10.5px;font-weight:700;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber);border-radius:8px;padding:3px 7px;white-space:nowrap}
+.ai-crop{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.ai-crop-lbl{font-size:11px;font-weight:700;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line);background:#f4f6fb}
+.ai-crop img{display:block;max-width:100%;max-height:130px;margin:6px auto}
+.ai-crop-fallback{display:none;padding:16px;text-align:center;color:var(--muted);font-size:12px}
+.ai-crop.noimg img{display:none}
+.ai-crop.noimg .ai-crop-fallback{display:block}
+.ai-conf-note{font-size:11px;font-weight:600;color:var(--amber);margin-bottom:11px;text-align:center;background:var(--amber-soft);border:1px solid var(--amber);border-radius:9px;padding:7px 9px}
+.ai-imp-help{font-size:12px;color:var(--muted);margin-bottom:9px;line-height:1.5}
+
+.guide-float{position:fixed; bottom:18px; left:16px; z-index:21; display:flex; flex-direction:column; gap:9px; align-items:flex-start}
+.guide-btn{display:inline-flex; align-items:center; gap:9px; background:var(--ink-strong); color:#fff; border:none; border-radius:999px; padding:11px 18px; font-family:inherit; font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 10px 30px rgba(49,46,129,.28)}
+.guide-body{background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 16px 46px rgba(49,46,129,.17); padding:14px 16px; max-width:320px; max-height:54vh; overflow-y:auto; font-size:13.5px; color:var(--muted); line-height:1.75}
+.guide-body ul{padding-inline-start:18px; display:flex; flex-direction:column; gap:6px}
+.guide-body b{color:var(--ink-strong)}
+/* tabs bar (top) */
+.tabbar{position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; gap:9px; background:#fff; border-bottom:1px solid var(--line); box-shadow:0 4px 16px rgba(49,46,129,.05); padding:7px 12px}
+.tab-add{flex-shrink:0; width:34px; height:34px; border:none; border-radius:9px; background:var(--indigo); color:#fff; font-size:23px; font-weight:700; cursor:pointer; display:grid; place-items:center; line-height:0}
+.tab-add:hover{background:#4338ca}
+.tabs{flex:1; display:flex; gap:6px; overflow-x:auto; overflow-y:hidden; align-items:center; min-width:0; scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:flex; align-items:center; gap:7px; padding:7px 9px; border-radius:9px; background:var(--paper); border:1px solid var(--line); cursor:pointer; white-space:nowrap; flex-shrink:0}
+.tab:hover{border-color:var(--indigo-2)}
+.tab.active{background:var(--indigo-soft); border-color:var(--indigo)}
+.tab-type{font-size:9px; font-weight:800; color:#fff; background:var(--indigo-2); padding:2px 6px; border-radius:999px; letter-spacing:.4px}
+.tab.active .tab-type{background:var(--indigo)}
+.tab-name{font-weight:700; color:var(--ink-strong); overflow:hidden; text-overflow:ellipsis; max-width:120px; font-size:13.5px}
+.tab-x{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:1px 4px; border-radius:5px}
+.tab-x:hover{background:var(--red-soft); color:var(--red)}
+.tabbar-brand{flex-shrink:0; display:flex; align-items:center; gap:9px; font-weight:800; color:var(--ink-strong); font-size:15px; white-space:nowrap; padding-inline-start:6px}
+.tabbar-brand .brand-icon{width:30px; height:30px; font-size:16px; border-radius:9px}
+
+/* ─── BUTTONS ─── */
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:7px; background:var(--panel); color:var(--ink);
+  border:1px solid var(--line); border-radius:999px; padding:10px 17px; font-family:inherit; font-size:14px; font-weight:700;
+  cursor:pointer; transition:border-color .18s,color .18s,background .18s,box-shadow .18s; box-shadow:var(--shadow-sm); min-height:42px}
+.btn:hover{border-color:var(--indigo-2); color:var(--indigo)}
+.btn:disabled{opacity:.45; cursor:default; box-shadow:none}
+.btn-primary{background:var(--indigo); color:#fff; border-color:transparent}
+.btn-primary:hover{background:#4338ca; color:#fff; box-shadow:0 8px 22px rgba(79,70,229,.35)}
+.btn-run{background:var(--green); color:#fff; border-color:transparent}
+.btn-run:hover{background:#15803d; color:#fff}
+.btn-delete{background:var(--red); color:#fff; border-color:transparent}
+.btn-delete:hover{background:#dc2626; color:#fff}
+.btn-icon{padding:0; width:42px; height:42px; border-radius:11px}
+.btn-lg{padding:13px 22px; font-size:15px; min-height:48px}
+.btn-sm{padding:7px 12px; font-size:13px; min-height:36px}
+
+/* ─── CANVAS (full screen) ─── */
+.canvas-area{position:absolute; inset:0; overflow:hidden; background:var(--paper);
+  background-image:radial-gradient(var(--dot) 1.4px, transparent 1.4px); background-size:24px 24px}
+.canvas-area[data-arming="1"]{cursor:crosshair}
+#canvas{width:100%; height:100%; display:block; touch-action:none; user-select:none; -webkit-user-select:none}
+.arm-banner{position:absolute; top:62px; left:50%; transform:translateX(-50%); z-index:6;
+  background:var(--ink-strong); color:#fff; padding:9px 18px; border-radius:999px; font-weight:600; font-size:13.5px;
+  box-shadow:var(--shadow); display:none; align-items:center; gap:8px}
+.arm-banner.show{display:flex}
+.arm-banner b{color:#c7d2fe}
+.stage-empty{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; padding:24px; text-align:center}
+.stage-empty .se{max-width:340px; color:var(--muted)}
+.stage-empty .se .se-ic{width:64px;height:64px;margin:0 auto 14px; color:var(--indigo-2)}
+.stage-empty .se b{color:var(--ink-strong)}
+
+/* SVG graph */
+.node{cursor:grab}
+.node:active{cursor:grabbing}
+.node .ncirc{fill:#fff; stroke:#4338ca; stroke-width:3; transition:stroke .15s,fill .15s,filter .15s}
+.node:hover .ncirc{filter:drop-shadow(0 4px 10px rgba(67,56,202,.28))}
+.node .nacc{fill:none; stroke:#4338ca; stroke-width:2.5}
+.node .nlabel{fill:var(--ink); font-weight:800; font-size:19px; pointer-events:none; font-family:'Heebo',sans-serif}
+.node.sel .ncirc{stroke:var(--indigo); stroke-width:4.5}
+.node.armed .ncirc{stroke:var(--indigo); stroke-width:4.5; stroke-dasharray:8 5}
+.node.active .ncirc{fill:var(--indigo); stroke:#4338ca}
+.node.active .nlabel{fill:#fff}
+.node.active .nacc{stroke:#fff}
+.node.active.ok .ncirc{fill:var(--green)}
+.node.active.bad .ncirc{fill:var(--red)}
+.sarrow{stroke:#475569; stroke-width:3; fill:none}
+.edge .eline{stroke:#475569; stroke-width:2.6; fill:none}
+.edge .ehit{stroke:transparent; stroke-width:22; fill:none; pointer-events:stroke; cursor:pointer}
+.edge .elabel{fill:var(--ink-strong); font-weight:800; font-size:17px; pointer-events:none; paint-order:stroke; stroke:#fff; stroke-width:5px; font-family:'Heebo',sans-serif; direction:ltr; unicode-bidi:bidi-override}
+.edge.sel .eline{stroke:var(--indigo); stroke-width:3.6}
+.edge.active .eline{stroke:var(--green); stroke-width:3.6}
+#arrow path{fill:#475569}
+#arrowG path{fill:var(--green)}
+#arrowA path{fill:var(--amber)}
+.node.ai-low .ncirc{stroke:var(--amber); stroke-width:4.5; fill:var(--amber-soft); filter:drop-shadow(0 0 10px rgba(217,119,6,.32))}
+.node.ai-low .nacc{stroke:var(--amber)}
+.edge.ai-low .eline{stroke:var(--amber); stroke-width:4; stroke-dasharray:9 5; filter:drop-shadow(0 0 7px rgba(217,119,6,.34))}
+.edge.ai-low .elabel{fill:var(--amber); stroke:#fff8e1; stroke-width:6px}
+.edge.ai-low.sel .eline{stroke:#b45309}
+.edge.cur .eline{stroke:var(--green); stroke-width:3.8; transition:stroke .15s}
+.edge.cur .elabel{fill:var(--green)}
+.pulse-dot{fill:var(--green); filter:drop-shadow(0 0 6px rgba(22,163,74,.8)); pointer-events:none}
+.state-ripple{fill:none; stroke:var(--green); stroke-width:3.5; vector-effect:non-scaling-stroke; pointer-events:none; transform-box:fill-box; transform-origin:center; animation:ripple .55s ease-out forwards}
+@keyframes ripple{from{transform:scale(1); opacity:.9} to{transform:scale(2.1); opacity:0}}
+.ai-review-panel{position:fixed;top:64px;right:292px;z-index:18;width:min(340px,calc(100vw - 330px));max-height:42vh;overflow:auto;background:#fff;border:1px solid #f59e0b;border-radius:14px;box-shadow:0 16px 40px rgba(217,119,6,.18);padding:11px 12px;display:none}
+.ai-review-panel.show{display:block}
+.ai-review-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:#92400e;font-weight:900;font-size:13px}
+.ai-review-close{border:none;background:transparent;color:#92400e;font-size:18px;line-height:1;cursor:pointer;border-radius:7px;width:28px;height:28px}
+.ai-review-close:hover{background:var(--amber-soft)}
+.ai-review-item{display:block;width:100%;text-align:right;border:1px solid #fbbf24;background:var(--amber-soft);color:#78350f;border-radius:10px;padding:8px 9px;margin-top:7px;cursor:pointer;font-family:'Heebo',sans-serif}
+.ai-review-item:hover{background:#fde68a}
+.ai-review-main{font-weight:800;font-size:12.5px;direction:ltr;text-align:left}
+.ai-review-sub{font-size:11px;color:#92400e;margin-top:3px;line-height:1.35}
+.rule-edit{display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 8px;margin:5px 0;text-align:right;cursor:pointer;color:var(--ink);font-family:'Heebo',sans-serif}
+.rule-edit:hover{border-color:var(--indigo);background:var(--indigo-soft)}
+.rule-edit.ai-low{border-color:#f59e0b;background:var(--amber-soft);color:#78350f}
+@media (max-width:760px){.ai-review-panel{left:12px;right:12px;top:56px;width:auto;max-height:34vh}}
+/* tape / film strip */
+.tape{position:relative; display:inline-block; background:var(--indigo-soft); border:1.5px solid var(--line); border-radius:14px; padding:16px 14px 12px}
+.tape::before,.tape::after{content:''; position:absolute; left:10px; right:10px; height:6px; background-image:radial-gradient(circle, var(--line) 2px, transparent 2.3px); background-size:15px 6px}
+.tape::before{top:5px} .tape::after{bottom:5px}
+.tape-label{font-size:11px; font-weight:800; color:var(--muted); letter-spacing:.6px; margin-bottom:8px; text-transform:uppercase}
+.tape-cells{display:flex; gap:8px; flex-wrap:nowrap; padding:2px 0}
+.cell{position:relative; display:grid; place-items:center; min-width:42px; height:48px; padding:0 11px; border-radius:9px; background:#fff; border:2px solid var(--line); font-family:'Courier New',monospace; font-weight:800; font-size:21px; color:var(--ink); transition:all .18s}
+.cell.read{background:var(--green-soft); border-color:var(--green); color:var(--green)}
+.cell.head{background:var(--indigo); color:#fff; border-color:transparent; transform:translateY(-3px); box-shadow:0 9px 18px rgba(79,70,229,.32)}
+.cell.stuck{background:var(--red-soft); border-color:var(--red); color:var(--red)}
+.cell.blank{color:var(--muted)}
+.cell.marker{background:#475569; color:#fff; border-color:#475569; font-weight:900}
+.cell .hmark{position:absolute; top:-13px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:9px solid var(--indigo)}
+.cell.empty{font-family:'Heebo',sans-serif; font-weight:600; font-size:14px; color:var(--muted); font-style:italic; border-style:dashed; min-width:150px}
+
+/* ─── INSPECTOR ─── */
+.inspector{background:var(--panel); border-inline-start:1px solid var(--line); overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:16px}
+.sec-title{font-size:12px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:800; margin-bottom:9px; display:flex; align-items:center; gap:6px}
+.fld{width:100%; background:var(--paper); border:1.5px solid var(--line); border-radius:var(--r-sm); padding:11px 12px; color:var(--ink); font-family:inherit; font-size:15px}
+.fld:focus{outline:none; border-color:var(--indigo)}
+.lbl{display:block; font-size:13px; color:var(--muted); font-weight:700; margin:2px 0 6px}
+.help-box{font-size:14px; color:var(--muted); line-height:1.7}
+.help-box ol{padding-inline-start:20px; display:flex; flex-direction:column; gap:9px; margin-top:6px}
+.help-box b{color:var(--ink-strong)}
+.insp-title{font-size:17px; font-weight:800; color:var(--ink-strong); margin-bottom:4px}
+.toggles{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0}
+.chip{display:flex; align-items:center; justify-content:center; gap:6px; padding:11px 8px; border-radius:var(--r-sm);
+  border:1.5px solid var(--line); background:var(--paper); color:var(--muted); font-weight:700; font-size:13.5px; cursor:pointer; transition:all .15s}
+.chip:hover{border-color:var(--indigo-2)}
+.chip.on{background:var(--indigo); color:#fff; border-color:transparent}
+.insp-actions{display:flex; flex-direction:column; gap:9px; margin-top:4px}
+.divider{height:1px; background:var(--line); margin:2px 0}
+
+/* validator */
+.vbadge{display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:999px; font-size:13.5px; font-weight:800; margin:0 0 8px}
+.vbadge.ok{background:var(--green-soft); color:var(--green)}
+.vbadge.amber{background:var(--amber-soft); color:var(--amber)}
+.vbadge.danger{background:var(--red-soft); color:var(--red)}
+.vrow{font-size:13.5px; color:var(--muted); padding:2px 0; line-height:1.55}
+.vrow.warn{color:var(--amber)}
+.vstat{margin-top:11px; padding-top:11px; border-top:1px solid var(--line); font-size:13px; color:var(--muted)}
+.legend-body{font-size:13.5px; color:var(--muted); line-height:1.75}
+.legend-body ul{padding-inline-start:18px; display:flex; flex-direction:column; gap:5px}
+.legend-body b{color:var(--ink-strong)}
+details.legend>summary{cursor:pointer; font-size:12px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:800; list-style:none}
+details.legend>summary::-webkit-details-marker{display:none}
+details.legend[open]>summary{margin-bottom:10px}
+
+/* ─── RUN BAR ─── */
+.run-card{background:var(--indigo-soft); border:1.5px solid #c7d2fe; border-radius:14px; padding:14px}
+.run-btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+.run-btns .btn{flex:1; min-width:84px}
+.insp-sel:not(:empty){margin-top:16px; padding-top:16px; border-top:1px solid var(--line)}
+.simstat{display:flex; flex-direction:column; gap:3px; font-size:13.5px; color:var(--muted)}
+.simstat b{color:var(--ink-strong)}
+.cfg-list{margin-top:6px; display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto}
+.cfg{font-size:12px; color:var(--muted); background:var(--paper); border:1px solid var(--line); border-radius:7px; padding:5px 8px; line-height:1.45; font-family:'Courier New',monospace}
+.cfg b{color:var(--ink-strong)}
+.cfg.acc{background:var(--green-soft); border-color:var(--green); color:var(--green)}
+.cfg.acc b{color:var(--green)}
+.cfg-label{margin-top:11px; font-size:11.5px; font-weight:700; color:var(--ink-strong)}
+.cfg-label span{font-weight:500; color:var(--muted)}
+.cfg-cards{margin-top:7px; display:flex; flex-wrap:wrap; gap:9px; max-height:300px; overflow-y:auto; padding-bottom:2px; align-items:flex-start}
+.cfg-card{flex:0 0 auto; min-width:72px; background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:7px 9px 9px; display:flex; flex-direction:column; align-items:center; gap:7px}
+.cfg-card.acc{background:var(--green-soft); border-color:var(--green)}
+.cfg-card.more-card{justify-content:center; text-align:center; font-size:11px; color:var(--muted); min-width:52px}
+.cfg-top{font-size:11.5px; color:var(--muted); text-align:center; line-height:1.45}
+.cfg-top b{color:var(--ink-strong)}
+.cfg-card.acc .cfg-top, .cfg-card.acc .cfg-top b{color:var(--green)}
+.cfg-rem{display:block; font-size:10.5px; margin-top:1px}
+.stk-wrap{display:flex; flex-direction:column; align-items:center; gap:2px}
+.stk-cap{font-size:9px; font-weight:700; color:var(--green); letter-spacing:.4px}
+.stk{display:flex; flex-direction:column}
+.stk-cell{position:relative; min-width:30px; height:23px; display:flex; align-items:center; justify-content:center; font-family:'Courier New',monospace; font-weight:700; font-size:13px; color:var(--ink-strong); background:#fff; border:1.5px solid var(--indigo); border-bottom:0}
+.stk-cell:last-child{border-bottom:1.5px solid var(--indigo)}
+.stk-cell:first-child{border-radius:5px 5px 0 0}
+.stk-cell.top{color:var(--green); box-shadow:inset 0 0 0 1.5px var(--green); z-index:1}
+.stk-cell.empty{min-width:46px; color:var(--muted); font-weight:600; font-size:10.5px; border:1.5px dashed var(--line); border-radius:5px; font-family:'Heebo',sans-serif}
+.stk-cell.more{color:var(--muted); font-size:10.5px; border-style:dashed; font-family:'Heebo',sans-serif}
+.stk-floor{width:42px; height:5px; background:var(--indigo); border-radius:0 0 4px 4px}
+.cfg-card.acc .stk-cell{border-color:var(--green)}
+.cfg-card.acc .stk-cell.empty{border-color:var(--green); color:var(--green)}
+.cfg-card.acc .stk-floor{background:var(--green)}
+.word-label{display:inline-flex; align-items:center; gap:7px; font-weight:800; color:var(--indigo); font-size:16px}
+.word-label .ic{width:1.3em; height:1.3em}
+.tapebar{flex:0 0 auto; min-width:0; background:transparent; padding:8px 12px}
+#tapeBar{min-width:0; max-width:100%; overflow-x:auto; direction:ltr}
+.tape-empty{color:var(--muted); font-size:14px; padding:8px 2px; direction:rtl}
+.word{width:100%; margin-top:7px; font-family:'Courier New',monospace; font-size:17px; letter-spacing:2px; padding:10px 12px; border:2px solid var(--indigo-2); border-radius:10px; background:#fff; color:var(--ink)}
+.word:focus{outline:none; border-color:var(--indigo); box-shadow:0 0 0 4px rgba(129,140,248,.25)}
+.word::placeholder{color:var(--muted); letter-spacing:0; font-family:'Heebo',sans-serif; font-size:14px}
+.run-extra{display:flex; gap:11px; align-items:center; flex-wrap:wrap}
+.ivis{display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+.ichar{display:grid; place-items:center; min-width:38px; height:42px; padding:0 8px; border-radius:10px; background:var(--paper);
+  border:2px solid var(--line); font-family:'Courier New',monospace; font-weight:700; font-size:19px; color:var(--ink); transition:all .12s}
+.ichar.done{opacity:.4}
+.ichar.cur{background:var(--indigo); color:#fff; border-color:transparent; transform:translateY(-4px); box-shadow:0 8px 16px rgba(79,70,229,.3)}
+.ichar.empty{font-style:italic; color:var(--muted); font-family:inherit; letter-spacing:0}
+.simctrls{display:flex; gap:9px; align-items:center; flex-wrap:wrap}
+.spd{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); font-weight:700}
+.simline{font-size:14px; color:var(--muted)}
+.simline b{color:var(--ink-strong)}
+.simpath{font-size:14px; color:var(--muted); font-family:'Courier New',monospace; word-break:break-word}
+.verdict{padding:11px 20px; border-radius:13px; font-weight:800; font-size:18px; display:inline-flex; align-items:center; gap:9px}
+.verdict.ok{background:var(--green-soft); color:var(--green)}
+.verdict.bad{background:var(--red-soft); color:var(--red)}
+
+/* batch */
+.bhead{display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap}
+.bsum{font-size:14px; font-weight:800; color:var(--ink-strong)}
+.brow{display:flex; gap:8px; align-items:center; margin-bottom:8px}
+.brow .bword{flex:1; font-family:'Courier New',monospace; letter-spacing:2px}
+.brow .bexp{width:120px}
+.bres{min-width:130px; font-size:13.5px; font-weight:800}
+.bres.ok{color:var(--green)} .bres.bad{color:var(--red)}
+
+/* ─── MODAL ─── */
+.modal-bg{position:fixed; inset:0; background:rgba(49,46,129,.35); backdrop-filter:blur(6px); display:none; place-items:center; z-index:100}
+.modal-bg.show{display:grid}
+.modal{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:26px; width:min(560px,93vw); max-height:88vh; overflow-y:auto; box-shadow:var(--shadow); animation:pop .2s}
+@keyframes pop{from{transform:scale(.94); opacity:0}}
+.modal h2{margin-bottom:18px; font-size:21px; color:var(--ink-strong)}
+.modal input,.modal select,.modal textarea{width:100%; background:var(--paper); border:1.5px solid var(--line); border-radius:var(--r-sm); padding:11px; color:var(--ink); font-family:inherit; font-size:15px}
+.modal input:focus,.modal textarea:focus,.modal select:focus{outline:none; border-color:var(--indigo)}
+.modal-actions{display:flex; gap:11px; justify-content:flex-end; margin-top:22px; align-items:center; flex-wrap:wrap}
+.lib-item{display:flex; align-items:center; gap:10px; padding:13px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--paper); margin-bottom:9px}
+.lib-item.cur{border-color:var(--indigo); box-shadow:0 0 0 3px var(--indigo-soft)}
+.lib-item .li-main{flex:1; min-width:0; cursor:pointer}
+.lib-item .li-name{font-weight:800; color:var(--ink-strong); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lib-item .li-meta{font-size:13px; color:var(--muted)}
+.lib-item .li-act{width:34px;height:34px;border:1px solid var(--line);background:var(--panel);border-radius:9px;cursor:pointer;color:var(--muted);display:grid;place-items:center}
+.lib-item .li-act:hover{border-color:var(--indigo-2); color:var(--indigo)}
+
+/* ─── TOAST ─── */
+.toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--ink-strong); color:#fff; padding:13px 22px; border-radius:13px; box-shadow:var(--shadow); font-weight:700; z-index:200; transition:transform .3s; max-width:90vw}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.danger{background:var(--red)}
+.toast.success{background:var(--green)}
+
+@media(max-width:560px){
+  .tabbar-brand{display:none}
+  .panel-float{left:8px; right:8px; width:auto; top:54px; max-height:58dvh}
+  .tape-float{max-width:94vw; bottom:12px}
+  .guide-float{bottom:12px}
+}
+/* ── סריקת שרטוט (מצלמה) ── */
+.scan-modal{width:min(480px,92vw)}
+.scan-state{display:flex;flex-direction:column;align-items:center;gap:12px;padding:6px 2px;text-align:center}
+.scan-state[hidden]{display:none}
+.scan-msg{font-size:13px;color:var(--muted);line-height:1.6}
+.scan-msg b{color:var(--ink-strong)}
+.scan-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:25px;background:linear-gradient(135deg,#eef0fb,#e3e8f4)}
+.scan-ic.warn{background:linear-gradient(135deg,var(--amber-soft),#fde68a);color:var(--amber)}
+.scan-ic.bad{background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626}
+.scan-spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--indigo);animation:scanspin .8s linear infinite}
+@keyframes scanspin{to{transform:rotate(360deg)}}
+.scan-drop{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;padding:26px 14px;border:2px dashed var(--indigo);border-radius:16px;cursor:pointer;background:linear-gradient(180deg,#fbfcff,#f1f3fc);transition:background .25s,border-color .25s,transform .15s,box-shadow .25s}
+.scan-drop:hover,.scan-drop.over{background:linear-gradient(180deg,#f1f3fc,#e7eafd);transform:translateY(-1px);box-shadow:0 8px 20px rgba(79,70,229,.14)}
+.scan-drop-t{font-size:14px;color:var(--ink)}
+.scan-drop-sub{font-size:11.5px;color:var(--muted)}
+.scan-foot{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:10px}
+.scan-tag{font-size:10.5px;color:var(--muted);background:#f4f6fb;border-radius:7px;padding:3px 8px}
+.scan-actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+.scan-img{max-width:100%;max-height:240px;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 22px rgba(49,46,129,.12);transition:opacity .3s}
+.scan-img.dim{opacity:.45}
+.scan-bar{width:100%;height:8px;border-radius:6px;background:#eef0fb;overflow:hidden}
+.scan-bar-fill{height:100%;width:38%;border-radius:6px;background:linear-gradient(90deg,var(--indigo),#8b5cf6,var(--indigo));animation:scanflow 1.4s linear infinite}
+@keyframes scanflow{0%{transform:translateX(-120%)}100%{transform:translateX(330%)}}
+/* ── מעברי צבע חלקים והדרגתיות (גרדיאנטים) ── */
+.btn{transition:background .2s,box-shadow .2s,transform .12s,border-color .2s,color .2s}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:linear-gradient(135deg,#4f46e5,#6d28d9);border-color:transparent}
+.btn-primary:hover{background:linear-gradient(135deg,#5b52f0,#7c3aed);box-shadow:0 6px 16px rgba(79,70,229,.28)}
+.btn-run{background:linear-gradient(135deg,#16a34a,#15803d);border-color:transparent;color:#fff}
+.btn-run:hover{background:linear-gradient(135deg,#1fb456,#16924a);box-shadow:0 6px 16px rgba(22,163,74,.25)}
+.float{transition:box-shadow .25s}
+.float:hover{box-shadow:0 20px 54px rgba(49,46,129,.22)}
+.verdict.ok{background:linear-gradient(135deg,#dcfce7,#bbf7d0)}
+.verdict.bad{background:linear-gradient(135deg,#fee2e2,#fecaca)}
+.tab.active{background:linear-gradient(180deg,#eef0fb,#ffffff)}
+.modal{animation:modalin .18s ease}
+@keyframes modalin{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.node .ncirc,.node .nacc{transition:fill .25s,stroke .25s}
+.edge .eline{transition:stroke .22s}
+.edge .elabel{transition:fill .22s}
+.stk-cell{transition:border-color .25s,color .25s,background .25s}
+.stk-cell.top{animation:stkin .22s ease}
+@keyframes stkin{from{transform:translateY(-9px);opacity:0}to{transform:none;opacity:1}}
+.stk-floor{background:linear-gradient(90deg,var(--indigo),#6d28d9)}
+.cfg-card.acc .stk-floor{background:linear-gradient(90deg,var(--green),#15803d)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- FULL-SCREEN CANVAS -->
+  <div class="canvas-area" id="canvasArea">
+    <div class="arm-banner" id="armBanner"></div>
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z"></path>
+        </marker>
+        <marker id="arrowG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z"></path>
+        </marker>
+        <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z"></path>
+        </marker>
+      </defs>
+      <g id="edges"></g>
+      <g id="nodes"></g>
+    </svg>
+    <div class="ai-review-panel" id="aiReviewPanel"></div>
+    <div class="stage-empty" id="stageEmpty">
+      <div class="se"><div class="se-ic" style="font-size:44px">◯→◎</div><div>לחץ <b>«+ מצב חדש»</b> בלוח הבקרה כדי להתחיל לבנות אוטומט.</div></div>
+    </div>
+  </div>
+
+  <!-- BRAND (top-left) -->
+  <!-- TABS BAR (full-width, top) -->
+  <div class="tabbar" id="tabBar">
+    <button class="tab-add" onclick="newModel()" title="מודל חדש (אוטומט סופי / מכונת טיורינג)">+</button>
+    <div class="tabs" id="tabs"></div>
+    <div class="tabbar-brand"><div class="brand-icon">Σ</div><span>מודלים חישוביים</span></div>
+  </div>
+
+  <!-- CONTROL PANEL (top-right, draggable) -->
+  <div class="float panel-float" id="controlPanel">
+    <div class="float-head"><span class="grip"></span><span>לוח בקרה</span></div>
+    <div class="float-body">
+      <div class="cp-model">
+        <span class="mtype" id="modelType">DFA</span>
+        <span class="mname" id="modelName">—</span>
+        <button class="cp-iconbtn" id="renameBtn" title="שנה שם" onclick="renameModel()"></button>
+      </div>
+      <div class="cp-sec">
+        <div class="cp-h">קובץ</div>
+        <div class="cp-row">
+          <button class="btn btn-sm" id="resetBtn" onclick="resetBoard()"></button>
+          <button class="btn btn-sm" id="libBtn" onclick="openLibrary()"></button>
+          <button class="btn btn-sm" id="saveBtn" onclick="exportCurrent()"></button>
+        </div>
+        <button class="btn btn-sm" id="aiBtn" onclick="openAiScan()" style="width:100%;margin-top:8px;display:none">סרוק שרטוט מצולם (AI)</button>
+      </div>
+      <div class="cp-sec">
+        <div class="cp-h">מצבים</div>
+        <button class="btn btn-primary" id="addStateBtn" onclick="addStateCentered()" style="width:100%"></button>
+        <div class="cp-row" style="margin-top:8px">
+          <button class="btn btn-sm" onclick="zoom(0.82)" title="התקרב">＋</button>
+          <button class="btn btn-sm" onclick="zoom(1.22)" title="התרחק">－</button>
+          <button class="btn btn-sm" onclick="fitView()">⤢ מרכוז</button>
+        </div>
+      </div>
+      <div class="cp-sec">
+        <div class="cp-h" id="wordLabel">הסרט שלך</div>
+        <input id="simWord" class="word" placeholder="הקלד אותיות, למשל aba…" oninput="onWordInput()" onkeydown="if(event.key==='Enter')playRun()">
+        <div class="run-btns">
+          <button class="btn btn-run" id="runBtn" onclick="playRun()"></button>
+          <button class="btn btn-step" id="stepBtn" onclick="stepOnce()"></button>
+        </div>
+        <button class="btn btn-sm" id="batchBtn" onclick="openBatch()" style="width:100%;margin-top:8px"></button>
+        <div id="runControls"></div>
+      </div>
+      <div id="inspector" class="cp-sel"></div>
+    </div>
+  </div>
+
+  <!-- TAPE (bottom-center, draggable) -->
+  <div class="float tape-float" id="tapeFloat">
+    <div class="float-head"><span class="grip"></span><span>סרט הקלט</span></div>
+    <div class="float-body"><div id="tapeBar"></div></div>
+  </div>
+
+  <!-- STACK (PDA only, left side, draggable) -->
+  <div class="float stack-float" id="stackFloat" style="display:none">
+    <div class="float-head"><span class="grip"></span><span>מחסנית</span></div>
+    <div class="float-body"><div id="stackBar"></div></div>
+  </div>
+
+  <!-- GUIDE (bottom-left) -->
+  <div class="guide-float" id="guideFloat">
+    <div class="guide-body" id="guideBody" style="display:none">
+      <ul>
+        <li>עיגול = מצב · עיגול כפול = מצב <b>מקבל</b>.</li>
+        <li>חץ נכנס מבחוץ = המצב <b>ההתחלתי</b> (המצב הראשון שתיצור).</li>
+        <li>תווית "a, b" = מעבר על <b>a</b> וגם על <b>b</b>.</li>
+        <li><b>בניית מעבר:</b> לחץ על מצב מקור ואז על מצב יעד, והקלד סימן.</li>
+        <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
+        <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
+      </ul>
+    </div>
+    <button class="guide-btn" onclick="toggleGuide()"><span>? מדריך</span><span id="guideChev">▴</span></button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="application/json,.json" style="display:none" onchange="onImport(event)">
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   מודלים חישוביים — סדנה לבניית והרצת אוטומטים  ·  עיצוב "לוח לבן"
+   קובץ עצמאי · וניל JS · נתונים ב-localStorage
+   גרסה 1: אוטומט סופי דטרמיניסטי (מלא + לא מלא)
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── helpers ─── */
+const $ = id => document.getElementById(id);
+const qa = sel => [...document.querySelectorAll(sel)];
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg, type=''){ const t=$('toast'); t.textContent=msg; t.className='toast show '+type; setTimeout(()=>t.className='toast',2400); }
+function download(name, text){ const b=new Blob([text],{type:'application/json'}); const u=URL.createObjectURL(b);
+  const a=document.createElement('a'); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000); }
+
+/* ─── inline SVG icons (Lucide-style) ─── */
+const PATHS={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  play:'<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>',
+  fwd:'<path d="M5 6l6 6-6 6M13 6l6 6-6 6"/>',
+  back:'<path d="M19 6l-6 6 6 6M11 6l-6 6 6 6"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v4h4"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  pencil:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  loop:'<path d="M17 1l4 4-4 4M3 11a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13a4 4 0 0 1-4 4H3"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  download:'<path d="M12 3v12M7 11l5 4 5-4M5 21h14"/>',
+  upload:'<path d="M12 21V9M7 13l5-4 5 4M5 3h14"/>',
+  copy:'<path d="M9 9h10v10H9zM5 15V5h10"/>',
+  graph:'<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h6a3 3 0 0 1 3 3v6"/>',
+  film:'<rect x="2.5" y="3" width="19" height="18" rx="2.5"/><path d="M7 3v18M17 3v18M2.5 8h4.5M2.5 12h19M2.5 16h4.5M17 8h4.5M17 16h4.5"/>'
+};
+function ico(name){ return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`; }
+
+/* ─── dialog system ─── */
+function _buildDialog({title, message, body, buttons, dismissValue=null}){
+  return new Promise(resolve=>{
+    const bg=document.createElement('div'); bg.className='modal-bg show';
+    bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
+      ${title?`<h2>${esc(title)}</h2>`:''}
+      ${message?`<p style="color:var(--muted);margin-bottom:16px;line-height:1.6;white-space:pre-wrap">${esc(message)}</p>`:''}
+      <div class="dialog-body"></div><div class="modal-actions"></div></div>`;
+    if(body) bg.querySelector('.dialog-body').appendChild(body);
+    const actions=bg.querySelector('.modal-actions');
+    const close=val=>{ document.removeEventListener('keydown',escH); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150); resolve(val); };
+    (buttons||[]).forEach(btn=>{ const b=document.createElement('button');
+      b.className='btn'+(btn.primary?' btn-primary':'')+(btn.danger?' btn-delete':''); b.textContent=btn.text;
+      b.onclick=()=>close(btn.value); actions.appendChild(b); });
+    bg.addEventListener('click',e=>{ if(e.target===bg) close(dismissValue); });
+    function escH(e){ if(e.key==='Escape'){e.preventDefault(); close(dismissValue);}
+      else if(e.key==='Enter'&&!e.shiftKey&&e.target.tagName!=='TEXTAREA'){ const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){e.preventDefault(); p.click();} } }
+    document.addEventListener('keydown',escH); document.body.appendChild(bg);
+    setTimeout(()=>{ const i=bg.querySelector('input,textarea'); if(i){i.focus(); i.select&&i.select();} else bg.querySelector('.btn-primary,.btn-delete,.btn')?.focus(); },50);
+  });
+}
+function confirmDialog(title, message='', opts={}){
+  return _buildDialog({title, message, buttons:[
+    {text:opts.cancelText||'ביטול', value:false},
+    {text:opts.confirmText||'אישור', value:true, primary:!opts.danger, danger:!!opts.danger}], dismissValue:false});
+}
+function promptDialog(title, opts={}){
+  const wrap=document.createElement('div');
+  if(opts.label){ const l=document.createElement('label'); l.textContent=opts.label;
+    l.style.cssText='display:block;margin-bottom:7px;font-size:14px;color:var(--ink-strong);font-weight:700'; wrap.appendChild(l); }
+  const input=document.createElement('input'); input.type='text';
+  if(opts.placeholder)input.placeholder=opts.placeholder; if(opts.value)input.value=opts.value; wrap.appendChild(input);
+  const SUBMIT=Symbol();
+  return _buildDialog({title, message:opts.message, body:wrap, buttons:[
+    {text:'ביטול', value:null}, {text:opts.confirmText||'שמור', value:SUBMIT, primary:true}], dismissValue:null})
+    .then(v=> v===SUBMIT ? input.value.trim() : null);
+}
+
+/* ─── state ─── */
+const STORE='automata_data_v1';
+let DB={ automata:[], settings:{lastId:null} };
+let current=null, sel={type:null,id:null}, armed=null;
+let view={x:0,y:0,w:1000,h:680};
+const R=40;
+let SIM=null, playTimer=null, speed=600;
+const BLANK='_';   /* תו ריק על הסרט (מכונת טיורינג) */
+function transLabelLines(t){   /* שורה לכל חוק — נערמות אנכית על החץ */
+  if(current && current.type==='tm') return (t.rules||[]).map(r=>`${r.read}→${r.write},${r.move}`);
+  if(current && current.type==='pda') return (t.rules||[]).map(r=>{ const P=pdaRuleParts(r); const pu=P.push.join(''); const act=P.removeTop?(pu?'⊟+'+pu:'⊟'):(pu?'+'+pu:'·'); return `${P.read||'ε'},${P.guard||'ε'}/${act}`; });
+  return [(t.symbols||[]).join(', ')];
+}
+function transLabel(t){ return transLabelLines(t).join('   '); }
+
+function load(){ try{ const raw=localStorage.getItem(STORE); if(raw){ const d=JSON.parse(raw);
+  DB.automata=d.automata||[]; DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e); } }
+function save(){ if(current) current.updated=Date.now(); localStorage.setItem(STORE, JSON.stringify(DB)); }
+const stById = id => current && current.states.find(s=>s.id===id);
+const trById = id => current && current.transitions.find(t=>t.id===id);
+
+/* ─── model ops ─── */
+function newAutomaton(name, type){ return { id:uid(), name:name||'מודל חדש', type:type||'dfa', alphabet:['a','b'],
+  states:[], transitions:[], tests:[], updated:Date.now() }; }
+function openAutomaton(id){ current=DB.automata.find(a=>a.id===id)||DB.automata[0]||null;
+  if(current) DB.settings.lastId=current.id; sel={type:null,id:null}; armed=null; save(); renderAll(); fitView(); }
+
+function nextLabel(){ const used=new Set(current.states.map(s=>s.label)); let i=0; while(used.has('q'+i)) i++; return 'q'+i; }
+function addStateCentered(){
+  const cx=view.x+view.w/2, cy=view.y+view.h/2, n=current.states.length, off=(n%6)*30-60;
+  const s={id:uid(), label:nextLabel(), x:cx+off, y:cy+off*0.55, isStart:n===0, isAccept:false};
+  current.states.push(s); armed=null; sel={type:'state',id:s.id}; save(); renderAll(); toast('מצב נוסף — גרור אותו למקום');
+}
+function deleteState(id){ const wasStart=stById(id)&&stById(id).isStart;
+  current.states=current.states.filter(s=>s.id!==id);
+  current.transitions=current.transitions.filter(t=>t.from!==id&&t.to!==id);
+  if(wasStart && current.states.length && !current.states.some(s=>s.isStart)) current.states[0].isStart=true;  /* המצב הראשון הופך להתחלתי */
+  if(sel.id===id) sel={type:null,id:null}; armed=null; save(); renderAll(); toast('המצב נמחק'); }
+function renameState(id,val){ const s=stById(id); if(s){ s.label=(val||'').trim()||s.label; save(); renderGraph(); renderInspector(); renderValidator(); } }
+function toggleAccept(id){ const s=stById(id); s.isAccept=!s.isAccept; save(); renderGraph(); renderInspector(); renderValidator(); }
+
+function parseSyms(str){ return [...new Set(String(str||'').replace(/[\s,]/g,'').split(''))]; }  /* כל תו = סימן נפרד */
+function addTransition(from,to,symbols){
+  let t=current.transitions.find(t=>t.from===from&&t.to===to);
+  if(t){ symbols.forEach(s=>{ if(!t.symbols.includes(s)) t.symbols.push(s); }); }
+  else current.transitions.push({id:uid(), from, to, symbols:[...symbols]});
+  save(); renderAll();
+}
+function promptTransition(from,to){
+  if(current.type==='tm'){ promptTransitionTM(from,to); return; }
+  if(current.type==='pda'){ promptTransitionPDA(from,to); return; }
+  const existing=current.transitions.find(t=>t.from===from&&t.to===to);
+  const self = from===to;
+  promptDialog(self?'סימן ללולאה עצמית':'סימן המעבר', {
+    label:`${stById(from).label}  →  ${stById(to).label}`,
+    placeholder:'סימנים, למשל a או 245',
+    message: (existing? 'כבר קיימים: '+existing.symbols.join(', ')+'. ' : '') + 'כל תו = סימן נפרד (למשל 245 ⟵ 2, 4, 5).',
+    confirmText:'הוסף'
+  }).then(v=>{
+    armed=null;
+    if(v==null){ renderGraph(); renderArmBanner(); return; }
+    const syms=parseSyms(v); if(!syms.length){ toast('לא הוקלד סימן','danger'); renderGraph(); renderArmBanner(); return; }
+    sel={type:null,id:null}; addTransition(from,to,syms); renderArmBanner();
+  });
+}
+function promptTransitionTM(from,to){
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`
+    <div style="font-weight:700;color:var(--ink-strong);margin-bottom:10px">${esc(stById(from).label)} → ${esc(stById(to).label)}</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <label style="flex:1;min-width:64px"><div class="lbl">קורא</div><input id="tmRead" class="fld" placeholder="0 / 1 / _"></label>
+      <label style="flex:1;min-width:64px"><div class="lbl">כותב</div><input id="tmWrite" class="fld" placeholder="0 / 1 / _"></label>
+      <label style="flex:1;min-width:96px"><div class="lbl">תנועה</div>
+        <select id="tmMove" class="fld"><option value="R">ימינה ▶</option><option value="L">◀ שמאלה</option></select></label>
+    </div>
+    <div class="help-box" style="margin-top:8px">תו ריק על הסרט = <b>_</b>. אם «כותב» ריק — נכתב מה שנקרא.</div>`;
+  const SUBMIT=Symbol();
+  _buildDialog({ title:'כלל מעבר (מכונת טיורינג)', body:wrap,
+    buttons:[{text:'ביטול',value:null},{text:'הוסף כלל',value:SUBMIT,primary:true}], dismissValue:null })
+  .then(v=>{ armed=null;
+    if(v!==SUBMIT){ renderGraph(); renderArmBanner(); return; }
+    let read=((wrap.querySelector('#tmRead').value||'').trim()||BLANK)[0];
+    let write=((wrap.querySelector('#tmWrite').value||'').trim()||read)[0];
+    const move=wrap.querySelector('#tmMove').value;
+    sel={type:null,id:null}; addRuleTransition(from,to,read,write,move); renderArmBanner();
+  });
+}
+function addRuleTransition(from,to,read,write,move){
+  let t=current.transitions.find(t=>t.from===from&&t.to===to);
+  if(t){ t.rules=t.rules||[]; const e=t.rules.find(r=>r.read===read); if(e){ e.write=write; e.move=move; } else t.rules.push({read,write,move}); }
+  else current.transitions.push({id:uid(), from, to, rules:[{read,write,move}]});
+  save(); renderAll();
+}
+let _pdaFocus=null;
+function pdaFocusOn(el){ _pdaFocus=el; }
+function pdaTokenize(str){ str=String(str==null?'':str); const out=[];
+  for(let i=0;i<str.length;){ const ch=str[i];
+    if(ch===' '||ch===','||ch==='ε'){ i++; continue; }
+    if(str.substr(i,2)==='Z₀'||str.substr(i,2)==='Z0'){ out.push('Z₀'); i+=2; continue; }
+    out.push(ch); i++; }
+  return out; }
+function pdaTok1(str){ return pdaTokenize(str)[0]||''; }
+function pdaInsert(sym){ const f=_pdaFocus||document.getElementById('pdaOp'); if(!f)return;
+  if(sym==='ε'){ f.value='ε'; } else { if(f.value==='ε') f.value=''; f.value+=sym; }
+  f.focus(); }
+function promptTransitionPDA(from,to,ai,onDone,opts){
+  opts=opts||{};
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`
+    <div style="font-weight:700;color:var(--ink-strong);text-align:center;margin-bottom:12px">${esc(stById(from).label)} → ${esc(stById(to).label)}</div>
+    <div class="pda-lbl">קלט שנקרא</div>
+    <div class="pda-row">
+      <input id="pdaRead" class="pda-box wide" placeholder="אות (או ε)" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <button type="button" class="pda-chip sm" id="pdaEpsRead">ε</button>
+    </div>
+    <div class="pda-lbl" style="margin-top:13px">מה בראש המחסנית עכשיו</div>
+    <div class="pda-row">
+      <input id="pdaTop" class="pda-box wide" placeholder="תנאי — או ε לכל תוכן" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <button type="button" class="pda-chip sm" id="pdaEpsTop">ε</button>
+      <button type="button" class="pda-chip sm" id="pdaZ0Top">Z₀</button>
+    </div>
+    <div class="pda-lbl" style="margin-top:13px">פעולה על המחסנית</div>
+    <div class="pda-modes">
+      <button type="button" class="pda-mode on" data-mode="push">דחיפה ↑</button>
+      <button type="button" class="pda-mode" data-mode="pop">שליפה ↓</button>
+      <button type="button" class="pda-mode" data-mode="none">ללא</button>
+    </div>
+    <div class="pda-row" id="pdaOpRow" style="margin-top:10px">
+      <span class="pda-oplbl">מה לדחוף</span>
+      <input id="pdaOp" class="pda-box wide" placeholder="סימן" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <button type="button" class="pda-chip sm" id="pdaZ0Op">Z₀</button>
+    </div>
+    <div class="pda-hint" id="pdaHint"></div>`;
+  let mode='push';
+  const upd=()=>{
+    wrap.querySelectorAll('.pda-mode').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
+    wrap.querySelector('#pdaOpRow').style.display = mode==='push' ? 'flex' : 'none';
+    const rd=pdaTok1(wrap.querySelector('#pdaRead').value)||'ε';
+    const tp=pdaTok1(wrap.querySelector('#pdaTop').value);
+    const opv=pdaTok1(wrap.querySelector('#pdaOp').value);
+    const cond = tp ? `אם בראש <b>${esc(tp)}</b>` : 'בלי תנאי על הראש';
+    let act;
+    if(mode==='push') act=`דוחפים <b>${esc(opv||'?')}</b>`+(tp?` (ה־<b>${esc(tp)}</b> נשאר מתחת)`:'');
+    else if(mode==='pop') act='שולפים את הראש';
+    else act='בלי שינוי במחסנית';
+    wrap.querySelector('#pdaHint').innerHTML = `קוראים <b>${esc(rd)}</b> · ${cond} · ${act}.`;
+  };
+  wrap.querySelectorAll('.pda-mode').forEach(b=>b.addEventListener('click',()=>{ mode=b.dataset.mode; upd(); }));
+  ['#pdaRead','#pdaTop','#pdaOp'].forEach(s=>wrap.querySelector(s).addEventListener('input',upd));
+  wrap.querySelector('#pdaEpsRead').addEventListener('click',()=>{ wrap.querySelector('#pdaRead').value='ε'; upd(); });
+  wrap.querySelector('#pdaEpsTop').addEventListener('click',()=>{ wrap.querySelector('#pdaTop').value='ε'; upd(); });
+  wrap.querySelector('#pdaZ0Top').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaTop'); pdaInsert('Z₀'); upd(); });
+  wrap.querySelector('#pdaZ0Op').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaOp'); pdaInsert('Z₀'); upd(); });
+  upd();
+  if(ai){   /* מילוי מראש: מעבר שפוענח ע״י AI או עריכה של כלל קיים */
+    const norm=v=>String(v==null?'':v).replace(/Z_?0/g,'Z₀');
+    wrap.querySelector('#pdaRead').value = ai.read_input?norm(ai.read_input.value):'';
+    wrap.querySelector('#pdaTop').value  = ai.pop_value?norm(ai.pop_value.value):'';
+    wrap.querySelector('#pdaOp').value   = ai.push_value?norm(ai.push_value.value):'';
+    mode = ({PUSH:'push',POP:'pop',NONE:'none'})[String(ai.stack_action&&ai.stack_action.type).toUpperCase()] || 'push';
+    upd();
+    if(!opts.noConfidence){
+      const LOW=AI_LOW, flag=(selr,c)=>{ if(c==null||c>=LOW)return; const el=wrap.querySelector(selr); if(!el)return; el.classList.add('lowconf');
+        const b=document.createElement('span'); b.className='conf-badge'; b.textContent='⚠ '+Math.round(c*100)+'%'; b.title='ביטחון נמוך בפענוח — אנא ודא ידנית'; el.parentNode.insertBefore(b, el.nextSibling); };
+      flag('#pdaRead', ai.read_input&&ai.read_input.confidence);
+      flag('#pdaTop',  ai.pop_value&&ai.pop_value.confidence);
+      if(mode==='push') flag('#pdaOp', ai.push_value&&ai.push_value.confidence);
+      if(ai.stack_action&&ai.stack_action.confidence!=null&&ai.stack_action.confidence<LOW) wrap.querySelector('.pda-modes').classList.add('lowconf');
+      const sc=ai.source_state&&ai.source_state.confidence, tc=ai.target_state&&ai.target_state.confidence;
+      if((sc!=null&&sc<LOW)||(tc!=null&&tc<LOW)){ const note=document.createElement('div'); note.className='ai-conf-note'; note.textContent='⚠ זיהוי המצבים אינו ודאי — ודא שהחץ מחבר את המצבים הנכונים'; wrap.insertBefore(note, wrap.firstChild); }
+      if(ai.cropped_image_segment_url){ const crop=document.createElement('div'); crop.className='ai-crop';
+        crop.innerHTML=`<div class="ai-crop-lbl">קטע מהשרטוט שלך</div><img src="${esc(ai.cropped_image_segment_url)}" alt="קטע מצולם" onerror="this.closest('.ai-crop').classList.add('noimg')"><div class="ai-crop-fallback">לא ניתן לטעון את קטע התמונה</div>`;
+        wrap.insertBefore(crop, wrap.firstChild); }
+    }
+  }
+  const SUBMIT=Symbol();
+  _buildDialog({ title: opts.title || (ai?'אישור מעבר — פוענח ע״י AI':'הוספת מעבר — אוטומט מחסנית'), body:wrap,
+    buttons:[{text:'ביטול',value:null},{text: opts.confirmText || (ai?'שמור שינויים':'הוסף כלל'),value:SUBMIT,primary:true}], dismissValue:null })
+  .then(v=>{ armed=null;
+    if(v!==SUBMIT){ renderGraph(); renderArmBanner(); if(onDone)onDone(false); return; }
+    const read=wrap.querySelector('#pdaRead').value;
+    const top=wrap.querySelector('#pdaTop').value;
+    const push=wrap.querySelector('#pdaOp').value;
+    sel={type:null,id:null};
+    if(opts.onSave) opts.onSave(makeRulePDA(read,top,mode,push));
+    else addRulePDA(from,to,read,top,mode,push);
+    renderArmBanner(); if(onDone)onDone(true);
+  });
+}
+function makeRulePDA(readRaw,topRaw,op,pushRaw){
+  return {read:pdaTok1(readRaw), top:pdaTok1(topRaw), op, push:op==='push'?pdaTokenize(pushRaw):[]};
+}
+function pdaRuleKey(rule){
+  const P=pdaRuleParts(rule);
+  return [P.read||'', P.guard||'', P.removeTop?'pop':(P.push.length?'push':'none'), P.push.join('')].join('\u0001');
+}
+function addRulePDA(from,to,readRaw,topRaw,op,pushRaw){
+  const rule=makeRulePDA(readRaw,topRaw,op,pushRaw);
+  let t=current.transitions.find(t=>t.from===from&&t.to===to);
+  if(t){ t.rules=t.rules||[]; if(!t.rules.some(r=>pdaRuleKey(r)===pdaRuleKey(rule))) t.rules.push(rule); }
+  else current.transitions.push({id:uid(), from, to, rules:[rule]});
+  save(); renderAll();
+}
+/* ── סריקת שרטוט מצולם (AI): מצלמה/תמונה → /api/parse-diagram → רינדור מלא + תיקון ישיר על הקנבס ── */
+const API_BASE = (location.protocol === 'file:') ? 'http://localhost:8790' : '';
+const AI_LOW=0.75;
+const AI_LAYOUT={perRow:5, x0:140, dx:195, y0:215, dy:250};   /* פרמטרי הפריסה האוטומטית — בלי מספרי קסם בקוד */
+/* דוגמת המבחן: L = { aⁱ bʲ cⁱ⁻ʲ | i≥4, i−j≥3 } — שלוש פאזות, לולאות-עצמיות על q0–q3,
+   מעברי-קידום עם חוק יחיד, ובדיוק שני סימוני ביטחון-נמוך (ה-ε המרוח על q0→q1 + כתב מרוח ב-L3) */
+const _aiR=(read,pop,act,push,c)=>({ read_input:{value:read,confidence:(c&&c.read)??0.93},
+  stack_action:{type:act,confidence:(c&&c.act)??0.94},
+  push_value:{value:push,confidence:(c&&c.push)??0.92},
+  pop_value:{value:pop,confidence:(c&&c.pop)??0.92} });
+const _aiT=(id,s,d,rules)=>({ transition_id:id, source_state:{id:s,confidence:0.95},
+  target_state:{id:d,confidence:0.95}, rules, cropped_image_segment_url:'' });
+const AI_SAMPLE={
+  states:['q0','q1','q2','q3','q4','q5','q6','q7','q8'].map((id,i)=>({id, is_start:i===0, is_accepting:id==='q8', confidence:0.96})),
+  transitions:[
+    /* פאזה 1 — קריאת a ודחיפה: לולאות-עצמיות על שלושה מצבים בלבד (q0–q2), שני חוקים בכל אחת.
+       על q3 אין לולאה מצוירת — בדיקת "בלי לולאות מומצאות" */
+    _aiT('t01','q0','q1',[_aiR('ε','Z₀','PUSH','S',{read:0.62})]),
+    _aiT('L0','q0','q0',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A')]),
+    _aiT('L1','q1','q1',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A')]),
+    _aiT('L2','q2','q2',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A',{push:0.72})]),
+    _aiT('t12','q1','q2',[_aiR('a','S','PUSH','A')]),
+    _aiT('t23','q2','q3',[_aiR('a','A','PUSH','A')]),
+    /* פאזה 2 — קריאת b (q3–q5) */
+    _aiT('t34','q3','q4',[_aiR('b','A','POP','ε')]),
+    _aiT('t45','q4','q5',[_aiR('b','A','POP','ε')]),
+    /* פאזה 3 — קריאת c ושליפה (q5–q8) */
+    _aiT('t56','q5','q6',[_aiR('c','A','POP','ε')]),
+    _aiT('t67','q6','q7',[_aiR('c','A','POP','ε')]),
+    _aiT('t78','q7','q8',[_aiR('c','S','POP','ε')])
+  ]
+};
+function closeStaleModals(){ qa('.modal-bg').forEach(b=>b.remove()); }
+function aiPayloadList(data){ return Array.isArray(data)?data:(Array.isArray(data&&data.transitions)?data.transitions:(data?[data]:[])); }
+function aiStateList(data){ return Array.isArray(data&&data.states)?data.states:[]; }
+function aiConf(field){ const n=Number(field&&field.confidence); return Number.isFinite(n)?n:null; }
+function aiLow(field){ const c=aiConf(field); return c!=null && c<AI_LOW; }
+function aiNorm(v){ const s=String(v==null?'':v).trim().replace(/⊥/g,'Z₀').replace(/Z_?0/g,'Z₀'); return (!s||s==='ε'||s==='e'||s==='E'||s.toLowerCase()==='epsilon')?'':s; }
+function aiBool(v){ return v===true || String(v).toLowerCase()==='true'; }
+function aiStateId(field){
+  if(field==null) return '';
+  if(typeof field==='string' || typeof field==='number') return String(field).trim();
+  return String(field.id ?? field.value ?? field.label ?? '').trim();
+}
+function applyAiStateMeta(s,meta){
+  if(!s||!meta||typeof meta!=='object') return;
+  const c=aiConf(meta);
+  if(c!=null){ s.aiConfidence=Math.min(s.aiConfidence==null?1:s.aiConfidence,c); if(c<AI_LOW)s.aiLow=true; }
+  if('is_accepting' in meta) s.isAccept=aiBool(meta.is_accepting);
+  if('isAccepting' in meta) s.isAccept=aiBool(meta.isAccepting);
+  if('is_final' in meta) s.isAccept=aiBool(meta.is_final);
+  if('is_start' in meta && aiBool(meta.is_start)){ current.states.forEach(st=>st.isStart=false); s.isStart=true; }
+  if('isStart' in meta && aiBool(meta.isStart)){ current.states.forEach(st=>st.isStart=false); s.isStart=true; }
+}
+function aiAction(it){ return ({PUSH:'push',POP:'pop',NONE:'none'})[String(it.stack_action&&it.stack_action.type).toUpperCase()] || 'none'; }
+function aiIssues(it){
+  const out=[];
+  if(aiLow(it.source_state)) out.push('מצב מקור');
+  if(aiLow(it.target_state)) out.push('מצב יעד');
+  if(aiLow(it.read_input)) out.push('קלט שנקרא');
+  if(aiLow(it.pop_value)) out.push('ראש מחסנית');
+  if(aiLow(it.stack_action)) out.push('פעולת מחסנית');
+  if(aiAction(it)==='push' && aiLow(it.push_value)) out.push('מה לדחוף');
+  return out;
+}
+function ensureStateByLabel(label,meta){ if(label==null||label==='') return null;
+  label=String(label).trim();
+  let s=current.states.find(st=>String(st.label)===label);
+  if(s){
+    applyAiStateMeta(s,meta);
+    return s.id;
+  }
+  const id=uid(), n=current.states.length;
+  const c=aiConf(meta);
+  /* פריסת נחש (boustrophedon) גנרית, לכל מספר מצבים: שורות זוגיות שמאל→ימין, שורות
+     אי-זוגיות ימין→שמאל — מעבר-שורה (למשל מצב 4→5) יורד אנכית באותה עמודה, בלי חצים חוצי-מסך */
+  const PER=AI_LAYOUT.perRow, row=Math.floor(n/PER), p=n%PER, col=(row%2===0)?p:(PER-1-p);
+  s={id, label, x:AI_LAYOUT.x0+col*AI_LAYOUT.dx, y:AI_LAYOUT.y0+row*AI_LAYOUT.dy, isStart:n===0, isAccept:false, aiConfidence:c, aiLow:c!=null&&c<AI_LOW};
+  current.states.push(s);
+  applyAiStateMeta(s,meta);
+  return id; }
+function applyAiStates(payload){
+  const states=aiStateList(payload);
+  states.forEach(st=>ensureStateByLabel(aiStateId(st),st));
+  const explicitStart=states.find(st=>aiBool(st&&st.is_start)||aiBool(st&&st.isStart));
+  if(explicitStart){
+    const s=stById(ensureStateByLabel(aiStateId(explicitStart),explicitStart));
+    if(s){ current.states.forEach(x=>x.isStart=false); s.isStart=true; }
+  } else if(current.states.length && !current.states.some(s=>s.isStart)) current.states[0].isStart=true;
+}
+function aiRuleFromPayload(it){
+  const op=aiAction(it);
+  const rule=makeRulePDA(aiNorm(it.read_input&&it.read_input.value), aiNorm(it.pop_value&&it.pop_value.value), op, aiNorm(it.push_value&&it.push_value.value));
+  const issues=aiIssues(it);
+  rule.aiLow=issues.length>0;
+  rule.aiIssues=issues;
+  rule.aiTransitionId=it.transition_id||'';
+  rule.aiConfidence=Math.min(...[it.read_input,it.pop_value,it.stack_action,op==='push'?it.push_value:null].map(aiConf).filter(x=>x!=null), 1);
+  return rule;
+}
+function recomputeAiTransition(t){
+  const issues=[];
+  (t.rules||[]).forEach(r=>(r.aiIssues||[]).forEach(x=>issues.push(x)));
+  /* רשת ביטחון: חץ-קידום מיובא עם כמה חוקים — אולי אלה חוקי לולאה-עצמית שאבדו */
+  if(t.aiImported && t.from!==t.to && (t.rules||[]).length>1) issues.push('כמה חוקים על חץ קידום — ודא שאינם של לולאה-עצמית');
+  t.aiIssues=[...new Set(issues)];
+  t.aiLow=Boolean(t.aiIssues.length || (t.rules||[]).some(r=>r.aiLow));
+}
+function addAiTransition(it){
+  const src=aiStateId(it.source_state||it.source);
+  const dst=aiStateId(it.target_state||it.target);
+  const from=ensureStateByLabel(src, it.source_state);
+  const to=ensureStateByLabel(dst, it.target_state);
+  if(!from||!to) return null;
+  /* חץ מצויר אחד יכול לשאת כמה חוקים (rules) — כולם מתמזגים לאותו מעבר על הקנבס */
+  const ruleItems = (Array.isArray(it.rules) && it.rules.length)
+    ? it.rules.map(r=>Object.assign({}, r, {source_state:it.source_state, target_state:it.target_state, transition_id:it.transition_id}))
+    : [it];
+  let t=current.transitions.find(x=>x.from===from&&x.to===to);
+  if(!t){ t={id:uid(), from, to, rules:[], aiImported:true}; current.transitions.push(t); }
+  t.rules=t.rules||[];
+  ruleItems.forEach(ri=>{
+    const rule=aiRuleFromPayload(ri);
+    const k=pdaRuleKey(rule), idx=t.rules.findIndex(r=>pdaRuleKey(r)===k);
+    if(idx>=0) t.rules[idx]=Object.assign(t.rules[idx], rule);
+    else t.rules.push(rule);
+  });
+  t.aiImported=true;
+  t.aiTransitionId=it.transition_id||t.aiTransitionId||'';
+  t.selfLoop = from===to || src!=='' && src===dst;
+  recomputeAiTransition(t);
+  return t.id;
+}
+function applyAiTransitionsToCanvas(payload){
+  const list=aiPayloadList(payload);
+  closeStaleModals();
+  if(!list.length){ toast('לא נמצאו מעברים בקלט','danger'); return; }
+  applyAiStates(payload);
+  let added=0, skipped=0;
+  list.forEach(it=>{ if(addAiTransition(it||{})) added++; else skipped++; });
+  current.aiReviewDismissed=false;
+  save(); renderAll(); fitView();
+  const lows=aiIssueCount();
+  toast(`זוהו ${added} מעברים והם צוירו על הקנבס${lows?` · ${lows} דורשים בדיקה`:''}`, lows?'':'success');
+  if(skipped) toast(`${skipped} מעברים דולגו כי חסר מקור/יעד`, 'danger');
+}
+function aiIssueCount(){
+  if(!current) return 0;
+  return current.states.filter(s=>s.aiLow).length + current.transitions.filter(t=>t.aiLow).length;
+}
+function pdaRuleToAi(r){
+  const P=pdaRuleParts(r), op=P.removeTop?'POP':(P.push.length?'PUSH':'NONE');
+  return {
+    read_input:{value:P.read||'ε',confidence:1},
+    pop_value:{value:P.guard||'ε',confidence:1},
+    push_value:{value:P.push.join('')||'ε',confidence:1},
+    stack_action:{type:op,confidence:1}
+  };
+}
+function editPdaTransition(id,ruleIndex){
+  const t=trById(id); if(!t||current.type!=='pda') return;
+  const rules=t.rules||[];
+  let idx = Number.isInteger(ruleIndex) ? ruleIndex : rules.findIndex(r=>r.aiLow);
+  if(idx<0) idx=0;
+  if(!rules[idx]){ promptTransitionPDA(t.from,t.to); return; }
+  sel={type:'transition',id}; renderGraph(); renderInspector();
+  promptTransitionPDA(t.from,t.to,pdaRuleToAi(rules[idx]),null,{
+    noConfidence:true,
+    title:'עריכת מעבר — אוטומט מחסנית',
+    confirmText:'שמור שינויים',
+    onSave:rule=>{
+      rules[idx]=Object.assign(rule,{aiLow:false,aiIssues:[],aiConfidence:1});
+      recomputeAiTransition(t);
+      save(); renderAll(); toast('המעבר עודכן','success');
+    }
+  });
+}
+function focusAiIssue(id,kind){
+  if(kind==='state'){ sel={type:'state',id}; renderGraph(); renderInspector(); renderArmBanner(); return; }
+  editPdaTransition(id);
+}
+function dismissAiReview(){ if(current){ current.aiReviewDismissed=true; save(); renderAiReviewPanel(); } }
+function renderAiReviewPanel(){
+  const p=$('aiReviewPanel'); if(!p) return;
+  if(!current || current.aiReviewDismissed){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  const items=[];
+  current.states.filter(s=>s.aiLow).forEach(s=>items.push({kind:'state',id:s.id,title:s.label,sub:'זיהוי מצב בביטחון נמוך'}));
+  current.transitions.filter(t=>t.aiLow).forEach(t=>{
+    const from=stById(t.from), to=stById(t.to), self=isSelfLoopTransition(t);
+    items.push({kind:'transition',id:t.id,title:`${from?from.label:'?'} ${self?'↺':'→'} ${to?to.label:'?'}`,sub:(t.aiIssues&&t.aiIssues.length?t.aiIssues.join(', '):'שדות מעבר בביטחון נמוך')});
+  });
+  if(!items.length){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  p.className='ai-review-panel show';
+  p.innerHTML=`<div class="ai-review-head"><span>בדיקת AI · ${items.length} סימונים</span><button class="ai-review-close" onclick="dismissAiReview()" title="הסתר">×</button></div>`+
+    items.map(it=>`<button class="ai-review-item" onclick="focusAiIssue('${it.id}','${it.kind}')"><div class="ai-review-main">${esc(it.title)}</div><div class="ai-review-sub">${esc(it.sub)}</div></button>`).join('');
+}
+function reviewAiList(list,i){ applyAiTransitionsToCanvas(list); }   /* תאימות ישנה: אין יותר אשף רציף */
+function downscaleImage(file,maxDim,quality){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>reject(new Error('קריאת הקובץ נכשלה'));
+    fr.onload=()=>{ const im=new Image();
+      im.onload=()=>{ let w=im.width,h=im.height; const k=Math.min(1,(maxDim||1568)/Math.max(w,h));
+        w=Math.max(1,Math.round(w*k)); h=Math.max(1,Math.round(h*k));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(im,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg', quality||0.85)); };
+      im.onerror=()=>reject(new Error('התמונה לא נטענה — ודא שזה קובץ תמונה'));
+      im.src=fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+function openAiScan(){
+  if(!current) return;
+  if(current.type!=='pda'){ toast('סריקת AI זמינה רק לאוטומט מחסנית','danger'); return; }
+  closeStaleModals();
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`
+    <div class="scan-state" data-state="detect">
+      <div class="scan-spin"></div>
+      <div class="scan-msg">בודק חיבור לשרת הסריקה…</div>
+    </div>
+    <div class="scan-state" data-state="offline" hidden>
+      <div class="scan-ic warn">⚠</div>
+      <div class="scan-msg" id="scanOffMsg"><b>שרת הסריקה לא פעיל.</b><br>הפעל אותו בלחיצה כפולה על <b>start-automata.bat</b> שבתיקייה:<br><span dir="ltr" style="font-size:11.5px;font-family:'Courier New',monospace">C:\Users\its\Documents\modeles</span><br><span style="font-size:11.5px;color:var(--muted)">ברגע שהשרת יעלה — אתחבר אליו אוטומטית.</span></div>
+      <div class="scan-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-act="retry">נסה שוב</button>
+        <button type="button" class="btn btn-sm" data-act="json">יש לי כבר JSON</button>
+      </div>
+    </div>
+    <div class="scan-state" data-state="source" hidden>
+      <label class="scan-drop" id="scanDrop">
+        <input id="scanFile" type="file" accept="image/*" capture="environment" hidden>
+        <div class="scan-ic">📷</div>
+        <div class="scan-drop-t"><b>צלם או בחר תמונה</b> של השרטוט שלך</div>
+        <div class="scan-drop-sub">אפשר גם לגרור תמונה לכאן, או להדביק (Ctrl+V)</div>
+      </label>
+      <div class="scan-foot">
+        <span class="scan-tag" id="scanModelTag"></span>
+        <button type="button" class="btn btn-sm" data-act="json">יש לי כבר JSON</button>
+      </div>
+    </div>
+    <div class="scan-state" data-state="json" hidden>
+      <div class="ai-imp-help">הדבק את ה-JSON של המעברים (מעבר בודד או מערך), והכול יצויר על הקנבס בבת אחת. סימונים לא בטוחים יופיעו בצהוב.</div>
+      <textarea id="scanJson" class="fld" spellcheck="false" style="height:150px;direction:ltr;font-family:'Courier New',monospace;font-size:12px"></textarea>
+      <div class="scan-actions" style="margin-top:9px">
+        <button type="button" class="btn btn-primary btn-sm" data-act="jsonGo">צייר על הקנבס</button>
+        <button type="button" class="btn btn-sm" data-act="sample">טען דוגמה</button>
+        <button type="button" class="btn btn-sm" data-act="back">חזרה</button>
+      </div>
+    </div>
+    <div class="scan-state" data-state="preview" hidden>
+      <img class="scan-img" data-img alt="השרטוט שצולם">
+      <div class="scan-actions">
+        <button type="button" class="btn btn-primary" data-act="go">פענח את השרטוט</button>
+        <button type="button" class="btn btn-sm" data-act="back">החלף תמונה</button>
+      </div>
+    </div>
+    <div class="scan-state" data-state="scanning" hidden>
+      <img class="scan-img dim" data-img alt="">
+      <div class="scan-bar"><div class="scan-bar-fill"></div></div>
+      <div class="scan-msg">ה-AI קורא את השרטוט… בדרך כלל 10–30 שניות</div>
+    </div>
+    <div class="scan-state" data-state="error" hidden>
+      <div class="scan-ic bad">✗</div>
+      <div class="scan-msg" id="scanErrMsg"></div>
+      <div class="scan-actions"><button type="button" class="btn btn-primary btn-sm" data-act="back">נסה שוב</button></div>
+    </div>`;
+
+  let imgData=null, busy=false, serverOk=false, healthTimer=null;
+  const setState=s=>wrap.querySelectorAll('.scan-state').forEach(el=>{ el.hidden = el.dataset.state!==s; });
+  const showError=html=>{ wrap.querySelector('#scanErrMsg').innerHTML=html; setState('error'); };
+
+  async function checkHealth(quiet){
+    if(healthTimer){ clearTimeout(healthTimer); healthTimer=null; }
+    if(!quiet) setState('detect');
+    try{
+      const r=await fetch(API_BASE+'/api/health',{signal:AbortSignal.timeout(2500)});
+      const h=await r.json();
+      if(!h.ok) throw new Error('bad health');
+      if(!h.hasKey){ serverOk=false;
+        wrap.querySelector('#scanOffMsg').innerHTML='<b>חסר מפתח API בשרת.</b><br>הוסף <b>OPENAI_API_KEY</b> לקובץ <b>.secrets\\openai.env</b> שבתיקיית הכלי, הפעל מחדש את השרת ואתחבר אוטומטית.';
+        setState('offline');
+        healthTimer=setTimeout(()=>checkHealth(true),3000);   /* ימשיך לנסות לבד */
+        return; }
+      serverOk=true;
+      wrap.querySelector('#scanModelTag').textContent='מנוע: '+(h.model||'');
+      setState('source');   /* המפתח מוגדר בשרת — אין מסך הגדרה, ישר למצלמה */
+    }catch(e){ serverOk=false; setState('offline');
+      healthTimer=setTimeout(()=>checkHealth(true),3000); }   /* יתחבר אוטומטית כשהשרת יעלה */
+  }
+  async function useFile(file){
+    if(!file || busy) return;
+    if(file.type && !/^image\//.test(file.type)){ showError('הקובץ שנבחר אינו תמונה.'); return; }
+    try{ imgData=await downscaleImage(file,1568,0.85);
+      wrap.querySelectorAll('[data-img]').forEach(im=>im.src=imgData);
+      setState('preview');
+    }catch(e){ showError(esc(e.message||'טעינת התמונה נכשלה')); }
+  }
+  async function runScan(){
+    if(!imgData || busy) return; busy=true; setState('scanning');
+    try{
+      const r=await fetch(API_BASE+'/api/parse-diagram',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({image:imgData}) });
+      const text=await r.text();
+      let data=null; try{ data=JSON.parse(text); }catch(_e){}
+      if(!r.ok) throw new Error((data&&data.error)||text||('שגיאת שרת '+r.status));
+      const list=(data&&data.transitions)||[];
+      busy=false;
+      if(!list.length){ showError('ה-AI לא זיהה מעברים בתמונה.<br>נסה תמונה חדה יותר, או צלם מקרוב.'); return; }
+      close();
+      const ruleCount=list.reduce((s,t)=>s+((Array.isArray(t.rules)&&t.rules.length)||1),0);
+      toast('זוהו '+ruleCount+' חוקים על '+list.length+' חיצים — מצייר על הקנבס');
+      reviewAiList(data,0);
+    }catch(e){ busy=false;
+      showError('הפענוח נכשל:<br><span dir="ltr" style="font-size:11px;word-break:break-all">'+esc(String(e.message||e).slice(0,220))+'</span>'); }
+  }
+
+  wrap.addEventListener('click',e=>{
+    const b=e.target.closest('[data-act]'); if(!b) return;
+    const act=b.dataset.act;
+    if(act==='retry') checkHealth();
+    else if(act==='json') setState('json');
+    else if(act==='sample') wrap.querySelector('#scanJson').value=JSON.stringify(AI_SAMPLE,null,2);
+    else if(act==='back'){ imgData=null; busy=false; setState(serverOk?'source':'offline'); }
+    else if(act==='go') runScan();
+    else if(act==='jsonGo'){
+      let data; try{ data=JSON.parse(wrap.querySelector('#scanJson').value); }catch(err){ toast('JSON לא תקין: '+err.message,'danger'); return; }
+      const list=aiPayloadList(data);
+      if(!list.length){ toast('לא נמצאו מעברים בקלט','danger'); return; }
+      close(); reviewAiList(data,0);
+    }
+  });
+  wrap.querySelector('#scanFile').addEventListener('change',e=>useFile(e.target.files&&e.target.files[0]));
+  const drop=wrap.querySelector('#scanDrop');
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add('over'); }));
+  drop.addEventListener('dragleave',e=>{ e.preventDefault(); drop.classList.remove('over'); });
+  drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('over'); if(e.dataTransfer) useFile(e.dataTransfer.files&&e.dataTransfer.files[0]); });
+
+  function buildScanModal(body){
+    const bg=document.createElement('div'); bg.className='modal-bg show';
+    const box=document.createElement('div'); box.className='modal scan-modal'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true');
+    const h=document.createElement('h2'); h.textContent='סריקת שרטוט — אוטומט מחסנית'; box.appendChild(h);
+    box.appendChild(body);
+    const actions=document.createElement('div'); actions.className='modal-actions';
+    const cancel=document.createElement('button'); cancel.className='btn'; cancel.textContent='סגור'; actions.appendChild(cancel);
+    box.appendChild(actions); bg.appendChild(box);
+    const onPaste=e=>{ const items=(e.clipboardData&&e.clipboardData.items)||[];
+      for(const it of items){ if(it.type&&it.type.startsWith('image/')){ e.preventDefault(); useFile(it.getAsFile()); return; } } };
+    const onKey=e=>{
+      if(e.key==='Escape'){ e.preventDefault(); doClose(); return; }
+      if(e.key==='Enter'){ const pv=wrap.querySelector('[data-state="preview"]'); if(pv&&!pv.hidden){ e.preventDefault(); runScan(); } } };
+    function doClose(){ if(healthTimer){ clearTimeout(healthTimer); healthTimer=null; } document.removeEventListener('keydown',onKey); document.removeEventListener('paste',onPaste); bg.remove(); }
+    cancel.onclick=doClose;
+    bg.addEventListener('click',e=>{ if(e.target===bg) doClose(); });
+    document.addEventListener('keydown',onKey); document.addEventListener('paste',onPaste);
+    document.body.appendChild(bg);
+    return doClose;
+  }
+  const close=buildScanModal(wrap);
+  checkHealth();
+}
+function selfLoop(id){ promptTransition(id,id); }
+function setTransSymbols(id,str){ const t=trById(id); if(!t)return; const syms=parseSyms(str);
+  if(!syms.length){ toast('מעבר חייב סימן אחד לפחות','danger'); renderInspector(); return; }
+  t.symbols=syms; save(); renderAll(); }
+function deleteTransition(id){ current.transitions=current.transitions.filter(t=>t.id!==id);
+  if(sel.id===id) sel={type:null,id:null}; save(); renderAll(); toast('המעבר נמחק'); }
+function clearGraph(){ if(!current.states.length) return;
+  confirmDialog('לנקות את כל הגרף?','כל המצבים והמעברים יימחקו.',{danger:true,confirmText:'נקה'}).then(ok=>{
+    if(ok){ current.states=[]; current.transitions=[]; sel={type:null,id:null}; armed=null; save(); renderAll(); } }); }
+
+/* ─── validation ─── */
+function alphabet(){ const s=new Set(); if(current) current.transitions.forEach(t=>(t.symbols||[]).forEach(x=>{ if(x!=='ε') s.add(x); })); return [...s].sort(); }   /* ε אינו אות באלפבית */
+function computeValidation(){
+  const a=current, dupes=[], gaps=[], starts=a.states.filter(s=>s.isStart);
+  if(a.type==='tm'){
+    a.states.forEach(s=>{ const cnt={};
+      a.transitions.filter(t=>t.from===s.id).forEach(t=>(t.rules||[]).forEach(r=>{ cnt[r.read]=(cnt[r.read]||0)+1; }));
+      Object.keys(cnt).forEach(rd=>{ if(cnt[rd]>1) dupes.push({state:s,sym:rd}); });
+    });
+    return {starts,dupes,gaps:[],alpha:[],deterministic:dupes.length===0,complete:false};
+  }
+  if(a.type==='pda'){ return {starts,dupes:[],gaps:[],alpha:[],deterministic:true,complete:false}; }
+  const ALPHA=alphabet();
+  a.states.forEach(s=>{
+    const cnt={}, cov=new Set();
+    a.transitions.filter(t=>t.from===s.id).forEach(t=>(t.symbols||[]).forEach(sym=>{ cnt[sym]=(cnt[sym]||0)+1; cov.add(sym); }));
+    Object.keys(cnt).forEach(sym=>{ if(cnt[sym]>1) dupes.push({state:s,sym}); });
+    const miss=ALPHA.filter(x=>!cov.has(x)); if(miss.length) gaps.push({state:s,miss});
+  });
+  const deterministic=dupes.length===0;
+  const complete=gaps.length===0 && ALPHA.length>0 && a.states.length>0;
+  return {starts,dupes,gaps,alpha:ALPHA,deterministic,complete};
+}
+function completeAutomaton(){
+  const v=computeValidation();
+  if(!v.deterministic){ toast('תקן את הדטרמיניזם תחילה','danger'); return; }
+  if(v.starts.length!==1){ toast('צריך מצב התחלתי אחד','danger'); return; }
+  if(v.complete){ toast('האוטומט כבר מלא'); return; }
+  const ALPHA=alphabet(), xs=current.states.map(s=>s.x), ys=current.states.map(s=>s.y);
+  const trap={id:uid(), label:trapLabel(), x:(Math.min(...xs)+Math.max(...xs))/2, y:Math.max(...ys)+170, isStart:false, isAccept:false};
+  current.states.push(trap);
+  current.transitions.push({id:uid(), from:trap.id, to:trap.id, symbols:[...ALPHA]});
+  current.states.forEach(s=>{ if(s.id===trap.id)return;
+    const cov=new Set(); current.transitions.filter(t=>t.from===s.id).forEach(t=>t.symbols.forEach(x=>cov.add(x)));
+    const miss=ALPHA.filter(x=>!cov.has(x));
+    if(miss.length) current.transitions.push({id:uid(), from:s.id, to:trap.id, symbols:miss});
+  });
+  save(); renderAll(); fitView(); toast('נוסף מצב בור — האוטומט עכשיו מלא','success');
+}
+function trapLabel(){ const used=new Set(current.states.map(s=>s.label)); if(!used.has('qבור'))return 'qבור'; let i=1; while(used.has('qבור'+i)) i++; return 'qבור'+i; }
+
+/* ─── geometry ─── */
+function geomEdge(c1,c2,bend){
+  const dx=c2.x-c1.x, dy=c2.y-c1.y, len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len, px=-uy, py=ux;
+  const mx=(c1.x+c2.x)/2+px*bend, my=(c1.y+c2.y)/2+py*bend;
+  const a1=Math.atan2(my-c1.y,mx-c1.x), a2=Math.atan2(my-c2.y,mx-c2.x);
+  const sx=c1.x+R*Math.cos(a1), sy=c1.y+R*Math.sin(a1), ex=c2.x+R*Math.cos(a2), ey=c2.y+R*Math.sin(a2);
+  const qx=0.25*sx+0.5*mx+0.25*ex, qy=0.25*sy+0.5*my+0.25*ey;
+  const off = bend===0 ? -22 : (bend>0 ? 16 : -16);
+  return { d:`M ${sx.toFixed(1)} ${sy.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, lx:qx+px*off, ly:qy+py*off };
+}
+function geomLoop(c){
+  return { d:`M ${c.x-20} ${c.y-R+8} C ${c.x-60} ${c.y-R-62}, ${c.x+60} ${c.y-R-62}, ${c.x+20} ${c.y-R+8}`, lx:c.x, ly:c.y-R-64 };
+}
+function isSelfLoopTransition(t){
+  return Boolean(t && (t.selfLoop || t.from===t.to));
+}
+function edgeGeom(t){ const a=stById(t.from), b=stById(t.to);
+  if(isSelfLoopTransition(t)) return geomLoop(a||b);
+  const rev=current.transitions.some(o=>o.from===t.to&&o.to===t.from&&o.id!==t.id);
+  return geomEdge(a,b, rev?54:20); }   /* קשתות פנימיות — כל מעבר מתעקל בעדינות, זוג דו-כיווני מתפצל */
+
+/* ─── render: graph ─── */
+function applyView(){ $('canvas').setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); }
+function fitView(){
+  const wrap=$('canvasArea')||$('stage'); const cw=wrap.clientWidth||1000, ch=wrap.clientHeight||680, ar=cw/ch;
+  if(!current || !current.states.length){ view={x:0,y:0,w:cw,h:ch}; applyView(); return; }
+  const xs=current.states.map(s=>s.x), ys=current.states.map(s=>s.y);
+  const hasLoops=current.transitions.some(isSelfLoopTransition);
+  let minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
+  let w=maxx-minx, h=maxy-miny;
+  if(w/h < ar){ const nw=h*ar; minx-=(nw-w)/2; w=nw; } else { const nh=w/ar; miny-=(nh-h)/2; h=nh; }
+  view={x:minx,y:miny,w,h}; applyView();
+}
+function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/view.w;
+  const cx=view.x+view.w/2, cy=view.y+view.h/2; view.w=w; view.h*=ratio; view.x=cx-view.w/2; view.y=cy-view.h/2; applyView(); }
+
+function renderGraph(){
+  if(!current){ $('edges').innerHTML=''; $('nodes').innerHTML=''; renderAiReviewPanel(); return; }
+  $('nodes').innerHTML = current.states.map(s=>{
+    const cls='node'+(sel.type==='state'&&sel.id===s.id?' sel':'')+(armed===s.id?' armed':'')+(s.aiLow?' ai-low':'');
+    return `<g class="${cls}" data-state-id="${s.id}" transform="translate(${s.x},${s.y})">
+      <circle class="ncirc" r="${R}"></circle>
+      ${s.isAccept?`<circle class="nacc" r="${R-6}"></circle>`:''}
+      <text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central">${esc(s.label)}</text>
+      ${s.isStart?`<path class="sarrow" d="M ${-R-30} 0 L ${-R-3} 0" marker-end="url(#arrow)"></path>`:''}
+    </g>`; }).join('');
+  $('edges').innerHTML = current.transitions.map(t=>{
+    const g=edgeGeom(t), cls='edge'+(sel.type==='transition'&&sel.id===t.id?' sel':'')+(t.aiLow?' ai-low':'');
+    const lines=transLabelLines(t).filter(Boolean); if(!lines.length) lines.push('');
+    const lx=g.lx.toFixed(1);
+    const ly=(t.from===t.to ? g.ly-(lines.length-1)*19 : g.ly-(lines.length-1)*9).toFixed(1);   /* רב-שורתי: מרימים את הבסיס כדי לא לדרוס את הקשת */
+    const tspans=lines.map((ln,k)=>`<tspan x="${lx}" dy="${k===0?((-(lines.length-1)*0.6).toFixed(2)+'em'):'1.2em'}">${esc(ln)}</tspan>`).join('');
+    return `<g class="${cls}" data-trans-id="${t.id}" data-from="${t.from}" data-to="${t.to}">
+      <path class="ehit" d="${g.d}"></path>
+      <path class="eline" d="${g.d}" marker-end="url(#${t.aiLow?'arrowA':'arrow'})"></path>
+      <text class="elabel" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central">${tspans}</text>
+    </g>`; }).join('');
+  $('stageEmpty').style.display = current.states.length ? 'none' : 'grid';
+  renderAiReviewPanel();
+  if(SIM) paintSim();
+}
+function refreshEdgeEl(el){ const t=trById(el.dataset.transId); if(!t)return; const g=edgeGeom(t);
+  el.querySelector('.ehit').setAttribute('d',g.d); el.querySelector('.eline').setAttribute('d',g.d);
+  const lab=el.querySelector('.elabel'); const spans=lab.querySelectorAll('tspan'); const n=spans.length||1;
+  const ly=(t.from===t.to ? g.ly-(n-1)*19 : g.ly-(n-1)*9);
+  lab.setAttribute('x',g.lx.toFixed(1)); lab.setAttribute('y',ly.toFixed(1));
+  spans.forEach(ts=>ts.setAttribute('x',g.lx.toFixed(1))); }
+
+/* ─── render: chrome ─── */
+function renderTopbar(){ $('modelName').textContent = current?current.name:'—'; $('modelType').textContent = current?(current.ndet?(current.type==='pda'?'NPDA':'NFA'):current.type.toUpperCase()):'—'; }
+function renderArmBanner(){ const b=$('armBanner');
+  if(armed && stById(armed)){ b.innerHTML=`לחץ על מצב <b>יעד</b> כדי למתוח מעבר מ-<b>${esc(stById(armed).label)}</b> · Esc לביטול`; b.classList.add('show'); }
+  else b.classList.remove('show'); $('canvasArea').dataset.arming = armed?'1':'0'; }
+
+function renderInspector(){
+  const el=$('inspector'); if(!current){ el.innerHTML=''; return; }
+  if(sel.type==='state'){ const s=stById(sel.id); if(!s){ el.innerHTML=inspEmpty(); return; }
+    el.innerHTML=`
+      <div class="insp-title">מצב ${esc(s.label)}</div>
+      <div class="toggles" style="grid-template-columns:1fr">
+        <button class="chip ${s.isAccept?'on':''}" onclick="toggleAccept('${s.id}')">מצב מקבל</button>
+      </div>
+      ${s.isStart?'<div class="vbadge ok" style="margin-top:2px">זהו המצב ההתחלתי</div>':''}
+      <div class="help-box" style="margin:2px 0 6px">לולאה עצמית: <b>לחיצה כפולה</b> על המצב.</div>
+      <div class="insp-actions">
+        <button class="btn btn-delete" onclick="deleteState('${s.id}')">${ico('trash')} מחק מצב</button>
+      </div>`;
+  } else if(sel.type==='transition'){ const t=trById(sel.id); if(!t){ el.innerHTML=inspEmpty(); return; }
+    if(current.type==='tm'){
+      el.innerHTML=`
+        <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
+        <div class="help-box">${(t.rules||[]).map(r=>`קריאה <b>${esc(r.read)}</b> → כתיבה <b>${esc(r.write)}</b>, ${r.move==='R'?'ימינה':'שמאלה'}`).join('<br>')||'אין כללים'}</div>
+        <div class="insp-actions" style="margin-top:12px">
+          <button class="btn btn-sm" onclick="promptTransitionTM('${t.from}','${t.to}')">${ico('plus')} הוסף/ערוך כלל</button>
+          <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
+        </div>`;
+    } else if(current.type==='pda'){
+      el.innerHTML=`
+        <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
+        <div class="help-box">${(t.rules||[]).map((r,i)=>{ const P=pdaRuleParts(r); const pu=P.push.join(''); const act=P.removeTop?(pu?'שלוף ואז דחוף '+pu:'שלוף'):(pu?'דחוף '+pu:'ללא שינוי'); return `<button class="rule-edit ${r.aiLow?'ai-low':''}" onclick="editPdaTransition('${t.id}',${i})">קלט <b>${esc(P.read||'ε')}</b> · בראש <b>${esc(P.guard||'ε')}</b> · ${act}</button>`; }).join('')||'אין כללים'}</div>
+        <div class="insp-actions" style="margin-top:12px">
+          <button class="btn btn-sm" onclick="promptTransitionPDA('${t.from}','${t.to}')">${ico('plus')} הוסף כלל</button>
+          <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
+        </div>`;
+    } else {
+      el.innerHTML=`
+        <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
+        <label class="lbl">סימנים (מופרדים בפסיק)</label>
+        <input class="fld" value="${esc(t.symbols.join(', '))}" onchange="setTransSymbols('${t.id}',this.value)">
+        <div class="insp-actions" style="margin-top:12px">
+          <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
+        </div>`;
+    }
+  } else el.innerHTML=inspEmpty();
+}
+function inspEmpty(){ return ''; }
+
+function badge(type,txt){ return `<div class="vbadge ${type}">${esc(txt)}</div>`; }
+function renderValidator(){
+  const el=$('validator'); if(!el) return; if(!current){ el.innerHTML=''; return; }
+  const v=computeValidation(); let h='';
+  if(v.starts.length===0) h+=badge('danger','אין מצב התחלתי');
+  else if(v.starts.length>1) h+=badge('danger','יש יותר ממצב התחלתי אחד');
+  else h+=badge('ok','התחלתי: '+v.starts[0].label);
+  if(!v.deterministic){ h+=badge('danger','אינו דטרמיניסטי');
+    v.dupes.forEach(d=> h+=`<div class="vrow warn">מ-${esc(d.state.label)} יש יותר ממעבר אחד על '${esc(d.sym)}'</div>`); }
+  else h+=badge('ok','דטרמיניסטי');
+  if(v.complete) h+=badge('ok','אוטומט מלא');
+  else { h+=badge('amber','אוטומט לא מלא');
+    v.gaps.forEach(g=> h+=`<div class="vrow">חסר ב-${esc(g.state.label)}: ${g.miss.map(esc).join(', ')}</div>`);
+    h+=`<button class="btn btn-sm btn-primary" style="margin-top:9px" ${(v.deterministic&&v.starts.length===1&&current.states.length)?'':'disabled'} onclick="completeAutomaton()">השלם לאוטומט מלא</button>`; }
+  h+=`<div class="vstat">הא״ב: ${v.alpha.length?v.alpha.map(esc).join(', '):'—'} · מצבים: ${current.states.length} · מעברים: ${current.transitions.length}</div>`;
+  el.innerHTML=h;
+}
+
+/* ─── interaction (no modes; click-to-connect) ─── */
+function toSvg(e){ const svg=$('canvas'); const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+let drag=null, lastClick={id:null,t:0};
+function onDown(e){
+  if(!current) return;
+  const sg=e.target.closest('[data-state-id]'), eg=e.target.closest('[data-trans-id]'), p=toSvg(e);
+  if(sg){ const s=stById(sg.dataset.stateId); drag={kind:'state', id:s.id, moved:false, ox:p.x-s.x, oy:p.y-s.y};
+    window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); }
+  else if(eg){ armed=null; selectTransition(eg.dataset.transId); }
+  else { drag={kind:'pan', moved:false, sx:e.clientX, sy:e.clientY, vx:view.x, vy:view.y};
+    window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); }
+}
+function onMove(e){
+  if(!drag) return;
+  if(drag.kind==='pan'){ const sc=view.w/$('canvas').clientWidth; view.x=drag.vx-(e.clientX-drag.sx)*sc; view.y=drag.vy-(e.clientY-drag.sy)*sc;
+    if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4) drag.moved=true; applyView(); return; }
+  const p=toSvg(e), s=stById(drag.id); if(!s)return; s.x=p.x-drag.ox; s.y=p.y-drag.oy; drag.moved=true;
+  const g=$('canvas').querySelector(`[data-state-id="${drag.id}"]`); if(g) g.setAttribute('transform',`translate(${s.x},${s.y})`);
+  $('canvas').querySelectorAll(`.edge[data-from="${drag.id}"],.edge[data-to="${drag.id}"]`).forEach(refreshEdgeEl);
+}
+function onUp(){
+  window.removeEventListener('pointermove',onMove); window.removeEventListener('pointerup',onUp);
+  const d=drag; drag=null; if(!d) return;
+  if(d.kind==='pan'){ if(!d.moved){ armed=null; deselect(); } return; }
+  if(d.moved){ save(); return; }              // dragged a state
+  onStateClick(d.id);                          // clicked a state
+}
+function onStateClick(id){
+  const now=Date.now();
+  if(lastClick.id===id && now-lastClick.t<330){ lastClick={id:null,t:0}; armed=null; selfLoop(id); return; }  /* לחיצה כפולה = לולאה עצמית */
+  lastClick={id, t:now};
+  if(armed && armed!==id){ const from=armed; promptTransition(from,id); return; }
+  if(armed && armed===id){ armed=null; deselect(); return; }
+  armed=id; sel={type:'state',id}; renderGraph(); renderInspector(); renderArmBanner();
+}
+function selectTransition(id,openEditor=true){
+  sel={type:'transition',id}; renderGraph(); renderInspector(); renderArmBanner();
+  if(openEditor && current && current.type==='pda') setTimeout(()=>editPdaTransition(id),0);
+}
+function deselect(){ armed=null; sel={type:null,id:null}; renderGraph(); renderInspector(); renderArmBanner(); }
+
+/* ─── simulation engine ─── */
+/* ── NFA (אוטומט סופי לא-דטרמיניסטי): קבוצת מצבים פעילים + סגור-ε ── */
+function nfaClosure(ids){ const set=new Set(ids), stack=[...ids];
+  while(stack.length){ const id=stack.pop();
+    for(const t of current.transitions){ if(t.from===id && (t.symbols||[]).includes('ε') && !set.has(t.to)){ set.add(t.to); stack.push(t.to); } } }
+  return [...set]; }
+function nfaMoveEdges(ids, sym){ const tos=new Set(), via=[];
+  for(const id of ids) for(const t of current.transitions){ if(t.from===id && (t.symbols||[]).includes(sym)){ tos.add(t.to); via.push(t.id); } }
+  return {states:nfaClosure([...tos]), via}; }
+function nfaStep(s){
+  if(s.pos>=s.input.length){ const acc=s.states.some(id=>stById(id).isAccept); s.status=acc?'accepted':'rejected'; s.reason=acc?'קיים מסלול שמסיים במצב מקבל ✓':'הקלט נגמר ואף מצב פעיל אינו מקבל ✗'; s.via=[]; return; }
+  const sym=s.input[s.pos]; const m=nfaMoveEdges(s.states, sym);
+  s.history.push(s.states.slice()); s.pos++; s.states=m.states; s.via=m.via;
+  if(!s.states.length){ s.status='rejected'; s.reason=`כל המסלולים נתקעו על '${sym}' ✗`; return; }
+  if(s.pos>=s.input.length){ const acc=s.states.some(id=>stById(id).isAccept); s.status=acc?'accepted':'rejected'; s.reason=acc?'קיים מסלול שמסיים במצב מקבל ✓':'הקלט נגמר ואף מסלול אינו מקבל ✗'; } }
+function nfaAccepts(input){ input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
+  let states=nfaClosure([start.id]);
+  for(const ch of String(input)){ states=nfaMoveEdges(states, ch).states; if(!states.length) return false; }
+  return states.some(id=>stById(id).isAccept); }
+function simReady(){ const v=computeValidation();
+  if(v.starts.length!==1){ toast('צריך בדיוק מצב התחלתי אחד','danger'); return false; }
+  if(!current.ndet && !v.deterministic){ toast('האוטומט אינו דטרמיניסטי — תקן לפני הרצה','danger'); return false; }
+  return true; }
+function simInit(w){ const st=current.states.find(s=>s.isStart);
+  if(current.type==='tm'){ const tape={}; const chars=[...String(w)];
+    tape[-2]='&'; tape[-1]='&';                  /* שני סימני התחלה (קבועים) */
+    chars.forEach((c,i)=>{ tape[i]=c; });        /* הקלט */
+    tape[chars.length]='&';                       /* סימן סוף (קבוע) */
+    return {tm:true, input:w, tape, head:0, steps:0, stateId:st.id, history:[], status:'running', reason:'', lastTransId:null, trail:[]}; }
+  if(current.type==='pda'){
+    if(current.ndet) return {pda:true, npda:true, input:String(w), configs:[{state:st.id, pos:0, stack:['Z₀'], via:null}], step:0, history:[], status:'running', reason:''};
+    return {pda:true, input:String(w), state:st.id, pos:0, stack:['Z₀'], step:0, history:[], status:'running', reason:'', lastVia:null, nd:false}; }
+  if(current.ndet) return {nfa:true, input:String(w), states:nfaClosure([st.id]), pos:0, history:[], status:'running', reason:'', via:[]};
+  return {input:w, pos:0, stateId:st.id, history:[], status:'running', reason:'', lastTransId:null, trail:[]}; }
+function simStepObj(s){
+  if(s.status!=='running') return;
+  if(s.tm) return tmStep(s);
+  if(s.pda) return pdaStep(s);
+  if(s.nfa) return nfaStep(s);
+  if(s.pos>=s.input.length){ const st=stById(s.stateId); s.status=st.isAccept?'accepted':'rejected';
+    s.reason=st.isAccept?'סוף הקלט במצב מקבל':'סוף הקלט במצב לא-מקבל'; s.lastTransId=null; return; }
+  const sym=s.input[s.pos];
+  const t=current.transitions.find(t=>t.from===s.stateId && t.symbols.includes(sym));
+  if(!t){ s.status='rejected'; s.reason=`נתקעה — אין מעבר מ-${stById(s.stateId).label} על '${sym}'`; s.lastTransId=null; return; }
+  s.history.push({stateId:s.stateId, pos:s.pos, lastTransId:s.lastTransId}); s.stateId=t.to; s.pos++; s.lastTransId=t.id; (s.trail=s.trail||[]).push(t.id);
+}
+function tmStep(s){
+  const st=stById(s.stateId);
+  if(st.isAccept){ s.status='accepted'; s.reason='הגיעה למצב מקבל ✓'; s.lastTransId=null; return; }
+  const read = (s.head in s.tape) ? s.tape[s.head] : BLANK;
+  let rule=null, trans=null;
+  for(const t of current.transitions){ if(t.from!==s.stateId) continue; const r=(t.rules||[]).find(r=>r.read===read); if(r){ rule=r; trans=t; break; } }
+  if(!rule){ s.status='rejected'; s.reason=`נתקעה — אין כלל מ-${st.label} עבור הקריאה '${read}'`; s.lastTransId=null; return; }
+  s.history.push({stateId:s.stateId, head:s.head, prev:read, lastTransId:s.lastTransId});
+  if(read!=='&') s.tape[s.head]=rule.write;   /* סימני הגבול & אינם ניתנים לשינוי */
+  s.head += (rule.move==='R'?1:-1); s.stateId=trans.to; s.lastTransId=trans.id; (s.trail=s.trail||[]).push(trans.id); s.steps=(s.steps||0)+1;
+  if(stById(s.stateId).isAccept){ s.status='accepted'; s.reason='הגיעה למצב מקבל ✓'; }
+  else if(s.steps>20000){ s.status='stopped'; s.reason='נעצר אחרי 20000 צעדים (ייתכן לולאה אינסופית)'; }
+}
+/* ─── PDA (אוטומט מחסנית) — לא דטרמיניסטי: קבוצת קונפיגורציות ─── */
+function pdaStackDone(stack){ return stack.length===0 || (stack.length===1 && stack[0]==='Z₀'); }   /* המחסנית חזרה למצב ההתחלתי: ריקה או רק Z₀ */
+function pdaCfgAccepts(c, len){ return c.pos===len && stById(c.state).isAccept && pdaStackDone(c.stack); }
+function pdaRuleParts(r){
+  if(r.op!==undefined) return {read:r.read||'', guard:r.top||'', removeTop:r.op==='pop', push:Array.isArray(r.push)?r.push:pdaTokenize(r.push)};
+  const lp=r.pop||'';                                   /* פורמט ישן: pop=סימן שנבדק ונשלף */
+  return {read:r.read||'', guard:lp, removeTop:lp!=='', push:Array.isArray(r.push)?r.push:pdaTokenize(r.push)};
+}
+function pdaApplicable(state, pos, stack, input){ const out=[];
+  for(const t of current.transitions){ if(t.from!==state) continue;
+    for(const r of (t.rules||[])){ const P=pdaRuleParts(r);
+      if(P.read && (pos>=input.length || input[pos]!==P.read)) continue;   /* הקלט אינו תואם */
+      if(P.guard && stack[0]!==P.guard) continue;                          /* בראש המחסנית אין את התו הנדרש */
+      if(P.removeTop && stack.length===0) continue;                        /* אי-אפשר לשלוף ממחסנית ריקה */
+      out.push({t, r, P});
+    }}
+  return out;
+}
+function pdaApply(s, t, r){ const P=pdaRuleParts(r);
+  const rest=P.removeTop ? s.stack.slice(1) : s.stack.slice();
+  s.stack=P.push.concat(rest);                            /* (אם נבחרה שליפה) שולפים את הראש, ואז דוחפים */
+  if(P.read) s.pos++;
+  s.state=t.to; s.lastVia=t.id;
+}
+/* ── PDA לא-דטרמיניסטי: קבוצת קונפיגורציות (נחקרים כל המסלולים במקביל) ── */
+function pdaSuccCfg(c, input){ const out=[];
+  for(const t of current.transitions){ if(t.from!==c.state) continue;
+    for(const r of (t.rules||[])){ const P=pdaRuleParts(r);
+      if(P.read && (c.pos>=input.length || input[c.pos]!==P.read)) continue;
+      if(P.guard && c.stack[0]!==P.guard) continue;
+      if(P.removeTop && c.stack.length===0) continue;
+      const nstack=P.push.concat(P.removeTop ? c.stack.slice(1) : c.stack.slice());
+      if(nstack.length>input.length+20) continue;            /* חסם גודל מחסנית */
+      out.push({state:t.to, pos:c.pos+(P.read?1:0), stack:nstack, via:t.id});
+    }}
+  return out;
+}
+function npdaStep(s){
+  if(s.configs.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול שמסיים במצב מקבל עם המחסנית בתחתית ✓'; return; }
+  const next=[], seen=new Set();
+  for(const c of s.configs) for(const nc of pdaSuccCfg(c, s.input)){ const k=nc.state+'|'+nc.pos+'|'+nc.stack.join(''); if(seen.has(k))continue; seen.add(k); next.push(nc); }
+  s.history.push(s.configs); s.configs=next; s.step=(s.step||0)+1;
+  if(!next.length){ s.status='rejected'; s.reason='כל המסלולים נתקעו ✗'; }
+  else if(next.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול מקבל ✓'; }
+  else if(s.step>4000 || next.length>1500){ s.status='stopped'; s.reason='נעצר — ריבוי מסלולים/צעדים'; }
+}
+function npdaAccepts(input){
+  input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
+  const seen=new Set(), queue=[{state:start.id, pos:0, stack:['Z₀']}]; let g=0;
+  while(queue.length && g++<400000){ const c=queue.shift(); const key=c.state+'|'+c.pos+'|'+c.stack.join('');
+    if(seen.has(key)) continue; seen.add(key);
+    if(pdaCfgAccepts(c,input.length)) return true;
+    for(const nc of pdaSuccCfg(c,input)) queue.push(nc);
+  }
+  return false;
+}
+function pdaStep(s){
+  if(s.npda) return npdaStep(s);
+  if(pdaCfgAccepts(s, s.input.length)){ s.status='accepted'; s.reason='הגענו למצב מקבל, כל הקלט נקרא והמחסנית חזרה לתחתית (Z₀) ✓'; s.lastVia=null; return; }
+  const apps=pdaApplicable(s.state, s.pos, s.stack, s.input);
+  if(!apps.length){ s.status='rejected'; s.lastVia=null;
+    s.reason = (s.pos<s.input.length)
+      ? `נתקעה — אין מעבר מ-${stById(s.state).label} על '${s.input[s.pos]}' כשבראש המחסנית '${s.stack[0]||'∅'}' ✗`
+      : (stById(s.state).isAccept ? `הקלט נגמר במצב מקבל, אך המחסנית לא חזרה לתחתית Z₀ (יש בה ${s.stack.join('')||'∅'}) ✗` : `הקלט נגמר במצב לא-מקבל ✗`);
+    return; }
+  s.history.push({state:s.state, pos:s.pos, stack:s.stack.slice(), lastVia:s.lastVia});
+  pdaApply(s, apps[0].t, apps[0].r);
+  s.step=(s.step||0)+1; s.nd=apps.length>1;
+  if(pdaCfgAccepts(s, s.input.length)){ s.status='accepted'; s.reason='הגענו למצב מקבל, כל הקלט נקרא והמחסנית חזרה לתחתית (Z₀) ✓'; }
+  else if(s.step>5000){ s.status='stopped'; s.reason='נעצר — ריצה ארוכה מדי (ייתכן לולאת ε)'; }
+}
+function pdaAccepts(input){
+  if(current.ndet) return npdaAccepts(input);
+  input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
+  let state=start.id, pos=0, stack=['Z₀'], seen=new Set(), g=0;
+  while(g++<200000){
+    if(pos===input.length && stById(state).isAccept && pdaStackDone(stack)) return true;
+    const key=state+'|'+pos+'|'+stack.join(''); if(seen.has(key)) return false;
+    seen.add(key);
+    const apps=pdaApplicable(state, pos, stack, input);
+    if(!apps.length) return false;
+    const P=apps[0].P;
+    stack=P.push.concat(P.removeTop ? stack.slice(1) : stack.slice());
+    if(P.read) pos++;
+    state=apps[0].t.to;
+  }
+  return false;
+}
+function simBack(){ if(!SIM||!SIM.history.length)return; const h=SIM.history.pop();
+  if(SIM.tm){ SIM.stateId=h.stateId; SIM.head=h.head; SIM.tape[h.head]=h.prev; SIM.lastTransId=h.lastTransId; if(SIM.trail)SIM.trail.pop(); SIM.steps=Math.max(0,(SIM.steps||1)-1); SIM.status='running'; SIM.reason=''; return; }
+  if(SIM.npda){ SIM.configs=h; SIM.step=Math.max(0,(SIM.step||1)-1); SIM.status='running'; SIM.reason=''; return; }
+  if(SIM.pda){ SIM.state=h.state; SIM.pos=h.pos; SIM.stack=h.stack; SIM.lastVia=h.lastVia; SIM.step=Math.max(0,(SIM.step||1)-1); SIM.status='running'; SIM.reason=''; return; }
+  if(SIM.nfa){ SIM.states=h; SIM.pos=Math.max(0,SIM.pos-1); SIM.via=[]; SIM.status='running'; SIM.reason=''; return; }
+  SIM.stateId=h.stateId; SIM.pos=h.pos; SIM.lastTransId=h.lastTransId; if(SIM.trail)SIM.trail.pop(); SIM.status='running'; SIM.reason=''; }
+function runQuick(w){ if(current.type==='pda'){ return {status: pdaAccepts(w)?'accepted':'rejected'}; } const s=simInit(w); let g=0; while(s.status==='running'&&g++<100000) simStepObj(s); return s; }
+
+function startStep(){ if(!simReady())return false; stopPlay(); SIM=simInit($('simWord').value); renderSim(); return true; }
+function quickRun(){ if(!startStep())return; let g=0; while(SIM.status==='running'&&g++<100000) simStepObj(SIM); renderSim(); }
+function animateEdgePulse(transId){
+  const line=$('canvas').querySelector(`[data-trans-id="${transId}"] .eline`); if(!line) return;
+  const len=line.getTotalLength(); if(!len) return;
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('class','pulse-dot'); dot.setAttribute('r','7');
+  $('nodes').appendChild(dot);
+  const dur=Math.max(180, Math.min(speed*0.75, 600)); let t0=null;
+  function frame(t){ if(t0===null)t0=t; const k=Math.min(1,(t-t0)/dur), pt=line.getPointAtLength(len*k);
+    dot.setAttribute('cx',pt.x); dot.setAttribute('cy',pt.y);
+    if(k<1) requestAnimationFrame(frame); else dot.remove(); }
+  requestAnimationFrame(frame);
+}
+function pulseState(stateId){
+  const g=$('canvas').querySelector(`[data-state-id="${stateId}"]`); if(!g) return;
+  const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  ring.setAttribute('class','state-ripple'); ring.setAttribute('r',R); ring.setAttribute('cx','0'); ring.setAttribute('cy','0');
+  g.appendChild(ring); setTimeout(()=>{ ring.remove(); }, 560);
+}
+function doStep(){ if(!SIM) return;
+  if(SIM.npda){ const before=SIM.step||0; simStepObj(SIM); renderSim();
+    if((SIM.step||0)>before){ [...new Set(SIM.configs.map(c=>c.via).filter(Boolean))].forEach(animateEdgePulse); [...new Set(SIM.configs.map(c=>c.state))].forEach(pulseState); }
+    return; }
+  if(SIM.pda){ const before=SIM.step||0; simStepObj(SIM); renderSim();
+    if((SIM.step||0)>before){ if(SIM.lastVia)animateEdgePulse(SIM.lastVia); pulseState(SIM.state); }
+    return; }
+  if(SIM.nfa){ const before=SIM.pos; simStepObj(SIM); renderSim();
+    if(SIM.pos>before){ (SIM.via||[]).forEach(animateEdgePulse); SIM.states.forEach(pulseState); }
+    return; }
+  const before=(SIM.trail||[]).length; simStepObj(SIM); renderSim();
+  if((SIM.trail||[]).length>before && SIM.lastTransId){ animateEdgePulse(SIM.lastTransId); pulseState(SIM.stateId); } }
+function simFwdR(){ doStep(); }
+function simBackR(){ simBack(); renderSim(); }
+function startPlay(){ if(playTimer)return; playTimer=setInterval(()=>{ if(!SIM||SIM.status!=='running'){ stopPlay(); renderSim(); return; } doStep(); }, speed); renderSim(); }
+function togglePlay(){ if(playTimer){ stopPlay(); renderSim(); } else startPlay(); }
+function playRun(){ stopPlay(); if(!startStep())return; startPlay(); }   /* הרץ = ניגון אוטומטי צעד-אחר-צעד */
+function stopPlay(){ if(playTimer){ clearInterval(playTimer); playTimer=null; } }
+function setSpeed(v){ speed=+v; if(playTimer){ stopPlay(); togglePlay(); } }
+function stopSim(){ stopPlay(); SIM=null; renderSim(); }
+function stepOnce(){ if(!SIM || SIM.status!=='running'){ startStep(); return; } doStep(); }
+function onWordInput(){ if(SIM){ stopPlay(); SIM=null; } renderSim(); }
+function resetBoard(){ if(!current) return; current.states=[]; current.transitions=[]; sel={type:null,id:null}; armed=null; stopPlay(); SIM=null; const w=$('simWord'); if(w)w.value=''; save(); renderAll(); fitView(); toast('הלוח נוקה — אפשר להתחיל מחדש'); }
+
+function paintSim(){
+  qa('.node.active').forEach(n=>n.classList.remove('active','ok','bad'));
+  qa('.edge').forEach(e=>{ e.classList.remove('cur'); const l=e.querySelector('.eline'); if(l) l.setAttribute('marker-end',e.classList.contains('ai-low')?'url(#arrowA)':'url(#arrow)'); });
+  if(!SIM)return;
+  if(SIM.nfa){
+    const accSet=new Set(SIM.states.filter(id=>stById(id).isAccept));
+    SIM.states.forEach(id=>{ const n=$('canvas').querySelector(`[data-state-id="${id}"]`); if(n){ n.classList.add('active'); if(SIM.status==='accepted' && accSet.has(id)) n.classList.add('ok'); } });
+    (SIM.via||[]).forEach(tid=>{ const e=$('canvas').querySelector(`[data-trans-id="${tid}"]`); if(e){ e.classList.add('cur'); const l=e.querySelector('.eline'); if(l) l.setAttribute('marker-end','url(#arrowG)'); } });
+    return;
+  }
+  if(SIM.npda){
+    const accSt=new Set(SIM.configs.filter(c=>pdaCfgAccepts(c,SIM.input.length)).map(c=>c.state));
+    [...new Set(SIM.configs.map(c=>c.state))].forEach(sid=>{ const n=$('canvas').querySelector(`[data-state-id="${sid}"]`); if(n){ n.classList.add('active'); if(accSt.has(sid))n.classList.add('ok'); } });
+    [...new Set(SIM.configs.map(c=>c.via).filter(Boolean))].forEach(tid=>{ const e=$('canvas').querySelector(`[data-trans-id="${tid}"]`); if(e){ e.classList.add('cur'); const l=e.querySelector('.eline'); if(l) l.setAttribute('marker-end','url(#arrowG)'); } });
+    return;
+  }
+  if(SIM.pda){
+    const n=$('canvas').querySelector(`[data-state-id="${SIM.state}"]`);
+    if(n){ n.classList.add('active'); if(SIM.status==='accepted')n.classList.add('ok'); if(SIM.status==='rejected')n.classList.add('bad'); }
+    if(SIM.lastVia){ const e=$('canvas').querySelector(`[data-trans-id="${SIM.lastVia}"]`); if(e){ e.classList.add('cur'); const l=e.querySelector('.eline'); if(l) l.setAttribute('marker-end','url(#arrowG)'); } }
+    return;
+  }
+  if(SIM.lastTransId){ const e=$('canvas').querySelector(`[data-trans-id="${SIM.lastTransId}"]`); if(e){ e.classList.add('cur'); const l=e.querySelector('.eline'); if(l) l.setAttribute('marker-end','url(#arrowG)'); } }  /* רק המעבר הנוכחי בירוק — לא נשאר */
+  const node=$('canvas').querySelector(`[data-state-id="${SIM.stateId}"]`);
+  if(node){ node.classList.add('active'); if(SIM.status==='accepted')node.classList.add('ok'); if(SIM.status==='rejected')node.classList.add('bad'); }
+}
+function tapeHTML(chars, pos, status){
+  const cells = chars.length ? chars.map((c,i)=>{
+    let cls='cell'; const head=i===pos&&(status==='running'||status==='preview'); const stuck=status==='rejected'&&i===pos;
+    if(status!=='preview'&&i<pos)cls+=' read'; if(head)cls+=' head'; if(stuck)cls+=' stuck';
+    return `<span class="${cls}">${esc(c)}${head?'<span class="hmark"></span>':''}</span>`;
+  }).join('') : '<span class="cell empty">ε — מילה ריקה</span>';
+  return `<div class="tape-cells">${cells}</div>`;
+}
+function tmTapeHTML(s){
+  const used=Object.keys(s.tape).map(Number);
+  const lo=Math.min(s.head, used.length?Math.min(...used):s.head);
+  const hi=Math.max(s.head, used.length?Math.max(...used):s.head);
+  let cells='';
+  for(let p=lo;p<=hi;p++){ const v=(p in s.tape)?s.tape[p]:BLANK; const head=p===s.head;
+    cells+=`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`; }
+  return `<div class="tape-cells">${cells}</div>`;
+}
+function tmPreviewHTML(word){ const chars=[...String(word)];
+  const cell=(v,head)=>`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`;
+  let html = cell('&')+cell('&');                  /* שני סימני התחלה */
+  chars.forEach((c,i)=> html+=cell(c, i===0));     /* קלט, ראש על הראשון */
+  html += cell('&', chars.length===0);              /* סימן סוף (אם הקלט ריק — הראש עליו) */
+  return `<div class="tape-cells">${html}</div>`;
+}
+function pdaInputHTML(s){
+  if(s.npda){
+    const heads=new Set(s.configs.map(c=>c.pos)), minPos=s.configs.length?Math.min(...s.configs.map(c=>c.pos)):0;
+    const cs=[...s.input].map((c,i)=>{ let cls='cell'; if(i<minPos)cls+=' read'; if(heads.has(i))cls+=' head'; return `<span class="${cls}">${esc(c)}${heads.has(i)?'<span class="hmark"></span>':''}</span>`; }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
+    return `<div class="tape-cells">${cs}</div>`;
+  }
+  const cells = [...s.input].map((c,i)=>{
+    let cls='cell'; if(i<s.pos)cls+=' read'; if(i===s.pos)cls+=' head';
+    return `<span class="${cls}">${esc(c)}${i===s.pos?'<span class="hmark"></span>':''}</span>`;
+  }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
+  return `<div class="tape-cells">${cells}</div>`;
+}
+function pdaInputPreview(word){ const chars=[...String(word)];
+  if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
+  return `<div class="tape-cells">${chars.map((c,i)=>`<span class="cell ${i===0?'head':''}">${esc(c)}${i===0?'<span class="hmark"></span>':''}</span>`).join('')}</div>`;
+}
+function nfaControlsHTML(s){
+  const ctrls=`<div class="simctrls" style="margin-top:11px">
+      <button class="btn btn-sm" onclick="simBackR()" ${s.history.length?'':'disabled'}>${ico('back')} אחורה</button>
+      <button class="btn btn-sm btn-primary" onclick="simFwdR()" ${s.status==='running'?'':'disabled'}>${ico('fwd')} צעד</button>
+      <button class="btn btn-sm" onclick="togglePlay()" ${s.status==='running'?'':'disabled'}>${ico('play')} ${playTimer?'עצור':'נגן'}</button>
+    </div>
+    <label class="spd" style="margin-top:9px">מהירות<input type="range" min="120" max="1200" step="120" value="${1320-speed}" onchange="setSpeed(1320-this.value)"></label>`;
+  let verdict=''; if(s.status==='accepted') verdict=`<div class="verdict ok">${ico('check')} מתקבלת</div>`;
+  else if(s.status==='rejected') verdict=`<div class="verdict bad">נדחית</div>`;
+  const active = s.states.length ? s.states.map(id=>esc(stById(id).label)).join(', ') : '∅ (אין)';
+  const cur = s.pos<s.input.length ? esc(s.input[s.pos]) : '—';
+  return `${ctrls}
+    <div class="simstat" style="margin-top:9px">
+      <div>מצבים פעילים: <b>${active}</b></div>
+      <div>סימן נוכחי: <b>${cur}</b> · מיקום: <b>${s.pos}</b>/${s.input.length}</div>
+    </div>
+    ${s.reason?`<div class="simline" style="margin-top:6px">${esc(s.reason)}</div>`:''}
+    ${verdict?`<div style="margin-top:8px">${verdict}</div>`:''}`;
+}
+function pdaControlsHTML(s){
+  const ctrls=`<div class="simctrls" style="margin-top:11px">
+      <button class="btn btn-sm" onclick="simBackR()" ${s.history.length?'':'disabled'}>${ico('back')} אחורה</button>
+      <button class="btn btn-sm btn-primary" onclick="simFwdR()" ${s.status==='running'?'':'disabled'}>${ico('fwd')} צעד</button>
+      <button class="btn btn-sm" onclick="togglePlay()" ${s.status==='running'?'':'disabled'}>${ico('play')} ${playTimer?'עצור':'נגן'}</button>
+    </div>
+    <label class="spd" style="margin-top:9px">מהירות<input type="range" min="120" max="1200" step="120" value="${1320-speed}" onchange="setSpeed(1320-this.value)"></label>`;
+  let verdict=''; if(s.status==='accepted') verdict=`<div class="verdict ok">${ico('check')} מתקבלת</div>`;
+  else if(s.status==='rejected') verdict=`<div class="verdict bad">נדחית</div>`;
+  else if(s.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber)">נעצר</div>`;
+  if(s.npda){
+    return `${ctrls}
+    <div class="simstat" style="margin-top:9px"><div>מסלולים פעילים: <b>${s.configs.length}</b> · צעד: <b>${s.step||0}</b></div><div style="font-size:11px;margin-top:2px;color:var(--muted)">כל מסלול = מחסנית נפרדת, בכרטיס «מחסנית» ←</div></div>
+    ${s.reason?`<div class="simline" style="margin-top:6px">${esc(s.reason)}</div>`:''}
+    ${verdict?`<div style="margin-top:8px">${verdict}</div>`:''}`;
+  }
+  const top = s.stack.length? esc(s.stack[0]) : 'ריק';
+  const rem = s.pos<s.input.length? esc(s.input.slice(s.pos)) : '—';
+  return `${ctrls}
+    <div class="simstat" style="margin-top:9px">
+      <div>מצב פעיל: <b>${esc(stById(s.state).label)}</b></div>
+      <div>בראש המחסנית: <b>${top}</b></div>
+      <div>נותר לקרוא: <b>${rem}</b> · צעד: <b>${s.step||0}</b></div>
+    </div>
+    ${s.nd?`<div class="simline" style="margin-top:6px;color:var(--amber)">יש כאן יותר ממעבר אחד אפשרי (אי-דטרמיניזם) — נבחר הראשון.</div>`:''}
+    ${s.reason?`<div class="simline" style="margin-top:6px">${esc(s.reason)}</div>`:''}
+    ${verdict?`<div style="margin-top:8px">${verdict}</div>`:''}`;
+}
+function pdaStackHTML(c){
+  const chars=[...c.stack];
+  if(!chars.length) return `<div class="stk-wrap"><div class="stk"><div class="stk-cell empty">ריקה</div></div><div class="stk-floor"></div></div>`;
+  const MAX=14; let shown=chars, extra=0;
+  if(chars.length>MAX){ shown=chars.slice(0,MAX-1); extra=chars.length-(MAX-1); }
+  let cells = shown.map((ch,i)=>`<div class="stk-cell${i===0?' top':''}">${esc(ch)}</div>`).join('');
+  if(extra) cells += `<div class="stk-cell more">+${extra}</div>`;
+  return `<div class="stk-wrap"><div class="stk-cap">ראש ↑</div><div class="stk">${cells}</div><div class="stk-floor"></div></div>`;
+}
+function pdaCfgCardHTML(c,len,input){
+  const acc=pdaCfgAccepts(c,len), rem=c.pos>=len?'—':esc(input.slice(c.pos));
+  return `<div class="cfg-card${acc?' acc':''}"><div class="cfg-top">מצב <b>${esc(stById(c.state).label)}</b><span class="cfg-rem">נותר: <b>${rem}</b></span></div>${pdaStackHTML(c)}</div>`;
+}
+function renderStack(){
+  const card=$('stackFloat'), bar=$('stackBar');
+  if(!card||!bar) return;
+  if(!current || current.type!=='pda'){ card.style.display='none'; return; }
+  card.style.display='';
+  if(SIM && SIM.npda){
+    const cards = SIM.configs.slice(0,16).map(c=>pdaCfgCardHTML(c,SIM.input.length,SIM.input)).join('')
+      + (SIM.configs.length>16?`<div class="cfg-card more-card">…+${SIM.configs.length-16}</div>`:'');
+    bar.innerHTML = `<div class="cfg-cards">${cards||'<div class="cfg">אין מסלולים פעילים</div>'}</div>`;
+  } else if(SIM && SIM.pda){
+    bar.innerHTML = `<div class="cfg-cards"><div class="cfg-card${pdaCfgAccepts(SIM,SIM.input.length)?' acc':''}"><div class="cfg-top">מצב <b>${esc(stById(SIM.state).label)}</b></div>${pdaStackHTML({stack:SIM.stack})}</div></div>`;
+  } else {
+    bar.innerHTML = `<div class="cfg-cards"><div class="cfg-card idle"><div class="cfg-top">מצב התחלתי</div>${pdaStackHTML({stack:['Z₀']})}</div></div><div class="stk-hint">המחסנית מתחילה עם <b>Z₀</b> בתחתית. הקלד מילה ולחץ «הרץ» או «צעד».</div>`;
+  }
+}
+function renderSim(){
+  paintSim();
+  renderStack();
+  const word=$('simWord')?$('simWord').value:'';
+  const tb=$('tapeBar'), rc=$('runControls');
+  /* bottom: only the tape itself */
+  if(tb){
+    if(SIM) tb.innerHTML = SIM.pda ? pdaInputHTML(SIM) : (SIM.tm ? tmTapeHTML(SIM) : tapeHTML([...SIM.input], SIM.pos, SIM.status));
+    else if(word) tb.innerHTML = (current&&current.type==='pda') ? pdaInputPreview(word) : ((current&&current.type==='tm') ? tmPreviewHTML(word) : tapeHTML([...word], 0, 'preview'));
+    else tb.innerHTML = '<div class="tape-empty">הקלד אותיות בשדה <b>הסרט שלך</b> בלוח הבקרה — והסרט יופיע כאן.</div>';
+    const h=tb.querySelector('.cell.head'); if(h){ const hr=h.getBoundingClientRect(), cr=tb.getBoundingClientRect(); tb.scrollLeft += (hr.left+hr.width/2)-(cr.left+cr.width/2); }
+  }
+  /* side panel: run controls + status + verdict */
+  if(rc){
+    if(!SIM){ rc.innerHTML=''; return; }
+    if(SIM.pda){ rc.innerHTML = pdaControlsHTML(SIM); return; }
+    if(SIM.nfa){ rc.innerHTML = nfaControlsHTML(SIM); return; }
+    const path=[...SIM.history.map(h=>stById(h.stateId).label), stById(SIM.stateId).label].join(' → ');
+    let verdict=''; if(SIM.status==='accepted') verdict=`<div class="verdict ok">${ico('check')} מתקבלת</div>`;
+    else if(SIM.status==='rejected') verdict=`<div class="verdict bad">נדחית</div>`;
+    else if(SIM.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber)">נעצר</div>`;
+    const stat = SIM.tm ? `
+      <div class="simstat" style="margin-top:9px">
+        <div>מיקום הראש: <b>${SIM.head}</b></div>
+        <div>תחת הראש: <b>${esc((SIM.head in SIM.tape)?SIM.tape[SIM.head]:BLANK)}</b></div>
+        <div>מצב פעיל: <b>${esc(stById(SIM.stateId).label)}</b></div>
+        <div>צעדים: <b>${SIM.steps||0}</b></div>
+      </div>` : `
+      <div class="simstat" style="margin-top:9px">
+        <div>מיקום בסרט: <b>${SIM.pos}</b> / ${SIM.input.length}</div>
+        <div>סימן נוכחי: <b>${SIM.pos<SIM.input.length?esc(SIM.input[SIM.pos]):'—'}</b></div>
+        <div>מצב פעיל: <b>${esc(stById(SIM.stateId).label)}</b></div>
+      </div>`;
+    rc.innerHTML = `
+      <div class="simctrls" style="margin-top:11px">
+        <button class="btn btn-sm" onclick="simBackR()" ${SIM.history.length?'':'disabled'}>${ico('back')} אחורה</button>
+        <button class="btn btn-sm btn-primary" onclick="simFwdR()" ${SIM.status==='running'?'':'disabled'}>${ico('fwd')} צעד</button>
+        <button class="btn btn-sm" onclick="togglePlay()" ${SIM.status==='running'?'':'disabled'}>${ico('play')} ${playTimer?'עצור':'נגן'}</button>
+      </div>
+      <label class="spd" style="margin-top:9px">מהירות<input type="range" min="120" max="1200" step="120" value="${1320-speed}" onchange="setSpeed(1320-this.value)"></label>
+      ${stat}
+      ${SIM.reason?`<div class="simline" style="margin-top:6px">${esc(SIM.reason)}</div>`:''}
+      <div class="simpath" style="margin-top:4px">מסלול: ${esc(path)}</div>
+      ${verdict?`<div style="margin-top:8px">${verdict}</div>`:''}`;
+  }
+}
+
+/* ─── batch self-check (modal) ─── */
+function openBatch(){ if(!current)return; const wrap=document.createElement('div'); wrap.innerHTML='<div id="batchBody"></div>';
+  _buildDialog({title:'בדיקה עצמית — הרצת מילים', body:wrap, buttons:[{text:'סגור', value:null, primary:true}], dismissValue:null}); renderBatch(); }
+function renderBatch(){
+  const el=$('batchBody'); if(!el||!current) return;
+  const rows=current.tests.map((t,i)=>`
+    <div class="brow">
+      <input class="fld bword" value="${esc(t.word)}" placeholder="מילה (ריק = ε)" onchange="setTest(${i},'word',this.value)">
+      <select class="fld bexp" onchange="setTest(${i},'expect',this.value)">
+        <option value="true" ${t.expect?'selected':''}>מתקבלת</option>
+        <option value="false" ${!t.expect?'selected':''}>נדחית</option>
+      </select>
+      <span class="bres" id="bres-${i}"></span>
+      <button class="btn btn-sm" onclick="delTest(${i})">✕</button>
+    </div>`).join('');
+  el.innerHTML=`<div class="bhead">
+      <button class="btn btn-sm" onclick="addTest()">${ico('plus')} מילה</button>
+      <button class="btn btn-sm btn-run" onclick="runBatch()">${ico('play')} הרץ הכל</button>
+      <span class="bsum" id="batchSummary"></span>
+    </div>${rows||'<div class="help-box">הוסף מילות מבחן עם התוצאה הצפויה, ובדוק שהאוטומט מזהה בדיוק את השפה.</div>'}`;
+}
+function setTest(i,k,v){ if(k==='expect') v=(v==='true'); current.tests[i][k]=v; save(); }
+function addTest(){ current.tests.push({word:'',expect:true}); save(); renderBatch(); }
+function delTest(i){ current.tests.splice(i,1); save(); renderBatch(); }
+function runBatch(){ if(!simReady())return; let pass=0;
+  current.tests.forEach((t,i)=>{ const span=$('bres-'+i); if(!span)return;
+    const res=runQuick(t.word), acc=res.status==='accepted', ok=(acc===!!t.expect); if(ok)pass++;
+    span.textContent=(ok?'✓ ':'✗ ')+(acc?'מתקבלת':'נדחית'); span.className='bres '+(ok?'ok':'bad'); });
+  const sum=$('batchSummary'); if(sum) sum.textContent=`${pass}/${current.tests.length} עברו`;
+}
+
+/* ─── library ─── */
+function openLibrary(){
+  const wrap=document.createElement('div');
+  wrap.innerHTML = (DB.automata.map(a=>`
+    <div class="lib-item ${current&&a.id===current.id?'cur':''}">
+      <div class="li-main" data-open="${a.id}">
+        <div class="li-name">${esc(a.name)}</div>
+        <div class="li-meta">${a.type.toUpperCase()} · ${a.states.length} מצבים · ${a.transitions.length} מעברים</div>
+      </div>
+      <button class="li-act" title="שכפל" data-dup="${a.id}">${ico('copy')}</button>
+      <button class="li-act" title="שנה שם" data-ren="${a.id}">${ico('pencil')}</button>
+      <button class="li-act" title="ייצא" data-exp="${a.id}">${ico('download')}</button>
+      <button class="li-act" title="מחק" data-del="${a.id}">${ico('trash')}</button>
+    </div>`).join('') || '<div class="help-box">אין מודלים עדיין.</div>')
+    + `<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="exportAll()">${ico('download')} ייצוא הכל</button>
+        <button class="btn btn-sm" onclick="fileInput.click()">${ico('upload')} ייבוא</button>
+      </div>`;
+  const dlg=_buildDialog({ title:'המודלים שלי', body:wrap,
+    buttons:[{text:'מודל חדש', value:'new'}, {text:'סגור', value:null, primary:true}], dismissValue:null });
+  wrap.addEventListener('click', e=>{ const t=e.target;
+    const open=t.closest('[data-open]'), dup=t.closest('[data-dup]'), ren=t.closest('[data-ren]'), del=t.closest('[data-del]'), exp=t.closest('[data-exp]');
+    if(open){ openAutomaton(open.dataset.open); closeTopModal(); }
+    else if(dup){ dupAutomaton(dup.dataset.dup); closeTopModal(); openLibrary(); }
+    else if(ren){ const a=DB.automata.find(x=>x.id===ren.dataset.ren);
+      promptDialog('שם חדש',{value:a.name}).then(v=>{ if(v){ a.name=v; save(); renderTopbar(); closeTopModal(); openLibrary(); } }); }
+    else if(exp){ const a=DB.automata.find(x=>x.id===exp.dataset.exp); download(safeName(a.name)+'.json', JSON.stringify(a,null,2)); }
+    else if(del){ const a=DB.automata.find(x=>x.id===del.dataset.del);
+      confirmDialog('למחוק מודל?',`"${a.name}" יימחק לצמיתות.`,{danger:true,confirmText:'מחק'}).then(ok=>{ if(ok){ delAutomaton(del.dataset.del); closeTopModal(); openLibrary(); } }); }
+  });
+  dlg.then(v=>{ if(v==='new') newModel(); });
+}
+function closeTopModal(){ const all=qa('.modal-bg'); const el=all[all.length-1]; if(el)el.remove(); }
+function safeName(n){ return String(n||'model').replace(/[\\/:*?"<>|]+/g,'_').slice(0,40); }
+function newModel(){
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`
+    <label class="lbl">שם המודל</label>
+    <input id="nmName" class="fld" placeholder="למשל: זוגי a-ים">
+    <label class="lbl" style="margin-top:12px">סוג המודל</label>
+    <div class="toggles" style="grid-template-columns:1fr;margin-top:4px">
+      <button type="button" class="chip on" data-tp="dfa">אוטומט סופי דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="nfa">אוטומט סופי לא-דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="pda">אוטומט מחסנית דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="npda">אוטומט מחסנית לא-דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="tm">מכונת טיורינג</button>
+    </div>`;
+  let tp='dfa';
+  wrap.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ tp=c.dataset.tp; wrap.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c)); });
+  const nm={dfa:'מודל חדש', nfa:'אוטומט סופי לא-דטרמיניסטי', pda:'אוטומט מחסנית', npda:'אוטומט מחסנית לא-דטרמיניסטי', tm:'מכונת טיורינג'};
+  const SUBMIT=Symbol();
+  _buildDialog({title:'מודל חדש', body:wrap, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
+  .then(v=>{ if(v!==SUBMIT)return; const name=(wrap.querySelector('#nmName').value||'').trim()||nm[tp]||'מודל חדש';
+    const a=newAutomaton(name, (tp==='npda'?'pda':tp==='nfa'?'dfa':tp)); if(tp==='npda'||tp==='nfa') a.ndet=true; DB.automata.push(a); openAutomaton(a.id); });
+}
+function renameModel(){ if(!current)return; promptDialog('שם המודל',{value:current.name}).then(v=>{ if(v){ current.name=v; save(); renderTopbar(); } }); }
+function dupAutomaton(id){ const a=DB.automata.find(x=>x.id===id); const c=JSON.parse(JSON.stringify(a));
+  c.id=uid(); c.name=a.name+' (עותק)'; const map={};
+  c.states.forEach(s=>{ const n=uid(); map[s.id]=n; s.id=n; });
+  c.transitions.forEach(t=>{ t.id=uid(); t.from=map[t.from]; t.to=map[t.to]; });
+  c.updated=Date.now(); DB.automata.push(c); save(); toast('שוכפל'); }
+function delAutomaton(id){ DB.automata=DB.automata.filter(a=>a.id!==id);
+  if(current&&current.id===id){ current=DB.automata[0]||null; if(current)DB.settings.lastId=current.id; renderAll(); fitView(); } save(); renderTabs(); }
+
+/* ─── import / export ─── */
+function exportAll(){ download('automata-backup.json', JSON.stringify({automata:DB.automata}, null, 2)); toast('יוצא גיבוי','success'); }
+function onImport(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader();
+  r.onload=()=>{ try{ importData(JSON.parse(r.result)); }catch(err){ toast('קובץ JSON לא תקין','danger'); } };
+  r.readAsText(f); e.target.value=''; }
+function importData(data){ let arr=data.automata||(data.states?[data]:null);
+  if(!Array.isArray(arr)){ toast('מבנה קובץ לא מזוהה','danger'); return; }
+  let n=0; arr.forEach(a=>{ if(!a||!Array.isArray(a.states))return; a.id=uid(); a.tests=a.tests||[]; a.type=a.type||'dfa';
+    a.alphabet=a.alphabet||[]; a.transitions=a.transitions||[]; DB.automata.push(a); n++; });
+  save(); toast(`יובאו ${n} מודלים`,'success'); qa('.modal-bg').forEach(m=>m.remove()); if(n) openAutomaton(DB.automata[DB.automata.length-1].id);
+}
+
+/* ─── render all ─── */
+function renderAll(){ stopSim(); renderTopbar(); renderGraph(); renderInspector(); renderValidator(); renderArmBanner(); renderGuide(); renderModeBits(); renderTabs(); }
+
+/* ─── examples ─── */
+function ex(name, alphabet, states, trans, tests, ndet){
+  const a={ id:uid(), name, type:'dfa', ndet:!!ndet, alphabet, states:[], transitions:[], tests:tests||[], updated:Date.now() }; const map={};
+  states.forEach(s=>{ const id=uid(); map[s.k]=id; a.states.push({id, label:s.l, x:s.x, y:s.y, isStart:!!s.s, isAccept:!!s.a}); });
+  trans.forEach(t=> a.transitions.push({ id:uid(), from:map[t.f], to:map[t.t], symbols:t.y })); return a;
+}
+function exTM(name, states, trans, tests){
+  const a={ id:uid(), name, type:'tm', alphabet:[], states:[], transitions:[], tests:tests||[], updated:Date.now() }; const map={};
+  states.forEach(s=>{ const id=uid(); map[s.k]=id; a.states.push({id, label:s.l, x:s.x, y:s.y, isStart:!!s.s, isAccept:!!s.a}); });
+  trans.forEach(t=> a.transitions.push({ id:uid(), from:map[t.f], to:map[t.t], rules:t.r })); return a;
+}
+function exPDA(name, states, trans, tests, ndet){
+  const a={ id:uid(), name, type:'pda', ndet:!!ndet, alphabet:[], states:[], transitions:[], tests:tests||[], updated:Date.now() }; const map={};
+  states.forEach(s=>{ const id=uid(); map[s.k]=id; a.states.push({id, label:s.l, x:s.x, y:s.y, isStart:!!s.s, isAccept:!!s.a}); });
+  trans.forEach(t=> a.transitions.push({ id:uid(), from:map[t.f], to:map[t.t], rules:t.r })); return a;
+}
+function seedExamples(){
+  DB.automata.push(ex('זוגי a-ים', ['a','b'],
+    [{k:0,l:'q0',x:380,y:300,s:1,a:1},{k:1,l:'q1',x:680,y:300}],
+    [{f:0,t:1,y:['a']},{f:1,t:0,y:['a']},{f:0,t:0,y:['b']},{f:1,t:1,y:['b']}],
+    [{word:'',expect:true},{word:'aa',expect:true},{word:'a',expect:false},{word:'abba',expect:true},{word:'aba',expect:true},{word:'ab',expect:false}]));
+  DB.automata.push(ex('מסתיימת ב-ab', ['a','b'],
+    [{k:0,l:'q0',x:240,y:300,s:1},{k:1,l:'q1',x:520,y:300},{k:2,l:'q2',x:800,y:300,a:1}],
+    [{f:0,t:1,y:['a']},{f:0,t:0,y:['b']},{f:1,t:1,y:['a']},{f:1,t:2,y:['b']},{f:2,t:1,y:['a']},{f:2,t:0,y:['b']}],
+    [{word:'ab',expect:true},{word:'aab',expect:true},{word:'abab',expect:true},{word:'ba',expect:false},{word:'a',expect:false}]));
+  DB.automata.push(ex('מכילה aba', ['a','b'],
+    [{k:0,l:'q0',x:220,y:220,s:1},{k:1,l:'q1',x:480,y:220},{k:2,l:'q2',x:740,y:220},{k:3,l:'q3',x:740,y:480,a:1}],
+    [{f:0,t:1,y:['a']},{f:0,t:0,y:['b']},{f:1,t:1,y:['a']},{f:1,t:2,y:['b']},{f:2,t:3,y:['a']},{f:2,t:0,y:['b']},{f:3,t:3,y:['a','b']}],
+    [{word:'aba',expect:true},{word:'aaba',expect:true},{word:'abba',expect:false},{word:'ab',expect:false}]));
+  DB.automata.push(ex('מתחילה ב-a (לא מלא)', ['a','b'],
+    [{k:0,l:'q0',x:380,y:300,s:1},{k:1,l:'q1',x:680,y:300,a:1}],
+    [{f:0,t:1,y:['a']},{f:1,t:1,y:['a','b']}],
+    [{word:'a',expect:true},{word:'abb',expect:true},{word:'b',expect:false},{word:'ba',expect:false}]));
+  DB.automata.push(ex('מסתיימת ב-ab (אוטומט סופי לא-דטרמיניסטי)', ['a','b'],
+    [{k:0,l:'q0',x:240,y:300,s:1},{k:1,l:'q1',x:500,y:300},{k:2,l:'q2',x:760,y:300,a:1}],
+    [{f:0,t:0,y:['a','b']},{f:0,t:1,y:['a']},{f:1,t:2,y:['b']}],
+    [{word:'ab',expect:true},{word:'aab',expect:true},{word:'abab',expect:true},{word:'bbab',expect:true},{word:'ba',expect:false},{word:'abb',expect:false},{word:'a',expect:false},{word:'',expect:false}],
+    true));
+  DB.automata.push(exTM('מכונת טיורינג — משלימה ביטים (0↔1)',
+    [{k:0,l:'q0',x:380,y:300,s:1},{k:1,l:'q1',x:720,y:300,a:1}],
+    [{f:0,t:0,r:[{read:'0',write:'1',move:'R'},{read:'1',write:'0',move:'R'}]},
+     {f:0,t:1,r:[{read:'&',write:'&',move:'R'}]}],
+    [{word:'1011',expect:true},{word:'000',expect:true}]));
+  DB.automata.push(exPDA('aⁿbⁿ (מחסנית דטרמיניסטי)',
+    [{k:0,l:'q0',x:360,y:300,s:1,a:1},{k:1,l:'q1',x:680,y:300,a:1}],
+    [{f:0,t:0,r:[{read:'a',pop:'',push:'A'}]},
+     {f:0,t:1,r:[{read:'b',pop:'A',push:''}]},
+     {f:1,t:1,r:[{read:'b',pop:'A',push:''}]}],
+    [{word:'',expect:true},{word:'ab',expect:true},{word:'aabb',expect:true},{word:'aaabbb',expect:true},{word:'aab',expect:false},{word:'abb',expect:false},{word:'ba',expect:false}]));
+  DB.automata.push(exPDA('wwᴿ פלינדרומים (מחסנית לא-דטרמיניסטי)',
+    [{k:0,l:'q0',x:360,y:300,s:1},{k:1,l:'q1',x:700,y:300,a:1}],
+    [{f:0,t:0,r:[{read:'a',top:'',op:'push',push:['a']},{read:'b',top:'',op:'push',push:['b']}]},
+     {f:0,t:1,r:[{read:'',top:'',op:'none',push:[]}]},
+     {f:1,t:1,r:[{read:'a',top:'a',op:'pop',push:[]},{read:'b',top:'b',op:'pop',push:[]}]}],
+    [{word:'',expect:true},{word:'aa',expect:true},{word:'abba',expect:true},{word:'baab',expect:true},{word:'abaaba',expect:true},{word:'ab',expect:false},{word:'aba',expect:false},{word:'aabb',expect:false},{word:'abab',expect:false}],
+    true));
+  DB.settings.lastId = DB.automata[0].id;
+}
+
+/* ─── init ─── */
+function setIcons(){
+  const set=(id,html)=>{ const e=$(id); if(e) e.innerHTML=html; };
+  set('renameBtn', ico('pencil'));
+  set('libBtn', ico('folder')+' פתח');
+  set('saveBtn', ico('download')+' שמור');
+  set('resetBtn', ico('trash')+' נקה הכל');
+  set('addStateBtn', ico('plus')+' מצב חדש');
+  set('wordLabel', ico('film')+' הסרט שלך');
+  set('runBtn', ico('play')+' הרץ');
+  set('stepBtn', ico('fwd')+' צעד');
+  set('batchBtn', ico('check')+' בדיקה עצמית');
+}
+function makeDraggable(el, handle){
+  let sx=0, sy=0, ox=0, oy=0, dragging=false;
+  handle.addEventListener('pointerdown', e=>{
+    if(e.target.closest('button,input,a,select')) return;
+    dragging=true; const r=el.getBoundingClientRect();
+    el.style.left=r.left+'px'; el.style.top=r.top+'px'; el.style.right='auto'; el.style.bottom='auto'; el.style.transform='none';
+    sx=e.clientX; sy=e.clientY; ox=r.left; oy=r.top;
+    try{ handle.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  handle.addEventListener('pointermove', e=>{ if(!dragging) return;
+    let nx=ox+(e.clientX-sx), ny=oy+(e.clientY-sy);
+    nx=Math.max(4, Math.min(innerWidth-el.offsetWidth-4, nx));
+    ny=Math.max(4, Math.min(innerHeight-el.offsetHeight-4, ny));
+    el.style.left=nx+'px'; el.style.top=ny+'px';
+  });
+  handle.addEventListener('pointerup', ()=>{ dragging=false; });
+}
+function toggleGuide(){ const b=$('guideBody'), c=$('guideChev'); const open=b.style.display!=='none';
+  b.style.display=open?'none':'block'; if(c)c.textContent=open?'▴':'▾'; }
+function renderGuide(){ const el=$('guideBody'); if(!el) return;
+  if(current && current.type==='pda'){ el.innerHTML=`<ul>
+      <li><b>אוטומט מחסנית ${current.ndet?'לא-דטרמיניסטי':'דטרמיניסטי'}:</b> מצבים + <b>מחסנית</b> שמתחילה עם <b>Z₀</b> בתחתית.</li>
+      ${current.ndet
+        ? '<li><b>לא-דטרמיניסטי:</b> כשכמה מעברים אפשריים — <b>כל המסלולים נבדקים במקביל</b> (לכל מסלול מחסנית משלו). המילה <b>מתקבלת אם קיים מסלול מקבל</b> אחד.</li>'
+        : '<li><b>דטרמיניסטי:</b> בכל צעד נבחר מעבר <b>יחיד</b> (מסלול אחד, מחסנית אחת); אם יש יותר ממעבר אפשרי תופיע אזהרה.</li>'}
+      <li><b>כלל מעבר:</b> <b>קלט · מה בראש המחסנית · פעולה</b> (דחיפה / שליפה / ללא).</li>
+      <li><b>«מה בראש המחסנית»</b> = תנאי: מה חייב להיות בראש כדי שהמעבר יתבצע (ε = לא משנה). הוא <b>לא נשלף</b> אלא אם בחרת «שליפה».</li>
+      <li>למשל <b>a,S/+A</b> = קרא a, אם בראש S, דחוף A (וה-S נשאר). <b>b,A/⊟</b> = קרא b, אם בראש A, שלוף אותו.</li>
+      <li><b>לחיצה כפולה</b> על מצב = כלל-עצמי.</li>
+      <li><b>קבלה:</b> כל הקלט נקרא, נמצאים ב<b>מצב מקבל</b>, והמחסנית חזרה ל<b>תחתית (Z₀)</b>.</li>
+    </ul>`; return; }
+  if(current && current.type==='dfa' && current.ndet){ el.innerHTML=`<ul>
+      <li><b>אוטומט סופי לא-דטרמיניסטי (NFA):</b> מאותו מצב מותר <b>כמה מעברים על אותו סימן</b>, וגם מעברי-<b>ε</b> (מעבר בלי לקרוא אות).</li>
+      <li>בריצה נשמרת <b>קבוצת מצבים פעילים</b> — כל המסלולים נבדקים במקביל (תראה אותם מודגשים יחד).</li>
+      <li><b>בניית מעבר:</b> לחץ מצב מקור ואז יעד, והקלד סימן (אפשר להקליד <b>ε</b> למעבר ספונטני).</li>
+      <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
+      <li><b>קבלה:</b> המילה מתקבלת אם <b>קיים ולו מסלול אחד</b> שמסיים ב<b>מצב מקבל</b>.</li>
+    </ul>`; return; }
+  el.innerHTML = (current && current.type==='tm') ? `<ul>
+      <li><b>מכונת טיורינג:</b> סרט עם ראש קורא/כותב שזז ימינה/שמאלה.</li>
+      <li>גבולות הסרט: <b>&amp;&amp;</b> בהתחלה ו-<b>&amp;</b> בסוף — קבועים, אי אפשר לכתוב עליהם (אפשר רק לקרוא).</li>
+      <li>תו ריק = <b>_</b>.</li>
+      <li><b>בניית כלל:</b> לחץ מצב מקור ואז יעד, והגדר <b>קורא / כותב / תנועה</b>.</li>
+      <li>תווית כלל: <b>קורא→כותב,כיוון</b> (למשל 0→1,R).</li>
+      <li><b>לחיצה כפולה</b> על מצב = כלל-עצמי (לולאה).</li>
+      <li><b>קבלה:</b> עוצרת ומקבלת כשמגיעה למצב מקבל; אין כלל מתאים ⟵ נדחית.</li>
+      <li>«הסרט שלך» = התוכן ההתחלתי של הסרט.</li>
+    </ul>` : `<ul>
+      <li>עיגול = מצב · עיגול כפול = מצב <b>מקבל</b>.</li>
+      <li>חץ נכנס מבחוץ = המצב <b>ההתחלתי</b> (המצב הראשון שתיצור).</li>
+      <li>תווית "a, b" = מעבר על <b>a</b> וגם על <b>b</b>.</li>
+      <li><b>בניית מעבר:</b> לחץ על מצב מקור ואז על מצב יעד, והקלד סימן.</li>
+      <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
+      <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
+    </ul>`;
+}
+function renderModeBits(){ const wi=$('simWord');
+  const wl=$('wordLabel'); if(wl) wl.textContent = (current&&current.type==='pda') ? 'מילת הקלט' : (current&&current.type==='tm') ? 'הסרט שלך' : 'המילה שלך';
+  if(wi) wi.placeholder = (current&&current.type==='tm') ? 'תוכן התחלתי לסרט, למשל 1011' : (current&&current.type==='pda') ? 'מילת קלט, למשל aabb' : 'הקלד אותיות, למשל aba…';
+  const ab=$('aiBtn'); if(ab) ab.style.display = (current&&current.type==='pda') ? 'block' : 'none';
+  renderStack();
+}
+function renderTabs(){ const el=$('tabs'); if(!el) return;
+  el.innerHTML = DB.automata.map(a=>`
+    <div class="tab ${current&&a.id===current.id?'active':''}" data-tab="${a.id}" title="${esc(a.name)}">
+      <span class="tab-type">${esc(a.type.toUpperCase())}</span>
+      <span class="tab-name">${esc(a.name)}</span>
+      <button class="tab-x" data-close="${a.id}" title="סגור">✕</button>
+    </div>`).join('');
+}
+function closeTab(id){ delAutomaton(id); }   /* מחיקה מיידית — בלי אישור */
+function exportCurrent(){ if(!current){ toast('אין מודל','danger'); return; } download(safeName(current.name)+'.json', JSON.stringify(current,null,2)); toast('נשמר','success'); }
+function init(){
+  load(); setIcons();
+  if(!DB.automata.length) seedExamples();
+  qa('.float-head').forEach(h=>{ const card=h.closest('.float'); if(card) makeDraggable(card, h); });
+  $('tabs').addEventListener('click', e=>{ const x=e.target.closest('[data-close]'), tab=e.target.closest('[data-tab]');
+    if(x){ e.stopPropagation(); closeTab(x.dataset.close); } else if(tab){ openAutomaton(tab.dataset.tab); } });
+  $('canvas').addEventListener('pointerdown', onDown);
+  $('canvas').addEventListener('wheel', e=>{ e.preventDefault(); zoom(e.deltaY>0?1.1:0.9); }, {passive:false});
+  document.addEventListener('keydown', e=>{
+    if(e.target.matches('input,textarea,select')) return;
+    if(e.key==='Delete'||e.key==='Backspace'){ if(sel.type==='state') deleteState(sel.id); else if(sel.type==='transition') deleteTransition(sel.id); }
+    else if(e.key==='Escape'){ armed=null; deselect(); }
+    else if(e.key==='n'||e.key==='N'){ addStateCentered(); }
+  });
+  window.addEventListener('resize', ()=>{ if(!SIM) applyView(); });
+  applyView();
+  openAutomaton(DB.settings.lastId || (DB.automata[0]&&DB.automata[0].id));
+}
+init();
+</script>
+</body>
+</html>
