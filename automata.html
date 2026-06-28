@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#eef2ff">
+<meta name="theme-color" content="#f9fafb">
 <title>מודלים חישוביים — סדנה</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,12 +11,12 @@
 <style>
 :root{
   --paper:#ffffff;
-  --bg:#eef2ff;
+  --bg:#f9fafb;
   --panel:#ffffff;
-  --ink:#1e293b;
-  --ink-strong:#312e81;
-  --muted:#64748b;
-  --line:#e3e8f4;
+  --ink:#1f2937;
+  --ink-strong:#111827;
+  --muted:#6b7280;
+  --line:#e5e7eb;
   --indigo:#4f46e5;
   --indigo-2:#818cf8;
   --indigo-soft:#eef2ff;
@@ -26,9 +26,9 @@
   --red-soft:#fee2e2;
   --amber:#d97706;
   --amber-soft:#fef3c7;
-  --dot:#dbe1f3;
-  --shadow:0 10px 34px rgba(49,46,129,.12);
-  --shadow-sm:0 2px 10px rgba(49,46,129,.08);
+  --dot:#e5e7eb;
+  --shadow:0 10px 30px rgba(17,24,39,.08);
+  --shadow-sm:0 2px 8px rgba(17,24,39,.05);
   --r:16px; --r-sm:11px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -42,13 +42,13 @@ body{
 .app{position:fixed; inset:0}
 
 /* ─── FLOATING CARDS ─── */
-.float{position:fixed; z-index:20; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 16px 46px rgba(49,46,129,.17)}
+.float{position:fixed; z-index:20; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 16px 46px rgba(17,24,39,.10)}
 .float-head{display:flex; align-items:center; gap:9px; padding:11px 15px; border-bottom:1px solid var(--line); cursor:grab; user-select:none; touch-action:none; font-weight:800; color:var(--ink-strong); font-size:15px}
 .float-head:active{cursor:grabbing}
 .grip{width:13px; height:13px; flex-shrink:0; background-image:radial-gradient(var(--muted) 1.3px, transparent 1.5px); background-size:5px 5px; opacity:.6}
 .float-body{padding:14px 15px}
-.brand-icon{width:34px;height:34px; background:linear-gradient(135deg,var(--indigo),var(--indigo-2)); border-radius:10px;
-  display:grid; place-items:center; color:#fff; font-size:18px; font-weight:800; box-shadow:0 6px 18px rgba(79,70,229,.35); flex-shrink:0}
+.brand-icon{width:34px;height:34px; background:var(--indigo); border-radius:10px;
+  display:grid; place-items:center; color:#fff; font-size:18px; font-weight:800; box-shadow:0 6px 18px rgba(79,70,229,.28); flex-shrink:0}
 .brand-float{top:16px; left:16px; display:flex; align-items:center; gap:11px; padding:9px 16px 9px 13px}
 .bf-title{font-weight:800; color:var(--ink-strong); font-size:16px}
 .panel-float{top:58px; right:14px; width:264px; max-height:calc(100dvh - 74px); display:flex; flex-direction:column}
@@ -73,28 +73,28 @@ body{
 .cfg-card.idle{opacity:.9}
 .pda-sub{font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 16px}
 .pda-box{width:80px;height:54px;text-align:center;font-size:18px;font-weight:700;color:var(--ink-strong);border:1.5px solid var(--line);border-radius:13px;background:#fff;font-family:'Courier New',monospace}
-.pda-box::placeholder{color:#b8c0d6;font-weight:500;font-size:14px;font-family:'Heebo',sans-serif}
+.pda-box::placeholder{color:#9ca3af;font-weight:500;font-size:14px;font-family:'Heebo',sans-serif}
 .pda-box:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.16)}
 .pda-quick{display:flex;justify-content:center;gap:11px}
-.pda-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#f4f6fb;font-size:16px;font-weight:700;color:var(--ink-strong);cursor:pointer;font-family:'Courier New',monospace}
+.pda-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#f3f4f6;font-size:16px;font-weight:700;color:var(--ink-strong);cursor:pointer;font-family:'Courier New',monospace}
 .pda-chip span{font-size:12px;font-weight:500;color:var(--muted);font-family:'Heebo',sans-serif}
-.pda-chip:hover{border-color:var(--indigo);background:#eef0fb}
+.pda-chip:hover{border-color:var(--indigo);background:var(--indigo-soft)}
 .pda-chip.sm{padding:0 14px;height:48px;font-size:15px}
 .pda-lbl{font-size:12.5px;font-weight:700;color:var(--ink-strong);margin-bottom:7px;text-align:right}
 .pda-row{display:flex;align-items:center;gap:9px}
 .pda-box.wide{width:auto;flex:1;height:48px;font-size:17px}
 .pda-modes{display:flex;gap:8px}
-.pda-mode{flex:1;padding:11px 6px;border:1.5px solid var(--line);border-radius:12px;background:#f4f6fb;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Heebo',sans-serif}
+.pda-mode{flex:1;padding:11px 6px;border:1.5px solid var(--line);border-radius:12px;background:#f3f4f6;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Heebo',sans-serif}
 .pda-mode:hover{border-color:var(--indigo)}
 .pda-mode.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
 .pda-oplbl{font-size:12px;color:var(--muted);white-space:nowrap;min-width:96px;text-align:right}
-.pda-hint{margin-top:11px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;background:#f4f6fb;border-radius:9px;padding:8px 10px}
+.pda-hint{margin-top:11px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;background:#f3f4f6;border-radius:9px;padding:8px 10px}
 /* ── פענוח AI: הדגשת ביטחון נמוך + תצוגת חיתוך ── */
 .pda-box.lowconf{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 3px rgba(217,119,6,.18)}
 .pda-modes.lowconf{outline:2px solid var(--amber);outline-offset:3px;border-radius:13px}
 .conf-badge{display:inline-flex;align-items:center;align-self:center;gap:3px;font-size:10.5px;font-weight:700;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber);border-radius:8px;padding:3px 7px;white-space:nowrap}
 .ai-crop{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
-.ai-crop-lbl{font-size:11px;font-weight:700;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line);background:#f4f6fb}
+.ai-crop-lbl{font-size:11px;font-weight:700;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line);background:#f3f4f6}
 .ai-crop img{display:block;max-width:100%;max-height:130px;margin:6px auto}
 .ai-crop-fallback{display:none;padding:16px;text-align:center;color:var(--muted);font-size:12px}
 .ai-crop.noimg img{display:none}
@@ -103,12 +103,12 @@ body{
 .ai-imp-help{font-size:12px;color:var(--muted);margin-bottom:9px;line-height:1.5}
 
 .guide-float{position:fixed; bottom:18px; left:16px; z-index:21; display:flex; flex-direction:column; gap:9px; align-items:flex-start}
-.guide-btn{display:inline-flex; align-items:center; gap:9px; background:var(--ink-strong); color:#fff; border:none; border-radius:999px; padding:11px 18px; font-family:inherit; font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 10px 30px rgba(49,46,129,.28)}
-.guide-body{background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 16px 46px rgba(49,46,129,.17); padding:14px 16px; max-width:320px; max-height:54vh; overflow-y:auto; font-size:13.5px; color:var(--muted); line-height:1.75}
+.guide-btn{display:inline-flex; align-items:center; gap:9px; background:var(--ink-strong); color:#fff; border:none; border-radius:999px; padding:11px 18px; font-family:inherit; font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 10px 30px rgba(17,24,39,.22)}
+.guide-body{background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 16px 46px rgba(17,24,39,.10); padding:14px 16px; max-width:320px; max-height:54vh; overflow-y:auto; font-size:13.5px; color:var(--muted); line-height:1.75}
 .guide-body ul{padding-inline-start:18px; display:flex; flex-direction:column; gap:6px}
 .guide-body b{color:var(--ink-strong)}
 /* tabs bar (top) */
-.tabbar{position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; gap:9px; background:#fff; border-bottom:1px solid var(--line); box-shadow:0 4px 16px rgba(49,46,129,.05); padding:7px 12px}
+.tabbar{position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; gap:9px; background:#fff; border-bottom:1px solid var(--line); box-shadow:0 4px 16px rgba(17,24,39,.04); padding:7px 12px}
 .tab-add{flex-shrink:0; width:34px; height:34px; border:none; border-radius:9px; background:var(--indigo); color:#fff; font-size:23px; font-weight:700; cursor:pointer; display:grid; place-items:center; line-height:0}
 .tab-add:hover{background:#4338ca}
 .tabs{flex:1; display:flex; gap:6px; overflow-x:auto; overflow-y:hidden; align-items:center; min-width:0; scrollbar-width:none}
@@ -116,7 +116,7 @@ body{
 .tab{display:flex; align-items:center; gap:7px; padding:7px 9px; border-radius:9px; background:var(--paper); border:1px solid var(--line); cursor:pointer; white-space:nowrap; flex-shrink:0}
 .tab:hover{border-color:var(--indigo-2)}
 .tab.active{background:var(--indigo-soft); border-color:var(--indigo)}
-.tab-type{font-size:9px; font-weight:800; color:#fff; background:var(--indigo-2); padding:2px 6px; border-radius:999px; letter-spacing:.4px}
+.tab-type{font-size:9px; font-weight:800; color:#fff; background:var(--muted); padding:2px 6px; border-radius:999px; letter-spacing:.4px}
 .tab.active .tab-type{background:var(--indigo)}
 .tab-name{font-weight:700; color:var(--ink-strong); overflow:hidden; text-overflow:ellipsis; max-width:120px; font-size:13.5px}
 .tab-x{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:1px 4px; border-radius:5px}
@@ -158,9 +158,9 @@ body{
 /* SVG graph */
 .node{cursor:grab}
 .node:active{cursor:grabbing}
-.node .ncirc{fill:#fff; stroke:#4338ca; stroke-width:3; transition:stroke .15s,fill .15s,filter .15s}
-.node:hover .ncirc{filter:drop-shadow(0 4px 10px rgba(67,56,202,.28))}
-.node .nacc{fill:none; stroke:#4338ca; stroke-width:2.5}
+.node .ncirc{fill:#fff; stroke:var(--ink); stroke-width:3; transition:stroke .15s,fill .15s,filter .15s}
+.node:hover .ncirc{filter:drop-shadow(0 4px 10px rgba(17,24,39,.18))}
+.node .nacc{fill:none; stroke:var(--ink); stroke-width:2.5}
 .node .nlabel{fill:var(--ink); font-weight:800; font-size:19px; pointer-events:none; font-family:'Heebo',sans-serif}
 .node.sel .ncirc{stroke:var(--indigo); stroke-width:4.5}
 .node.armed .ncirc{stroke:var(--indigo); stroke-width:4.5; stroke-dasharray:8 5}
@@ -202,7 +202,7 @@ body{
 .rule-edit.ai-low{border-color:#f59e0b;background:var(--amber-soft);color:#78350f}
 @media (max-width:760px){.ai-review-panel{left:12px;right:12px;top:56px;width:auto;max-height:34vh}}
 /* tape / film strip */
-.tape{position:relative; display:inline-block; background:var(--indigo-soft); border:1.5px solid var(--line); border-radius:14px; padding:16px 14px 12px}
+.tape{position:relative; display:inline-block; background:var(--bg); border:1.5px solid var(--line); border-radius:14px; padding:16px 14px 12px}
 .tape::before,.tape::after{content:''; position:absolute; left:10px; right:10px; height:6px; background-image:radial-gradient(circle, var(--line) 2px, transparent 2.3px); background-size:15px 6px}
 .tape::before{top:5px} .tape::after{bottom:5px}
 .tape-label{font-size:11px; font-weight:800; color:var(--muted); letter-spacing:.6px; margin-bottom:8px; text-transform:uppercase}
@@ -250,7 +250,7 @@ details.legend>summary::-webkit-details-marker{display:none}
 details.legend[open]>summary{margin-bottom:10px}
 
 /* ─── RUN BAR ─── */
-.run-card{background:var(--indigo-soft); border:1.5px solid #c7d2fe; border-radius:14px; padding:14px}
+.run-card{background:var(--bg); border:1.5px solid var(--line); border-radius:14px; padding:14px}
 .run-btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
 .run-btns .btn{flex:1; min-width:84px}
 .insp-sel:not(:empty){margin-top:16px; padding-top:16px; border-top:1px solid var(--line)}
@@ -274,13 +274,13 @@ details.legend[open]>summary{margin-bottom:10px}
 .stk-wrap{display:flex; flex-direction:column; align-items:center; gap:2px}
 .stk-cap{font-size:9px; font-weight:700; color:var(--green); letter-spacing:.4px}
 .stk{display:flex; flex-direction:column}
-.stk-cell{position:relative; min-width:30px; height:23px; display:flex; align-items:center; justify-content:center; font-family:'Courier New',monospace; font-weight:700; font-size:13px; color:var(--ink-strong); background:#fff; border:1.5px solid var(--indigo); border-bottom:0}
-.stk-cell:last-child{border-bottom:1.5px solid var(--indigo)}
+.stk-cell{position:relative; min-width:30px; height:23px; display:flex; align-items:center; justify-content:center; font-family:'Courier New',monospace; font-weight:700; font-size:13px; color:var(--ink-strong); background:#fff; border:1.5px solid var(--ink); border-bottom:0}
+.stk-cell:last-child{border-bottom:1.5px solid var(--ink)}
 .stk-cell:first-child{border-radius:5px 5px 0 0}
 .stk-cell.top{color:var(--green); box-shadow:inset 0 0 0 1.5px var(--green); z-index:1}
 .stk-cell.empty{min-width:46px; color:var(--muted); font-weight:600; font-size:10.5px; border:1.5px dashed var(--line); border-radius:5px; font-family:'Heebo',sans-serif}
 .stk-cell.more{color:var(--muted); font-size:10.5px; border-style:dashed; font-family:'Heebo',sans-serif}
-.stk-floor{width:42px; height:5px; background:var(--indigo); border-radius:0 0 4px 4px}
+.stk-floor{width:42px; height:5px; background:var(--ink); border-radius:0 0 4px 4px}
 .cfg-card.acc .stk-cell{border-color:var(--green)}
 .cfg-card.acc .stk-cell.empty{border-color:var(--green); color:var(--green)}
 .cfg-card.acc .stk-floor{background:var(--green)}
@@ -289,8 +289,8 @@ details.legend[open]>summary{margin-bottom:10px}
 .tapebar{flex:0 0 auto; min-width:0; background:transparent; padding:8px 12px}
 #tapeBar{min-width:0; max-width:100%; overflow-x:auto; direction:ltr}
 .tape-empty{color:var(--muted); font-size:14px; padding:8px 2px; direction:rtl}
-.word{width:100%; margin-top:7px; font-family:'Courier New',monospace; font-size:17px; letter-spacing:2px; padding:10px 12px; border:2px solid var(--indigo-2); border-radius:10px; background:#fff; color:var(--ink)}
-.word:focus{outline:none; border-color:var(--indigo); box-shadow:0 0 0 4px rgba(129,140,248,.25)}
+.word{width:100%; margin-top:7px; font-family:'Courier New',monospace; font-size:17px; letter-spacing:2px; padding:10px 12px; border:2px solid var(--line); border-radius:10px; background:#fff; color:var(--ink)}
+.word:focus{outline:none; border-color:var(--indigo); box-shadow:0 0 0 4px rgba(79,70,229,.18)}
 .word::placeholder{color:var(--muted); letter-spacing:0; font-family:'Heebo',sans-serif; font-size:14px}
 .run-extra{display:flex; gap:11px; align-items:center; flex-wrap:wrap}
 .ivis{display:flex; gap:6px; flex-wrap:wrap; align-items:center}
@@ -318,7 +318,7 @@ details.legend[open]>summary{margin-bottom:10px}
 .bres.ok{color:var(--green)} .bres.bad{color:var(--red)}
 
 /* ─── MODAL ─── */
-.modal-bg{position:fixed; inset:0; background:rgba(49,46,129,.35); backdrop-filter:blur(6px); display:none; place-items:center; z-index:100}
+.modal-bg{position:fixed; inset:0; background:rgba(17,24,39,.45); backdrop-filter:blur(6px); display:none; place-items:center; z-index:100}
 .modal-bg.show{display:grid}
 .modal{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:26px; width:min(560px,93vw); max-height:88vh; overflow-y:auto; box-shadow:var(--shadow); animation:pop .2s}
 @keyframes pop{from{transform:scale(.94); opacity:0}}
@@ -352,35 +352,35 @@ details.legend[open]>summary{margin-bottom:10px}
 .scan-state[hidden]{display:none}
 .scan-msg{font-size:13px;color:var(--muted);line-height:1.6}
 .scan-msg b{color:var(--ink-strong)}
-.scan-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:25px;background:linear-gradient(135deg,#eef0fb,#e3e8f4)}
+.scan-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:25px;background:linear-gradient(135deg,#f3f4f6,#e5e7eb)}
 .scan-ic.warn{background:linear-gradient(135deg,var(--amber-soft),#fde68a);color:var(--amber)}
 .scan-ic.bad{background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626}
 .scan-spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--indigo);animation:scanspin .8s linear infinite}
 @keyframes scanspin{to{transform:rotate(360deg)}}
-.scan-drop{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;padding:26px 14px;border:2px dashed var(--indigo);border-radius:16px;cursor:pointer;background:linear-gradient(180deg,#fbfcff,#f1f3fc);transition:background .25s,border-color .25s,transform .15s,box-shadow .25s}
-.scan-drop:hover,.scan-drop.over{background:linear-gradient(180deg,#f1f3fc,#e7eafd);transform:translateY(-1px);box-shadow:0 8px 20px rgba(79,70,229,.14)}
+.scan-drop{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;padding:26px 14px;border:2px dashed var(--indigo);border-radius:16px;cursor:pointer;background:linear-gradient(180deg,#ffffff,#f9fafb);transition:background .25s,border-color .25s,transform .15s,box-shadow .25s}
+.scan-drop:hover,.scan-drop.over{background:linear-gradient(180deg,#f9fafb,#eef2ff);transform:translateY(-1px);box-shadow:0 8px 20px rgba(79,70,229,.14)}
 .scan-drop-t{font-size:14px;color:var(--ink)}
 .scan-drop-sub{font-size:11.5px;color:var(--muted)}
 .scan-foot{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:10px}
-.scan-tag{font-size:10.5px;color:var(--muted);background:#f4f6fb;border-radius:7px;padding:3px 8px}
+.scan-tag{font-size:10.5px;color:var(--muted);background:#f3f4f6;border-radius:7px;padding:3px 8px}
 .scan-actions{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
-.scan-img{max-width:100%;max-height:240px;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 22px rgba(49,46,129,.12);transition:opacity .3s}
+.scan-img{max-width:100%;max-height:240px;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 22px rgba(17,24,39,.10);transition:opacity .3s}
 .scan-img.dim{opacity:.45}
-.scan-bar{width:100%;height:8px;border-radius:6px;background:#eef0fb;overflow:hidden}
-.scan-bar-fill{height:100%;width:38%;border-radius:6px;background:linear-gradient(90deg,var(--indigo),#8b5cf6,var(--indigo));animation:scanflow 1.4s linear infinite}
+.scan-bar{width:100%;height:8px;border-radius:6px;background:#f3f4f6;overflow:hidden}
+.scan-bar-fill{height:100%;width:38%;border-radius:6px;background:linear-gradient(90deg,var(--indigo-2),var(--indigo),var(--indigo-2));animation:scanflow 1.4s linear infinite}
 @keyframes scanflow{0%{transform:translateX(-120%)}100%{transform:translateX(330%)}}
 /* ── מעברי צבע חלקים והדרגתיות (גרדיאנטים) ── */
 .btn{transition:background .2s,box-shadow .2s,transform .12s,border-color .2s,color .2s}
 .btn:active{transform:translateY(1px)}
-.btn-primary{background:linear-gradient(135deg,#4f46e5,#6d28d9);border-color:transparent}
-.btn-primary:hover{background:linear-gradient(135deg,#5b52f0,#7c3aed);box-shadow:0 6px 16px rgba(79,70,229,.28)}
-.btn-run{background:linear-gradient(135deg,#16a34a,#15803d);border-color:transparent;color:#fff}
-.btn-run:hover{background:linear-gradient(135deg,#1fb456,#16924a);box-shadow:0 6px 16px rgba(22,163,74,.25)}
+.btn-primary{background:var(--indigo);border-color:transparent}
+.btn-primary:hover{background:#4338ca;box-shadow:0 8px 20px rgba(79,70,229,.30)}
+.btn-run{background:var(--green);border-color:transparent;color:#fff}
+.btn-run:hover{background:#15803d;box-shadow:0 8px 20px rgba(22,163,74,.25)}
 .float{transition:box-shadow .25s}
-.float:hover{box-shadow:0 20px 54px rgba(49,46,129,.22)}
+.float:hover{box-shadow:0 20px 50px rgba(17,24,39,.14)}
 .verdict.ok{background:linear-gradient(135deg,#dcfce7,#bbf7d0)}
 .verdict.bad{background:linear-gradient(135deg,#fee2e2,#fecaca)}
-.tab.active{background:linear-gradient(180deg,#eef0fb,#ffffff)}
+.tab.active{background:var(--indigo-soft)}
 .modal{animation:modalin .18s ease}
 @keyframes modalin{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
 .node .ncirc,.node .nacc{transition:fill .25s,stroke .25s}
@@ -389,8 +389,8 @@ details.legend[open]>summary{margin-bottom:10px}
 .stk-cell{transition:border-color .25s,color .25s,background .25s}
 .stk-cell.top{animation:stkin .22s ease}
 @keyframes stkin{from{transform:translateY(-9px);opacity:0}to{transform:none;opacity:1}}
-.stk-floor{background:linear-gradient(90deg,var(--indigo),#6d28d9)}
-.cfg-card.acc .stk-floor{background:linear-gradient(90deg,var(--green),#15803d)}
+.stk-floor{background:var(--ink)}
+.cfg-card.acc .stk-floor{background:var(--green)}
 </style>
 </head>
 <body>
@@ -668,17 +668,35 @@ function addRuleTransition(from,to,read,write,move){
   save(); renderAll();
 }
 let _pdaFocus=null;
+const PDA_BOTTOM='Z₀';
 function pdaFocusOn(el){ _pdaFocus=el; }
+function pdaNormSym(sym){
+  const s=String(sym==null?'':sym).trim();
+  if(!s || s==='ε' || s.toLowerCase()==='epsilon') return '';
+  const up=s.toUpperCase();
+  return (s===PDA_BOTTOM || s==='⊥' || s==='⟂' || up==='Z0' || up==='Z_0') ? PDA_BOTTOM : s;
+}
 function pdaTokenize(str){ str=String(str==null?'':str); const out=[];
-  for(let i=0;i<str.length;){ const ch=str[i];
+  for(let i=0;i<str.length;){ const ch=str[i], tail=str.slice(i);
     if(ch===' '||ch===','||ch==='ε'){ i++; continue; }
-    if(str.substr(i,2)==='Z₀'||str.substr(i,2)==='Z0'){ out.push('Z₀'); i+=2; continue; }
-    out.push(ch); i++; }
+    if(tail.startsWith(PDA_BOTTOM)){ out.push(PDA_BOTTOM); i+=PDA_BOTTOM.length; continue; }
+    if(tail.slice(0,3).toUpperCase()==='Z_0'){ out.push(PDA_BOTTOM); i+=3; continue; }
+    if(tail.slice(0,2).toUpperCase()==='Z0'){ out.push(PDA_BOTTOM); i+=2; continue; }
+    if(ch==='⊥'||ch==='⟂'){ out.push(PDA_BOTTOM); i++; continue; }
+    const tok=pdaNormSym(ch); if(tok) out.push(tok); i++; }
   return out; }
-function pdaTok1(str){ return pdaTokenize(str)[0]||''; }
+function pdaTokens(v){ return Array.isArray(v) ? v.flatMap(x=>pdaTokenize(x)) : pdaTokenize(v); }
+function pdaTok1(str){ return pdaTokens(str)[0]||''; }
 function pdaInsert(sym){ const f=_pdaFocus||document.getElementById('pdaOp'); if(!f)return;
-  if(sym==='ε'){ f.value='ε'; } else { if(f.value==='ε') f.value=''; f.value+=sym; }
+  if(sym==='ε'){ f.value='ε'; } else { if(f.value==='ε') f.value=''; f.value+=pdaNormSym(sym); }
   f.focus(); }
+function pdaNormalizeStackField(el){
+  if(!el) return;
+  const raw=String(el.value||'').trim();
+  if(!raw) return;
+  const toks=pdaTokens(raw);
+  el.value = toks.length ? toks.join('') : (pdaNormSym(raw) || 'ε');
+}
 function promptTransitionPDA(from,to,ai,onDone,opts){
   opts=opts||{};
   const wrap=document.createElement('div');
@@ -691,7 +709,7 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     </div>
     <div class="pda-lbl" style="margin-top:13px">מה בראש המחסנית עכשיו</div>
     <div class="pda-row">
-      <input id="pdaTop" class="pda-box wide" placeholder="תנאי — או ε לכל תוכן" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <input id="pdaTop" class="pda-box wide" placeholder="A / S / Z₀ — או ε לכל תוכן" onfocus="pdaFocusOn(this)" autocomplete="off">
       <button type="button" class="pda-chip sm" id="pdaEpsTop">ε</button>
       <button type="button" class="pda-chip sm" id="pdaZ0Top">Z₀</button>
     </div>
@@ -722,11 +740,16 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     wrap.querySelector('#pdaHint').innerHTML = `קוראים <b>${esc(rd)}</b> · ${cond} · ${act}.`;
   };
   wrap.querySelectorAll('.pda-mode').forEach(b=>b.addEventListener('click',()=>{ mode=b.dataset.mode; upd(); }));
-  ['#pdaRead','#pdaTop','#pdaOp'].forEach(s=>wrap.querySelector(s).addEventListener('input',upd));
+  wrap.querySelector('#pdaRead').addEventListener('input',upd);
+  ['#pdaTop','#pdaOp'].forEach(s=>{
+    const el=wrap.querySelector(s);
+    el.addEventListener('input',e=>{ if(/[⊥⟂]/.test(e.target.value)||/Z_?0/i.test(e.target.value)) pdaNormalizeStackField(e.target); upd(); });
+    el.addEventListener('blur',e=>{ pdaNormalizeStackField(e.target); upd(); });
+  });
   wrap.querySelector('#pdaEpsRead').addEventListener('click',()=>{ wrap.querySelector('#pdaRead').value='ε'; upd(); });
   wrap.querySelector('#pdaEpsTop').addEventListener('click',()=>{ wrap.querySelector('#pdaTop').value='ε'; upd(); });
-  wrap.querySelector('#pdaZ0Top').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaTop'); pdaInsert('Z₀'); upd(); });
-  wrap.querySelector('#pdaZ0Op').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaOp'); pdaInsert('Z₀'); upd(); });
+  wrap.querySelector('#pdaZ0Top').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaTop'); pdaInsert(PDA_BOTTOM); upd(); });
+  wrap.querySelector('#pdaZ0Op').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaOp'); pdaInsert(PDA_BOTTOM); upd(); });
   upd();
   if(ai){   /* מילוי מראש: מעבר שפוענח ע״י AI או עריכה של כלל קיים */
     const norm=v=>String(v==null?'':v).replace(/Z_?0/g,'Z₀');
@@ -754,6 +777,8 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     buttons:[{text:'ביטול',value:null},{text: opts.confirmText || (ai?'שמור שינויים':'הוסף כלל'),value:SUBMIT,primary:true}], dismissValue:null })
   .then(v=>{ armed=null;
     if(v!==SUBMIT){ renderGraph(); renderArmBanner(); if(onDone)onDone(false); return; }
+    pdaNormalizeStackField(wrap.querySelector('#pdaTop'));
+    pdaNormalizeStackField(wrap.querySelector('#pdaOp'));
     const read=wrap.querySelector('#pdaRead').value;
     const top=wrap.querySelector('#pdaTop').value;
     const push=wrap.querySelector('#pdaOp').value;
@@ -764,7 +789,7 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
   });
 }
 function makeRulePDA(readRaw,topRaw,op,pushRaw){
-  return {read:pdaTok1(readRaw), top:pdaTok1(topRaw), op, push:op==='push'?pdaTokenize(pushRaw):[]};
+  return {read:pdaTok1(readRaw), top:pdaTok1(topRaw), op, push:op==='push'?pdaTokens(pushRaw):[]};
 }
 function pdaRuleKey(rule){
   const P=pdaRuleParts(rule);
@@ -781,8 +806,27 @@ function addRulePDA(from,to,readRaw,topRaw,op,pushRaw){
 const API_BASE = (location.protocol === 'file:') ? 'http://localhost:8790' : '';
 const AI_LOW=0.75;
 const AI_LAYOUT={perRow:5, x0:140, dx:195, y0:215, dy:250};   /* פרמטרי הפריסה האוטומטית — בלי מספרי קסם בקוד */
-/* דוגמת המבחן: L = { aⁱ bʲ cⁱ⁻ʲ | i≥4, i−j≥3 } — שלוש פאזות, לולאות-עצמיות על q0–q3,
-   מעברי-קידום עם חוק יחיד, ובדיוק שני סימוני ביטחון-נמוך (ה-ε המרוח על q0→q1 + כתב מרוח ב-L3) */
+/* ── פריסת נחש (Boustrophedon / S-curve) דטרמיניסטית, לכל מספר מצבים ──
+   נתון אינדקס סדרתי n ו-PER מצבים בשורה (K=PER-1 האינדקס האחרון בשורה):
+     • שורה זוגית (row%2===0): משמאל לימין — col עולה (0,1,…,K).
+     • שורה אי-זוגית (row%2===1): מימין לשמאל — col יורד (היפוך: col=(PER-1)-col).
+   לכן מצב K+1 (q5 כש-PER=5) מקבל col=PER-1=K ויושב *ישירות מתחת* למצב K (q4) בקצה הימני,
+   כך שחץ מעבר-השורה יורד אנכית בדיוק ולא חוצה את המסך באלכסון.
+   טבלת אימות ל-PER=5: q0..q4 → col 0,1,2,3,4 (ימינה); q5..q8 → col 4,3,2,1 (שמאלה),
+   ו-q5.x === q4.x. */
+function aiLayoutPos(index){
+  const nodesPerRow=AI_LAYOUT.perRow;
+  const row=Math.floor(index/nodesPerRow);
+  let col=index%nodesPerRow;
+  if(row%2===1){ col=(nodesPerRow-1)-col; }        /* היפוך מחייב בשורות אי-זוגיות */
+  return { x:AI_LAYOUT.x0+col*AI_LAYOUT.dx, y:AI_LAYOUT.y0+row*AI_LAYOUT.dy };
+}
+/* דוגמת כיול למנוע (לא קשורה לשפה מסוימת) — מדגימה את כל יכולות המנוע במכה אחת:
+   (1) פריסת נחש: 9 מצבים, 5 בשורה → q0–q4 שמאל→ימין, q5–q8 ימין→שמאל כש-q5 בדיוק מתחת ל-q4;
+   (2) ערמת חוקים: לולאות עם שני חוקים נערמות אנכית על חץ יחיד;
+   (3) בלי לולאות מומצאות: על q3 אין לולאה;
+   (4) מצב מקבל בעיגול כפול: q8;
+   בנוסף בדיוק שני סימוני ביטחון-נמוך כדי להדגים את לוח בדיקת-ה-AI. */
 const _aiR=(read,pop,act,push,c)=>({ read_input:{value:read,confidence:(c&&c.read)??0.93},
   stack_action:{type:act,confidence:(c&&c.act)??0.94},
   push_value:{value:push,confidence:(c&&c.push)??0.92},
@@ -792,18 +836,18 @@ const _aiT=(id,s,d,rules)=>({ transition_id:id, source_state:{id:s,confidence:0.
 const AI_SAMPLE={
   states:['q0','q1','q2','q3','q4','q5','q6','q7','q8'].map((id,i)=>({id, is_start:i===0, is_accepting:id==='q8', confidence:0.96})),
   transitions:[
-    /* פאזה 1 — קריאת a ודחיפה: לולאות-עצמיות על שלושה מצבים בלבד (q0–q2), שני חוקים בכל אחת.
-       על q3 אין לולאה מצוירת — בדיקת "בלי לולאות מומצאות" */
+    /* שורה עליונה (q0–q4): לולאות-עצמיות עם שני חוקים על q0–q2 (ערמה אנכית), חצי-קידום בחוק יחיד.
+       על q3 אין לולאה מצוירת — בדיקת "בלי לולאות מומצאות". ה-ε על t01 מסומן בביטחון נמוך לבדיקה. */
     _aiT('t01','q0','q1',[_aiR('ε','Z₀','PUSH','S',{read:0.62})]),
     _aiT('L0','q0','q0',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A')]),
     _aiT('L1','q1','q1',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A')]),
     _aiT('L2','q2','q2',[_aiR('a','A','PUSH','AA'), _aiR('a','S','PUSH','A',{push:0.72})]),
     _aiT('t12','q1','q2',[_aiR('a','S','PUSH','A')]),
     _aiT('t23','q2','q3',[_aiR('a','A','PUSH','A')]),
-    /* פאזה 2 — קריאת b (q3–q5) */
+    /* t45 (q4→q5) הוא מעבר-השורה — q5 יושב מתחת ל-q4 ולכן החץ יורד אנכית, בלי קו אלכסוני */
     _aiT('t34','q3','q4',[_aiR('b','A','POP','ε')]),
     _aiT('t45','q4','q5',[_aiR('b','A','POP','ε')]),
-    /* פאזה 3 — קריאת c ושליפה (q5–q8) */
+    /* שורה תחתונה הפוכה (q5–q8) — שליפה */
     _aiT('t56','q5','q6',[_aiR('c','A','POP','ε')]),
     _aiT('t67','q6','q7',[_aiR('c','A','POP','ε')]),
     _aiT('t78','q7','q8',[_aiR('c','S','POP','ε')])
@@ -814,7 +858,37 @@ function aiPayloadList(data){ return Array.isArray(data)?data:(Array.isArray(dat
 function aiStateList(data){ return Array.isArray(data&&data.states)?data.states:[]; }
 function aiConf(field){ const n=Number(field&&field.confidence); return Number.isFinite(n)?n:null; }
 function aiLow(field){ const c=aiConf(field); return c!=null && c<AI_LOW; }
-function aiNorm(v){ const s=String(v==null?'':v).trim().replace(/⊥/g,'Z₀').replace(/Z_?0/g,'Z₀'); return (!s||s==='ε'||s==='e'||s==='E'||s.toLowerCase()==='epsilon')?'':s; }
+function aiNorm(v){
+  const raw=String(v==null?'':v).trim();
+  if(!raw || raw==='ε' || raw==='e' || raw==='E' || raw.toLowerCase()==='epsilon') return '';
+  const toks=pdaTokens(raw);
+  return toks.length ? toks.join('') : '';
+}
+function aiRawText(it){ return String(it && (it.raw_label_text ?? it.raw_text ?? it.label_text ?? '') || '').trim(); }
+function aiLabelLeft(raw){
+  return String(raw||'').replace(/\s+/g,' ').replace(/^.*?:/,'').split(/[,\u060C،，/]/)[0].trim();
+}
+function aiLabelMiddle(raw){
+  const txt=String(raw||'').replace(/\s+/g,' ').replace(/^.*?:/,'');
+  return (txt.split(/[,\u060C،，]/).slice(1).join(',').split('/')[0]||'').trim();
+}
+function aiLabelRight(raw){
+  const txt=String(raw||'').replace(/\s+/g,' ');
+  return txt.includes('/') ? txt.split('/').slice(1).join('/').trim() : '';
+}
+function aiSymbolFromLabelPart(part){
+  const s=String(part||'').trim();
+  if(!s) return '';
+  if(/^(ε|e|epsilon)$/i.test(s)) return '';
+  const m=s.match(/Z_?0|Z₀|[⊥⟂]|[A-Za-z0-9]/);
+  return m ? aiNorm(m[0]) : '';
+}
+function aiReadFromRaw(raw){ return aiSymbolFromLabelPart(aiLabelLeft(raw)); }
+function aiTopFromRaw(raw){ return aiSymbolFromLabelPart(aiLabelMiddle(raw)); }
+function aiActionValueFromRaw(raw){
+  const tail=aiLabelRight(raw).replace(/ללא\s*שינוי|בלי\s*שינוי|דחיפה|לדחוף|דוחפים|דחוף|שליפה|לשלוף|שולפים|שלוף|no\s*change|none|push|pop/ig,' ');
+  return aiSymbolFromLabelPart(tail);
+}
 function aiBool(v){ return v===true || String(v).toLowerCase()==='true'; }
 function aiStateId(field){
   if(field==null) return '';
@@ -831,7 +905,18 @@ function applyAiStateMeta(s,meta){
   if('is_start' in meta && aiBool(meta.is_start)){ current.states.forEach(st=>st.isStart=false); s.isStart=true; }
   if('isStart' in meta && aiBool(meta.isStart)){ current.states.forEach(st=>st.isStart=false); s.isStart=true; }
 }
-function aiAction(it){ return ({PUSH:'push',POP:'pop',NONE:'none'})[String(it.stack_action&&it.stack_action.type).toUpperCase()] || 'none'; }
+function aiAction(it){
+  const raw=String((it.stack_action&&it.stack_action.type) ?? it.action ?? '').trim();
+  const label=aiRawText(it);
+  if(/ללא\s*שינוי|בלי\s*שינוי|no\s*change|none/i.test(label)) return 'none';
+  if(/שלו|לשלוף|שליפה|pop/i.test(label)) return 'pop';
+  if(/דח|לדחוף|דוחפ|דחיפה|push/i.test(label)) return 'push';
+  const up=raw.toUpperCase();
+  if(up.includes('NONE') || up.includes('NO_CHANGE') || up.includes('NO CHANGE')) return 'none';
+  if(/שלו|לשלוף|שליפה|pop/i.test(raw)) return 'pop';
+  if(/דח|לדחוף|דוחפ|דחיפה|push/i.test(raw)) return 'push';
+  return aiNorm(it.push_value&&it.push_value.value) ? 'push' : (raw ? 'push' : 'none');
+}
 function aiIssues(it){
   const out=[];
   if(aiLow(it.source_state)) out.push('מצב מקור');
@@ -851,10 +936,10 @@ function ensureStateByLabel(label,meta){ if(label==null||label==='') return null
   }
   const id=uid(), n=current.states.length;
   const c=aiConf(meta);
-  /* פריסת נחש (boustrophedon) גנרית, לכל מספר מצבים: שורות זוגיות שמאל→ימין, שורות
-     אי-זוגיות ימין→שמאל — מעבר-שורה (למשל מצב 4→5) יורד אנכית באותה עמודה, בלי חצים חוצי-מסך */
-  const PER=AI_LAYOUT.perRow, row=Math.floor(n/PER), p=n%PER, col=(row%2===0)?p:(PER-1-p);
-  s={id, label, x:AI_LAYOUT.x0+col*AI_LAYOUT.dx, y:AI_LAYOUT.y0+row*AI_LAYOUT.dy, isStart:n===0, isAccept:false, aiConfidence:c, aiLow:c!=null&&c<AI_LOW};
+  /* מיקום לפי פריסת הנחש (ראה aiLayoutPos) — שורה זוגית שמאל→ימין, אי-זוגית ימין→שמאל,
+     ומצב פותח-שורה יושב ישירות מתחת לקודמו בקצה כדי שמעבר-השורה יירד אנכית */
+  const pos=aiLayoutPos(n);
+  s={id, label, x:pos.x, y:pos.y, isStart:n===0, isAccept:false, aiConfidence:c, aiLow:c!=null&&c<AI_LOW};
   current.states.push(s);
   applyAiStateMeta(s,meta);
   return id; }
@@ -868,9 +953,25 @@ function applyAiStates(payload){
   } else if(current.states.length && !current.states.some(s=>s.isStart)) current.states[0].isStart=true;
 }
 function aiRuleFromPayload(it){
+  const raw=aiRawText(it);
   const op=aiAction(it);
-  const rule=makeRulePDA(aiNorm(it.read_input&&it.read_input.value), aiNorm(it.pop_value&&it.pop_value.value), op, aiNorm(it.push_value&&it.push_value.value));
+  let read=aiNorm(it.read_input&&it.read_input.value);
+  let top=aiNorm(it.pop_value&&it.pop_value.value);
+  let push=aiNorm(it.push_value&&it.push_value.value);
+  const rawRead=aiReadFromRaw(raw), rawTop=aiTopFromRaw(raw), rawVal=aiActionValueFromRaw(raw);
+  const patched=[];
+  const rawAct=String((it.stack_action&&it.stack_action.type) ?? it.action ?? '').toUpperCase();
+  if(/שלו|לשלוף|שליפה/.test(raw) && rawAct!=='POP') patched.push('פעולת מחסנית תוקנה לשליפה לפי התווית');
+  if(/דח|לדחוף|דוחפ|דחיפה/.test(raw) && rawAct!=='PUSH') patched.push('פעולת מחסנית תוקנה לדחיפה לפי התווית');
+  if(rawRead && read!==rawRead){ read=rawRead; patched.push('קלט תוקן לפי התווית'); }
+  if(rawTop && top!==rawTop){ top=rawTop; patched.push('ראש מחסנית תוקן לפי התווית'); }
+  if(op==='pop'){ if(!top && push) top=push; push=''; }
+  if(op==='pop' && !rawTop && rawVal && top!==rawVal){ top=rawVal; patched.push('שליפה תוקנה לפי התווית'); }
+  if(op==='push' && rawVal && push!==rawVal){ push=rawVal; patched.push('דחיפה תוקנה לפי התווית'); }
+  if(op==='none') push='';
+  const rule=makeRulePDA(read, top, op, push);
   const issues=aiIssues(it);
+  patched.forEach(x=>issues.push(x));
   rule.aiLow=issues.length>0;
   rule.aiIssues=issues;
   rule.aiTransitionId=it.transition_id||'';
@@ -884,6 +985,28 @@ function recomputeAiTransition(t){
   if(t.aiImported && t.from!==t.to && (t.rules||[]).length>1) issues.push('כמה חוקים על חץ קידום — ודא שאינם של לולאה-עצמית');
   t.aiIssues=[...new Set(issues)];
   t.aiLow=Boolean(t.aiIssues.length || (t.rules||[]).some(r=>r.aiLow));
+}
+function aiGuessCountingInput(){
+  /* דומיין-אגנוסטי: מסיקים את אות-הקלט מהקריאות שכבר זוהו בשרטוט עצמו, לא מאלפבית
+     קשיח. מחזיר את אות-הקלט הנפוצה ביותר, או '' כשאין עדות (ואז לא ממציאים כלום). */
+  const tally=new Map();
+  (current&&current.transitions||[]).forEach(t=>(t.rules||[]).forEach(r=>{ const P=pdaRuleParts(r); if(P.read && P.read!=='ε') tally.set(P.read,(tally.get(P.read)||0)+1); }));
+  let best='', bestN=0;
+  tally.forEach((n,v)=>{ if(n>bestN){ best=v; bestN=n; } });
+  return best;
+}
+function repairAiLikelyFalseEpsilonPushReads(t){
+  if(!t) return;
+  const guess=aiGuessCountingInput();
+  if(!guess) return;   /* אין עדות בשרטוט — לא ממציאים אות קלט במקום ε */
+  (t.rules||[]).forEach(r=>{
+    const P=pdaRuleParts(r);
+    if(P.read || P.removeTop || !P.push.length || P.guard===PDA_BOTTOM) return;
+    r.read=guess;
+    r.aiLow=true;
+    r.aiConfidence=Math.min(r.aiConfidence==null?1:r.aiConfidence,0.62);
+    r.aiIssues=[...(r.aiIssues||[]),'קלט תוקן מ-ε לאות קלט במעבר דחיפה'];
+  });
 }
 function addAiTransition(it){
   const src=aiStateId(it.source_state||it.source);
@@ -907,8 +1030,56 @@ function addAiTransition(it){
   t.aiImported=true;
   t.aiTransitionId=it.transition_id||t.aiTransitionId||'';
   t.selfLoop = from===to || src!=='' && src===dst;
+  repairAiLikelyFalseEpsilonPushReads(t);
   recomputeAiTransition(t);
   return t.id;
+}
+/* ── אימות-רצף (Sequential Path Verification) ──
+   מפתח-מיון דומיין-אגנוסטי: המספר הסדרתי בסוף תווית המצב (q0,q1,…,A1,s12 וכו'). */
+function aiStateOrderKey(s){
+  const m=String(s&&s.label||'').match(/(\d+)\s*$/);
+  return m ? parseInt(m[1],10) : null;
+}
+/* כשכל המצבים ממוספרים עקבית, פורסים אותם לפי הסדר המספרי (לא לפי סדר ההגעה מה-VLM),
+   כך שהנחש תמיד תקין גם אם ה-VLM החזיר מצבים בסדר מעורבב, וכל מצב ברצף משתלב במקומו. */
+function relayoutAiSequence(){
+  if(!current || current.states.length<2) return;
+  const keyed=current.states.map(s=>({s,k:aiStateOrderKey(s)}));
+  if(keyed.some(o=>o.k==null)) return;   /* תוויות לא ממוספרות עקבית — לא נוגעים בפריסה הידנית */
+  keyed.sort((a,b)=>a.k-b.k);
+  keyed.forEach((o,i)=>{ const p=aiLayoutPos(i); o.s.x=p.x; o.s.y=p.y; });
+}
+/* מסמן מצבים שבורים-מבחינה-מבנית לבדיקה (בלי להמציא מעברים): מצב מבודד, מצב שאינו
+   נגיש ממצב-ההתחלה q0 דרך מסלול ההרצה (BFS), או מצב-קצה לא-מקבל בלי חץ יוצא — כל אלה
+   הסימנים הקלאסיים ל"מצב ברצף שדולג" / "אורphan". משאיר אותם לבדיקה ידנית, לא ממציא מעברים. */
+function flagAiStructuralIssues(){
+  if(!current || !current.states.length) return;
+  const start = current.states.find(s=>s.isStart) || current.states[0];
+  const adj={}, inNonSelf={}, touch={};
+  current.states.forEach(s=>{ adj[s.id]=[]; inNonSelf[s.id]=0; touch[s.id]=0; });
+  current.transitions.forEach(t=>{
+    if(touch[t.from]!=null) touch[t.from]++;
+    if(touch[t.to]!=null) touch[t.to]++;
+    if(adj[t.from]) adj[t.from].push(t.to);
+    if(t.from!==t.to && inNonSelf[t.to]!=null) inNonSelf[t.to]++;
+  });
+  /* נגישות ממצב-ההתחלה (BFS על כל החצים כולל לולאות) */
+  const reach=new Set([start.id]), queue=[start.id];
+  while(queue.length){ const cur=queue.shift(); (adj[cur]||[]).forEach(nx=>{ if(!reach.has(nx)){ reach.add(nx); queue.push(nx); } }); }
+  current.states.forEach(s=>{
+    const issues=[];
+    if(!touch[s.id]) issues.push('מצב מבודד — אינו מחובר לאף מעבר');
+    else{
+      if(!reach.has(s.id) && !s.isStart) issues.push('מצב לא נגיש ממצב ההתחלה (ייתכן שמצב ברצף דולג)');
+      else if(!inNonSelf[s.id] && !s.isStart) issues.push('אין חץ נכנס');
+      if(adj[s.id].length===0 && !s.isAccept && !s.isStart) issues.push('מצב-קצה — אין חץ יוצא ואינו מקבל');
+    }
+    if(issues.length){
+      s.aiLow=true;
+      s.aiIssues=[...new Set([...(s.aiIssues||[]), ...issues])];
+      if(s.aiConfidence==null || s.aiConfidence>0.62) s.aiConfidence=0.62;
+    }
+  });
 }
 function applyAiTransitionsToCanvas(payload){
   const list=aiPayloadList(payload);
@@ -917,6 +1088,8 @@ function applyAiTransitionsToCanvas(payload){
   applyAiStates(payload);
   let added=0, skipped=0;
   list.forEach(it=>{ if(addAiTransition(it||{})) added++; else skipped++; });
+  relayoutAiSequence();        /* פריסת נחש לפי סדר מספרי — מתקן "נחש הפוך" וסדר מעורבב */
+  flagAiStructuralIssues();    /* סימון מצבים מבודדים/לא-נגישים לבדיקה — "מצב ברצף שדולג" */
   current.aiReviewDismissed=false;
   save(); renderAll(); fitView();
   const lows=aiIssueCount();
@@ -963,7 +1136,7 @@ function renderAiReviewPanel(){
   const p=$('aiReviewPanel'); if(!p) return;
   if(!current || current.aiReviewDismissed){ p.className='ai-review-panel'; p.innerHTML=''; return; }
   const items=[];
-  current.states.filter(s=>s.aiLow).forEach(s=>items.push({kind:'state',id:s.id,title:s.label,sub:'זיהוי מצב בביטחון נמוך'}));
+  current.states.filter(s=>s.aiLow).forEach(s=>items.push({kind:'state',id:s.id,title:s.label,sub:(s.aiIssues&&s.aiIssues.length?s.aiIssues.join(', '):'זיהוי מצב בביטחון נמוך')}));
   current.transitions.filter(t=>t.aiLow).forEach(t=>{
     const from=stById(t.from), to=stById(t.to), self=isSelfLoopTransition(t);
     items.push({kind:'transition',id:t.id,title:`${from?from.label:'?'} ${self?'↺':'→'} ${to?to.label:'?'}`,sub:(t.aiIssues&&t.aiIssues.length?t.aiIssues.join(', '):'שדות מעבר בביטחון נמוך')});
@@ -981,9 +1154,34 @@ function downscaleImage(file,maxDim,quality){
     fr.onload=()=>{ const im=new Image();
       im.onload=()=>{ let w=im.width,h=im.height; const k=Math.min(1,(maxDim||1568)/Math.max(w,h));
         w=Math.max(1,Math.round(w*k)); h=Math.max(1,Math.round(h*k));
-        const c=document.createElement('canvas'); c.width=w; c.height=h;
-        const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(im,0,0,w,h);
-        resolve(c.toDataURL('image/jpeg', quality||0.85)); };
+        const make=(mode)=>{
+          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          const ctx=c.getContext('2d',{willReadFrequently:!!mode});
+          ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(im,0,0,w,h);
+          if(mode){
+            const data=ctx.getImageData(0,0,w,h), p=data.data;
+            for(let i=0;i<p.length;i+=4){
+              const y=0.299*p[i]+0.587*p[i+1]+0.114*p[i+2];
+              let v;
+              if(mode==='ink'){
+                v=(y-168)*1.55+168;
+                if(y<172) v-=34;
+                if(y>226) v=255;
+              }else{
+                if(y<145) v=18;
+                else if(y<188) v=58+(y-145)*1.2;
+                else if(y<218) v=205+(y-188)*1.6;
+                else v=255;
+              }
+              v=Math.max(0,Math.min(255,v));
+              p[i]=p[i+1]=p[i+2]=v;
+            }
+            ctx.putImageData(data,0,0);
+          }
+          return c.toDataURL('image/jpeg', mode?0.94:(quality||0.92));
+        };
+        const original=make(false), enhanced=make('hard'), ink=make('ink');
+        resolve({preview:original, images:[enhanced, ink, original]}); };
       im.onerror=()=>reject(new Error('התמונה לא נטענה — ודא שזה קובץ תמונה'));
       im.src=fr.result; };
     fr.readAsDataURL(file);
@@ -1046,7 +1244,7 @@ function openAiScan(){
       <div class="scan-actions"><button type="button" class="btn btn-primary btn-sm" data-act="back">נסה שוב</button></div>
     </div>`;
 
-  let imgData=null, busy=false, serverOk=false, healthTimer=null;
+  let imgData=null, previewData=null, busy=false, serverOk=false, healthTimer=null;
   const setState=s=>wrap.querySelectorAll('.scan-state').forEach(el=>{ el.hidden = el.dataset.state!==s; });
   const showError=html=>{ wrap.querySelector('#scanErrMsg').innerHTML=html; setState('error'); };
 
@@ -1071,15 +1269,15 @@ function openAiScan(){
   async function useFile(file){
     if(!file || busy) return;
     if(file.type && !/^image\//.test(file.type)){ showError('הקובץ שנבחר אינו תמונה.'); return; }
-    try{ imgData=await downscaleImage(file,1568,0.85);
-      wrap.querySelectorAll('[data-img]').forEach(im=>im.src=imgData);
+    try{ imgData=await downscaleImage(file,2400,0.92); previewData=imgData.preview;
+      wrap.querySelectorAll('[data-img]').forEach(im=>im.src=previewData);
       setState('preview');
     }catch(e){ showError(esc(e.message||'טעינת התמונה נכשלה')); }
   }
   async function runScan(){
     if(!imgData || busy) return; busy=true; setState('scanning');
     try{
-      const r=await fetch(API_BASE+'/api/parse-diagram',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({image:imgData}) });
+      const r=await fetch(API_BASE+'/api/parse-diagram',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({image:imgData.images[0], images:imgData.images}) });
       const text=await r.text();
       let data=null; try{ data=JSON.parse(text); }catch(_e){}
       if(!r.ok) throw new Error((data&&data.error)||text||('שגיאת שרת '+r.status));
@@ -1100,7 +1298,7 @@ function openAiScan(){
     if(act==='retry') checkHealth();
     else if(act==='json') setState('json');
     else if(act==='sample') wrap.querySelector('#scanJson').value=JSON.stringify(AI_SAMPLE,null,2);
-    else if(act==='back'){ imgData=null; busy=false; setState(serverOk?'source':'offline'); }
+    else if(act==='back'){ imgData=null; previewData=null; busy=false; setState(serverOk?'source':'offline'); }
     else if(act==='go') runScan();
     else if(act==='jsonGo'){
       let data; try{ data=JSON.parse(wrap.querySelector('#scanJson').value); }catch(err){ toast('JSON לא תקין: '+err.message,'danger'); return; }
@@ -1395,8 +1593,8 @@ function simInit(w){ const st=current.states.find(s=>s.isStart);
     tape[chars.length]='&';                       /* סימן סוף (קבוע) */
     return {tm:true, input:w, tape, head:0, steps:0, stateId:st.id, history:[], status:'running', reason:'', lastTransId:null, trail:[]}; }
   if(current.type==='pda'){
-    if(current.ndet) return {pda:true, npda:true, input:String(w), configs:[{state:st.id, pos:0, stack:['Z₀'], via:null}], step:0, history:[], status:'running', reason:''};
-    return {pda:true, input:String(w), state:st.id, pos:0, stack:['Z₀'], step:0, history:[], status:'running', reason:'', lastVia:null, nd:false}; }
+    if(current.ndet) return {pda:true, npda:true, input:String(w), configs:[{state:st.id, pos:0, stack:[PDA_BOTTOM], via:null}], step:0, history:[], status:'running', reason:''};
+    return {pda:true, input:String(w), state:st.id, pos:0, stack:[PDA_BOTTOM], step:0, history:[], status:'running', reason:'', lastVia:null, nd:false}; }
   if(current.ndet) return {nfa:true, input:String(w), states:nfaClosure([st.id]), pos:0, history:[], status:'running', reason:'', via:[]};
   return {input:w, pos:0, stateId:st.id, history:[], status:'running', reason:'', lastTransId:null, trail:[]}; }
 function simStepObj(s){
@@ -1425,12 +1623,12 @@ function tmStep(s){
   else if(s.steps>20000){ s.status='stopped'; s.reason='נעצר אחרי 20000 צעדים (ייתכן לולאה אינסופית)'; }
 }
 /* ─── PDA (אוטומט מחסנית) — לא דטרמיניסטי: קבוצת קונפיגורציות ─── */
-function pdaStackDone(stack){ return stack.length===0 || (stack.length===1 && stack[0]==='Z₀'); }   /* המחסנית חזרה למצב ההתחלתי: ריקה או רק Z₀ */
+function pdaStackDone(stack){ const s=pdaTokens(stack); return s.length===0 || (s.length===1 && s[0]===PDA_BOTTOM); }   /* המחסנית חזרה למצב ההתחלתי: ריקה או רק Z₀/⊥ */
 function pdaCfgAccepts(c, len){ return c.pos===len && stById(c.state).isAccept && pdaStackDone(c.stack); }
 function pdaRuleParts(r){
-  if(r.op!==undefined) return {read:r.read||'', guard:r.top||'', removeTop:r.op==='pop', push:Array.isArray(r.push)?r.push:pdaTokenize(r.push)};
+  if(r.op!==undefined) return {read:pdaTok1(r.read), guard:pdaTok1(r.top), removeTop:r.op==='pop', push:pdaTokens(r.push)};
   const lp=r.pop||'';                                   /* פורמט ישן: pop=סימן שנבדק ונשלף */
-  return {read:r.read||'', guard:lp, removeTop:lp!=='', push:Array.isArray(r.push)?r.push:pdaTokenize(r.push)};
+  return {read:pdaTok1(r.read), guard:pdaTok1(lp), removeTop:pdaTok1(lp)!=='', push:pdaTokens(r.push)};
 }
 function pdaApplicable(state, pos, stack, input){ const out=[];
   for(const t of current.transitions){ if(t.from!==state) continue;
@@ -1472,7 +1670,7 @@ function npdaStep(s){
 }
 function npdaAccepts(input){
   input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
-  const seen=new Set(), queue=[{state:start.id, pos:0, stack:['Z₀']}]; let g=0;
+  const seen=new Set(), queue=[{state:start.id, pos:0, stack:[PDA_BOTTOM]}]; let g=0;
   while(queue.length && g++<400000){ const c=queue.shift(); const key=c.state+'|'+c.pos+'|'+c.stack.join('');
     if(seen.has(key)) continue; seen.add(key);
     if(pdaCfgAccepts(c,input.length)) return true;
@@ -1498,7 +1696,7 @@ function pdaStep(s){
 function pdaAccepts(input){
   if(current.ndet) return npdaAccepts(input);
   input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
-  let state=start.id, pos=0, stack=['Z₀'], seen=new Set(), g=0;
+  let state=start.id, pos=0, stack=[PDA_BOTTOM], seen=new Set(), g=0;
   while(g++<200000){
     if(pos===input.length && stById(state).isAccept && pdaStackDone(stack)) return true;
     const key=state+'|'+pos+'|'+stack.join(''); if(seen.has(key)) return false;
@@ -1702,7 +1900,7 @@ function renderStack(){
   } else if(SIM && SIM.pda){
     bar.innerHTML = `<div class="cfg-cards"><div class="cfg-card${pdaCfgAccepts(SIM,SIM.input.length)?' acc':''}"><div class="cfg-top">מצב <b>${esc(stById(SIM.state).label)}</b></div>${pdaStackHTML({stack:SIM.stack})}</div></div>`;
   } else {
-    bar.innerHTML = `<div class="cfg-cards"><div class="cfg-card idle"><div class="cfg-top">מצב התחלתי</div>${pdaStackHTML({stack:['Z₀']})}</div></div><div class="stk-hint">המחסנית מתחילה עם <b>Z₀</b> בתחתית. הקלד מילה ולחץ «הרץ» או «צעד».</div>`;
+    bar.innerHTML = `<div class="cfg-cards"><div class="cfg-card idle"><div class="cfg-top">מצב התחלתי</div>${pdaStackHTML({stack:[PDA_BOTTOM]})}</div></div><div class="stk-hint">המחסנית מתחילה עם <b>Z₀</b> בתחתית. אם מקלידים <b>⊥</b> הוא מוחלף ל־<b>Z₀</b>. הקלד מילה ולחץ «הרץ» או «צעד».</div>`;
   }
 }
 function renderSim(){
