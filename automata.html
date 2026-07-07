@@ -1008,12 +1008,54 @@ function repairAiLikelyFalseEpsilonPushReads(t){
     r.aiIssues=[...(r.aiIssues||[]),'קלט תוקן מ-ε לאות קלט במעבר דחיפה'];
   });
 }
+/* ── מצב אוטומט סופי (DFA/NFA): הפלט ההיברידי של השרת משאיר את פרמטרי המחסנית
+   ריקים, ואות-הקלט של כל חוק היא סימן על תווית החץ. תווית-ספר כמו "0,1" נקראת
+   מ-raw_label_text; תווית עם '/' היא בסגנון מחסנית ולכן נלקח רק read_input. ── */
+function aiFaSymbolsFromRule(r){
+  const raw=aiRawText(r);
+  const src = raw && !raw.includes('/') ? raw : String((r.read_input&&r.read_input.value) ?? r.read ?? '');
+  const out=[];
+  for(const tok of String(src).split(/[,\s]+/)){
+    const t=tok.trim(); if(!t) continue;
+    if(t==='ε'||/^epsilon$/i.test(t)){ if(!out.includes('ε')) out.push('ε'); continue; }
+    for(const ch of t) if(!out.includes(ch)) out.push(ch);   /* כל תו = סימן נפרד, כמו parseSyms */
+  }
+  return out;
+}
+function addAiTransitionFA(it, from, to, src, dst){
+  const ruleItems=(Array.isArray(it.rules)&&it.rules.length)?it.rules:[it];
+  const issues=[], syms=[];
+  if(aiLow(it.source_state)) issues.push('מצב מקור');
+  if(aiLow(it.target_state)) issues.push('מצב יעד');
+  let conf=1;
+  ruleItems.forEach(r=>{
+    aiFaSymbolsFromRule(r).forEach(s=>{ if(!syms.includes(s)) syms.push(s); });
+    const c=aiConf(r.read_input); if(c!=null) conf=Math.min(conf,c);
+    if(aiLow(r.read_input)) issues.push('אות קלט');
+  });
+  /* מעברי-ε חוקיים רק באוטומט לא-דטרמיניסטי */
+  const use = current.ndet ? syms : syms.filter(s=>s!=='ε');
+  if(!current.ndet && syms.includes('ε')) issues.push('מעבר-ε הושמט — DFA אינו תומך במעברי ε');
+  if(!use.length) issues.push('תווית ריקה — הוסף סימן מעבר');
+  let t=current.transitions.find(x=>x.from===from&&x.to===to);
+  if(!t){ t={id:uid(), from, to, symbols:[], aiImported:true}; current.transitions.push(t); }
+  t.symbols=t.symbols||[];
+  use.forEach(s=>{ if(!t.symbols.includes(s)) t.symbols.push(s); });
+  t.aiImported=true;
+  t.aiTransitionId=it.transition_id||t.aiTransitionId||'';
+  t.selfLoop = from===to || src!=='' && src===dst;
+  t.aiIssues=[...new Set([...(t.aiIssues||[]), ...issues])];
+  t.aiLow=Boolean(t.aiIssues.length);
+  t.aiConfidence = t.aiConfidence==null ? conf : Math.min(t.aiConfidence, conf);
+  return t.id;
+}
 function addAiTransition(it){
   const src=aiStateId(it.source_state||it.source);
   const dst=aiStateId(it.target_state||it.target);
   const from=ensureStateByLabel(src, it.source_state);
   const to=ensureStateByLabel(dst, it.target_state);
   if(!from||!to) return null;
+  if(current.type!=='pda') return addAiTransitionFA(it, from, to, src, dst);
   /* חץ מצויר אחד יכול לשאת כמה חוקים (rules) — כולם מתמזגים לאותו מעבר על הקנבס */
   const ruleItems = (Array.isArray(it.rules) && it.rules.length)
     ? it.rules.map(r=>Object.assign({}, r, {source_state:it.source_state, target_state:it.target_state, transition_id:it.transition_id}))
@@ -1129,7 +1171,8 @@ function editPdaTransition(id,ruleIndex){
 }
 function focusAiIssue(id,kind){
   if(kind==='state'){ sel={type:'state',id}; renderGraph(); renderInspector(); renderArmBanner(); return; }
-  editPdaTransition(id);
+  if(current && current.type==='pda'){ editPdaTransition(id); return; }
+  selectTransition(id);   /* אוטומט סופי: הבחירה פותחת את עורך הסימנים בלוח הצד */
 }
 function dismissAiReview(){ if(current){ current.aiReviewDismissed=true; save(); renderAiReviewPanel(); } }
 function renderAiReviewPanel(){
@@ -1189,7 +1232,7 @@ function downscaleImage(file,maxDim,quality){
 }
 function openAiScan(){
   if(!current) return;
-  if(current.type!=='pda'){ toast('סריקת AI זמינה רק לאוטומט מחסנית','danger'); return; }
+  if(current.type==='tm'){ toast('סריקת AI זמינה לאוטומטים סופיים ולאוטומט מחסנית — לא למכונת טיורינג','danger'); return; }
   closeStaleModals();
   const wrap=document.createElement('div');
   wrap.innerHTML=`
@@ -1277,7 +1320,8 @@ function openAiScan(){
   async function runScan(){
     if(!imgData || busy) return; busy=true; setState('scanning');
     try{
-      const r=await fetch(API_BASE+'/api/parse-diagram',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({image:imgData.images[0], images:imgData.images}) });
+      const modelType = current.type==='pda' ? 'pda' : (current.ndet ? 'nfa' : 'dfa');   /* הקשר לשרת ההיברידי */
+      const r=await fetch(API_BASE+'/api/parse-diagram',{ method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({image:imgData.images[0], images:imgData.images, model_type:modelType}) });
       const text=await r.text();
       let data=null; try{ data=JSON.parse(text); }catch(_e){}
       if(!r.ok) throw new Error((data&&data.error)||text||('שגיאת שרת '+r.status));
@@ -1286,7 +1330,7 @@ function openAiScan(){
       if(!list.length){ showError('ה-AI לא זיהה מעברים בתמונה.<br>נסה תמונה חדה יותר, או צלם מקרוב.'); return; }
       close();
       const ruleCount=list.reduce((s,t)=>s+((Array.isArray(t.rules)&&t.rules.length)||1),0);
-      toast('זוהו '+ruleCount+' חוקים על '+list.length+' חיצים — מצייר על הקנבס');
+      toast('זוהו '+ruleCount+' '+(current.type==='pda'?'חוקים':'סימני מעבר')+' על '+list.length+' חיצים — מצייר על הקנבס');
       reviewAiList(data,0);
     }catch(e){ busy=false;
       showError('הפענוח נכשל:<br><span dir="ltr" style="font-size:11px;word-break:break-all">'+esc(String(e.message||e).slice(0,220))+'</span>'); }
@@ -1316,7 +1360,9 @@ function openAiScan(){
   function buildScanModal(body){
     const bg=document.createElement('div'); bg.className='modal-bg show';
     const box=document.createElement('div'); box.className='modal scan-modal'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true');
-    const h=document.createElement('h2'); h.textContent='סריקת שרטוט — אוטומט מחסנית'; box.appendChild(h);
+    const h=document.createElement('h2');
+    h.textContent='סריקת שרטוט — '+(current.type==='pda' ? 'אוטומט מחסנית' : (current.ndet ? 'אוטומט סופי לא-דטרמיניסטי (NFA)' : 'אוטומט סופי דטרמיניסטי (DFA)'));
+    box.appendChild(h);
     box.appendChild(body);
     const actions=document.createElement('div'); actions.className='modal-actions';
     const cancel=document.createElement('button'); cancel.className='btn'; cancel.textContent='סגור'; actions.appendChild(cancel);
@@ -1339,7 +1385,8 @@ function openAiScan(){
 function selfLoop(id){ promptTransition(id,id); }
 function setTransSymbols(id,str){ const t=trById(id); if(!t)return; const syms=parseSyms(str);
   if(!syms.length){ toast('מעבר חייב סימן אחד לפחות','danger'); renderInspector(); return; }
-  t.symbols=syms; save(); renderAll(); }
+  t.symbols=syms; t.aiLow=false; t.aiIssues=[];   /* עריכה ידנית = הסימון מהסריקה טופל */
+  save(); renderAll(); }
 function deleteTransition(id){ current.transitions=current.transitions.filter(t=>t.id!==id);
   if(sel.id===id) sel={type:null,id:null}; save(); renderAll(); toast('המעבר נמחק'); }
 function clearGraph(){ if(!current.states.length) return;
@@ -2191,7 +2238,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
 function renderModeBits(){ const wi=$('simWord');
   const wl=$('wordLabel'); if(wl) wl.textContent = (current&&current.type==='pda') ? 'מילת הקלט' : (current&&current.type==='tm') ? 'הסרט שלך' : 'המילה שלך';
   if(wi) wi.placeholder = (current&&current.type==='tm') ? 'תוכן התחלתי לסרט, למשל 1011' : (current&&current.type==='pda') ? 'מילת קלט, למשל aabb' : 'הקלד אותיות, למשל aba…';
-  const ab=$('aiBtn'); if(ab) ab.style.display = (current&&current.type==='pda') ? 'block' : 'none';
+  const ab=$('aiBtn'); if(ab) ab.style.display = (current&&current.type!=='tm') ? 'block' : 'none';   /* סריקה זמינה לכל האוטומטים (DFA/NFA/PDA), לא למכונת טיורינג */
   renderStack();
 }
 function renderTabs(){ const el=$('tabs'); if(!el) return;

@@ -309,7 +309,7 @@ function flagStructuralProblems(states, transitions) {
   return flagged;
 }
 
-function normalizePayload(value, imageUrl) {
+function normalizePayload(value, imageUrl, isPda) {
   const raw = value || {};
   const list = Array.isArray(raw) ? raw : (Array.isArray(raw.transitions) ? raw.transitions : [raw]);
   const states = new Map();
@@ -340,6 +340,22 @@ function normalizePayload(value, imageUrl) {
     const ruleSrcs = Array.isArray(t.rules) && t.rules.length ? t.rules : [t];
     const rules = ruleSrcs.filter(Boolean).map(r => {
       const rawText = ruleRawText(t, r);
+      // DFA/NFA mode: raw_label_text is a bare input-symbol list ("a", "0,1") with no
+      // stack zones, so the comma/slash zone-splitting below would corrupt it (the
+      // second symbol of "0,1" would be misread as a stack-top). Take the read as-is
+      // and force the stack fields empty.
+      if (!isPda) {
+        return {
+          raw_label_text: rawText,
+          read_input: {
+            value: normalizeSymbolValue((r.read_input && r.read_input.value) ?? r.read ?? EPSILON),
+            confidence: Number((r.read_input && r.read_input.confidence) ?? r.read_confidence ?? DEFAULT_CONFIDENCE),
+          },
+          stack_action: { type: 'NONE', confidence: 1 },
+          push_value: { value: EPSILON, confidence: 1 },
+          pop_value: { value: EPSILON, confidence: 1 },
+        };
+      }
       const rawAction = (r.stack_action && r.stack_action.type) ?? r.action;
       const modelAction = String(rawAction || 'NONE').toUpperCase();
       const action = normalizeStackAction(rawAction, r, rawText);
@@ -414,9 +430,11 @@ function normalizePayload(value, imageUrl) {
     });
   });
 
-  repairInitialStackRules(transitions, [...states.values()]);
-  repairStackingSelfLoopRules(transitions);
-  repairLikelyFalseEpsilonPushReads(transitions);
+  if (isPda) {   // these repair passes assume a stack — never run them on DFA/NFA sheets
+    repairInitialStackRules(transitions, [...states.values()]);
+    repairStackingSelfLoopRules(transitions);
+    repairLikelyFalseEpsilonPushReads(transitions);
+  }
 
   if (states.size && ![...states.values()].some(s => s.is_start)) {
     const first = states.values().next().value;
@@ -449,7 +467,7 @@ function rawLooksLikePdaRule(raw) {
   return s.includes('/') && /[,،，]/.test(s);
 }
 
-function parseQualityProblems(value) {
+function parseQualityProblems(value, isPda) {
   const problems = [];
   const analysis = value && value.analysis;
   for (const key of ['input_glyph_audit_table', 'rule_parse_table', 'final_audit_table']) {
@@ -463,7 +481,9 @@ function parseQualityProblems(value) {
     const raw = ruleRawText(transition, rule);
     const tag = `rule ${i + 1} ${from}->${to}`;
     if (!raw) problems.push(`${tag}: empty raw_label_text`);
-    else {
+    else if (isPda) {
+      // Strict PDA-only checks: a finite-automaton label ("a" / "0,1") has no
+      // stack zone or action word, so these must never run in DFA/NFA mode.
       if (!rawLooksLikePdaRule(raw)) problems.push(`${tag}: raw_label_text is not split as input,stack/action`);
       if (!rawHasActionWord(raw)) problems.push(`${tag}: raw_label_text is missing stack action word`);
     }
@@ -471,12 +491,17 @@ function parseQualityProblems(value) {
   return problems;
 }
 
-async function parseDiagram(imageUrls) {
+async function parseDiagram(imageUrls, modelType) {
   if (!process.env.OPENAI_API_KEY) {
     const err = new Error('OPENAI_API_KEY is missing. Put it in .env');
     err.status = 401;
     throw err;
   }
+  // Hybrid mode context from the client: 'pda' keeps the strict stack-rule pipeline;
+  // 'dfa'/'nfa' treat labels as bare input-symbol lists with no stack zones at all.
+  // Missing/unknown => 'pda', so legacy clients keep the exact previous behavior.
+  const mode = String(modelType || 'pda').trim().toLowerCase();
+  const isPda = mode !== 'dfa' && mode !== 'nfa';
   const urls = (Array.isArray(imageUrls) ? imageUrls : [imageUrls]).filter(Boolean).slice(0, 3);
 
   const schema = {
@@ -645,6 +670,13 @@ async function parseDiagram(imageUrls) {
     'Normalize any bottom-marker glyph ("⊥", "⟂", "Z_0", "Z₀") to "Z0" in the JSON; never output "⊥". Treat "e"/"E"/"ε" for epsilon as "ε" everywhere.',
     'A label like "x, Y / Z" reads as: input x, stack-top condition Y, then the action part Z (a pushed string, or a pop mark).',
     'Confidence calibration: clear state labels, clear arrows, and readable fields should usually be 0.85-0.98. Use confidence below 0.75 only for genuine ambiguity — unclear handwriting, overlapping arrows, a glyph you corrected, or cropped/border text. If unsure, still provide the best value with a lower confidence score.',
+    ...(isPda ? [] : [
+      'MODEL TYPE CONTEXT (provided by the client): this sheet is a FINITE AUTOMATON (DFA/NFA) — there is NO stack anywhere on it.',
+      'FA LABELS OVERRIDE the zone-split rules above (2g, and the stack parts of the FIELD RULES): a transition label is one or more BARE input symbols. A comma separates ALTERNATIVE input symbols on the SAME arrow (e.g. "0,1" means the arrow fires on 0 and also on 1) — it is NOT an input/stack-top separator. There is no slash "/" and no action word on this sheet.',
+      'For every visible label line: raw_label_text = the exact visible text (e.g. "a" or "0,1"), and emit ONE rule per alternative symbol with read_input = that symbol, stack_action="NONE", pop_value="ε", push_value="ε".',
+      'Ignore the stack-specific rules 1e/1f (bottom marker) and the PUSH/POP action rules. Epsilon discipline (1d) still applies: ε is a legitimate NFA input, but only when an epsilon is explicitly drawn.',
+      'In analysis.rule_parse_table and analysis.final_audit_table fill the stack-top / action columns with "—" — those zones do not exist on a finite-automaton sheet.',
+    ]),
   ].join('\n');
 
   const callVision = async (promptText) => {
@@ -667,7 +699,7 @@ async function parseDiagram(imageUrls) {
         text: {
           format: {
             type: 'json_schema',
-            name: 'pda_transition_scan',
+            name: isPda ? 'pda_transition_scan' : 'fa_transition_scan',
             schema,
             strict: true,
           },
@@ -691,10 +723,10 @@ async function parseDiagram(imageUrls) {
   };
 
   let parsedJson = await callVision(prompt);
-  let qualityProblems = parseQualityProblems(parsedJson);
+  let qualityProblems = parseQualityProblems(parsedJson, isPda);
   if (qualityProblems.length) {
     console.warn('AI parse failed quality gate, retrying:', qualityProblems.slice(0, 8).join(' | '));
-    const retryPrompt = prompt + '\n\n' + [
+    const retryPrompt = prompt + '\n\n' + (isPda ? [
       'VALIDATION FAILURE RECOVERY PASS:',
       'Your previous JSON failed validation. The most common failure is leaving raw_label_text empty or omitting the Hebrew action word.',
       `Detected problems: ${qualityProblems.slice(0, 12).join('; ')}`,
@@ -704,9 +736,15 @@ async function parseDiagram(imageUrls) {
       'PUSH plus read_input=ε is allowed only for a clear one-time Z0 initialization. For an ordinary stack top, repair it to the input letter the neighbouring rules read (from the global input alphabet) with low confidence.',
       'If you cannot read one character, write your best visible transcription with ? for the unclear character, set confidence below 0.60, and keep parsing the rest. Never use an empty string.',
       'Before returning JSON, check every rules[].raw_label_text. If any is empty, or lacks both comma and slash, repair it. If it lacks דחוף/שלוף/ללא שינוי while the image has such a word, zoom mentally into the label and transcribe it.',
-    ].join('\n');
+    ] : [
+      'VALIDATION FAILURE RECOVERY PASS:',
+      'Your previous JSON failed validation. The most common failure on a finite-automaton sheet is leaving raw_label_text empty for a labelled arrow.',
+      `Detected problems: ${qualityProblems.slice(0, 12).join('; ')}`,
+      'Retry from the image, not from the previous answer. This is a FINITE AUTOMATON (DFA/NFA) sheet: every visible arrow label must appear as raw_label_text with its bare input symbols (e.g. "a" or "0,1"), one rule per alternative symbol, stack_action="NONE" and pop_value/push_value="ε".',
+      'If you cannot read one character, write your best visible transcription with ? for the unclear character, set confidence below 0.60, and keep parsing the rest. Never use an empty string.',
+    ]).join('\n');
     parsedJson = await callVision(retryPrompt);
-    qualityProblems = parseQualityProblems(parsedJson);
+    qualityProblems = parseQualityProblems(parsedJson, isPda);
   }
   if (qualityProblems.length) {
     const err = new Error('ה-AI לא הצליח לקרוא את תוויות המעברים בצורה אמינה. נסה צילום חד/קרוב יותר, או הדבק JSON ידנית. פרטים: ' + qualityProblems.slice(0, 4).join(' | '));
@@ -719,7 +757,7 @@ async function parseDiagram(imageUrls) {
       if (parsedJson.analysis[k]) console.log(String(parsedJson.analysis[k]).slice(0, 800));
     });
   }
-  return { analysis: (parsedJson && parsedJson.analysis) || null, ...normalizePayload(parsedJson, urls[0] || '') };
+  return { analysis: (parsedJson && parsedJson.analysis) || null, ...normalizePayload(parsedJson, urls[0] || '', isPda) };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -741,7 +779,7 @@ const server = http.createServer(async (req, res) => {
         send(res, 400, { error: 'Missing image data URL' });
         return;
       }
-      const parsed = await parseDiagram(images);
+      const parsed = await parseDiagram(images, payload.model_type);
       send(res, 200, { ...parsed, model: MODEL });
       return;
     }
