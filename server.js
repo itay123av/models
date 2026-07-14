@@ -5,9 +5,33 @@ const path = require('path');
 const ROOT = __dirname;
 loadEnv(path.join(ROOT, '.secrets', 'openai.env'));
 loadEnv(path.join(ROOT, '.env'));
-const PORT = Number(process.env.PORT || 8790);
+const PORT = intEnv('PORT', 8790, 1, 65535);
+const HOST = String(process.env.HOST || '127.0.0.1').trim();
 const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const OPENAI_TIMEOUT_MS = intEnv('OPENAI_TIMEOUT_MS', 90_000, 1_000, 300_000);
+const RATE_LIMIT_WINDOW_MS = intEnv('RATE_LIMIT_WINDOW_MS', 60_000, 1_000, 3_600_000);
+const MAX_PARSE_REQUESTS = intEnv('MAX_PARSE_REQUESTS', 12, 1, 10_000);
+const MAX_CONCURRENT_PARSES = intEnv('MAX_CONCURRENT_PARSES', 2, 1, 20);
 const DEFAULT_CONFIDENCE = 0.9;
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+if (!LOOPBACK_HOSTS.has(HOST)) {
+  throw new Error(`Refusing to listen on non-loopback host "${HOST}". Use 127.0.0.1, localhost, or ::1.`);
+}
+
+const ALLOWED_ORIGINS = new Set([
+  `http://127.0.0.1:${PORT}`,
+  `http://localhost:${PORT}`,
+  `http://[::1]:${PORT}`,
+  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(value => value && value !== 'null'),
+]);
+
+const PUBLIC_FILES = new Map([
+  ['/', 'automata.html'],
+  ['/automata.html', 'automata.html'],
+]);
+const parseRateBuckets = new Map();
+let activeParseRequests = 0;
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -22,33 +46,81 @@ function loadEnv(file) {
   }
 }
 
+function intEnv(name, fallback, min, max) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
+}
+
 function send(res, status, data, headers = {}) {
-  const body = typeof data === 'string' ? data : JSON.stringify(data);
+  const body = status === 204 ? '' : (typeof data === 'string' ? data : JSON.stringify(data));
   res.writeHead(status, {
     'content-type': typeof data === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
     ...headers,
   });
   res.end(body);
+}
+
+function isAllowedApiOrigin(req) {
+  const origin = req.headers.origin;
+  return !origin || ALLOWED_ORIGINS.has(origin);
+}
+
+function apiCorsHeaders(req) {
+  const origin = req.headers.origin;
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    vary: 'Origin',
+  };
+}
+
+function sendApi(req, res, status, data, headers = {}) {
+  send(res, status, data, { ...apiCorsHeaders(req), ...headers });
+}
+
+function consumeParseQuota(req) {
+  const now = Date.now();
+  const key = req.socket.remoteAddress || 'unknown';
+  let bucket = parseRateBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    parseRateBuckets.set(key, bucket);
+  }
+  const resetSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+  if (bucket.count >= MAX_PARSE_REQUESTS) {
+    return { allowed: false, remaining: 0, resetSeconds };
+  }
+  bucket.count += 1;
+  return { allowed: true, remaining: MAX_PARSE_REQUESTS - bucket.count, resetSeconds };
 }
 
 function readBody(req, limit = 24 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const parts = [];
+    let finished = false;
     req.on('data', chunk => {
+      if (finished) return;
       size += chunk.length;
       if (size > limit) {
-        reject(new Error('Image is too large'));
-        req.destroy();
+        finished = true;
+        const err = new Error('Request body is too large');
+        err.status = 413;
+        reject(err);
         return;
       }
       parts.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(parts).toString('utf8')));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!finished) resolve(Buffer.concat(parts).toString('utf8'));
+    });
+    req.on('error', err => {
+      if (!finished) reject(err);
+    });
   });
 }
 
@@ -680,46 +752,60 @@ async function parseDiagram(imageUrls, modelType) {
   ].join('\n');
 
   const callVision = async (promptText) => {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        input: [{
-          role: 'user',
-          content: [
-            { type: 'input_text', text: promptText },
-            ...urls.map(image_url => ({ type: 'input_image', image_url, detail: 'high' })),
-          ],
-        }],
-        max_output_tokens: 6000,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: isPda ? 'pda_transition_scan' : 'fa_transition_scan',
-            schema,
-            strict: true,
-          },
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'content-type': 'application/json',
         },
-      }),
-    });
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: MODEL,
+          input: [{
+            role: 'user',
+            content: [
+              { type: 'input_text', text: promptText },
+              ...urls.map(image_url => ({ type: 'input_image', image_url, detail: 'high' })),
+            ],
+          }],
+          max_output_tokens: 6000,
+          text: {
+            format: {
+              type: 'json_schema',
+              name: isPda ? 'pda_transition_scan' : 'fa_transition_scan',
+              schema,
+              strict: true,
+            },
+          },
+        }),
+      });
 
-    const body = await response.text();
-    if (!response.ok) {
-      const err = new Error(body || `OpenAI request failed with ${response.status}`);
-      err.status = response.status;
+      const body = await response.text();
+      if (!response.ok) {
+        const err = new Error(body || `OpenAI request failed with ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
+      const data = JSON.parse(body);
+      const text = data.output_text || (data.output || [])
+        .flatMap(item => item.content || [])
+        .map(part => part.text || '')
+        .join('');
+      if (!text) throw new Error('OpenAI returned an empty response');
+      return JSON.parse(text);
+    } catch (err) {
+      if (controller.signal.aborted) {
+        const timeoutError = new Error(`OpenAI request timed out after ${OPENAI_TIMEOUT_MS} ms`);
+        timeoutError.status = 504;
+        throw timeoutError;
+      }
       throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-    const data = JSON.parse(body);
-    const text = data.output_text || (data.output || [])
-      .flatMap(item => item.content || [])
-      .map(part => part.text || '')
-      .join('');
-    if (!text) throw new Error('OpenAI returned an empty response');
-    return JSON.parse(text);
   };
 
   let parsedJson = await callVision(prompt);
@@ -760,45 +846,139 @@ async function parseDiagram(imageUrls, modelType) {
   return { analysis: (parsedJson && parsedJson.analysis) || null, ...normalizePayload(parsedJson, urls[0] || '', isPda) };
 }
 
+const STATIC_HEADERS = {
+  'cache-control': 'no-store',
+  'content-security-policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+  ].join('; '),
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+};
+
 const server = http.createServer(async (req, res) => {
+  let isApiRequest = false;
   try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
+    const url = new URL(req.url, `http://${req.headers.host || `${HOST}:${PORT}`}`);
+    isApiRequest = url.pathname.startsWith('/api/');
+
+    if (isApiRequest && !isAllowedApiOrigin(req)) {
+      send(res, 403, { error: 'Origin is not allowed' });
+      return;
+    }
     if (req.method === 'OPTIONS') {
-      send(res, 204, '');
+      if (!isApiRequest) {
+        send(res, 404, 'Not found');
+        return;
+      }
+      sendApi(req, res, 204, '');
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      send(res, 200, { ok: true, model: MODEL, hasKey: Boolean(process.env.OPENAI_API_KEY) });
+      sendApi(req, res, 200, { ok: true, model: MODEL, hasKey: Boolean(process.env.OPENAI_API_KEY) });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/api/parse-diagram') {
-      const raw = await readBody(req);
-      const payload = JSON.parse(raw || '{}');
-      const images = Array.isArray(payload.images) ? payload.images.filter(Boolean) : [payload.image].filter(Boolean);
-      if (!images.length) {
-        send(res, 400, { error: 'Missing image data URL' });
+      const quota = consumeParseQuota(req);
+      const quotaHeaders = {
+        'x-ratelimit-limit': String(MAX_PARSE_REQUESTS),
+        'x-ratelimit-remaining': String(quota.remaining),
+        'x-ratelimit-reset': String(quota.resetSeconds),
+      };
+      if (!quota.allowed) {
+        sendApi(req, res, 429, { error: 'Too many scan requests. Try again shortly.' }, {
+          ...quotaHeaders,
+          'retry-after': String(quota.resetSeconds),
+        });
         return;
       }
-      const parsed = await parseDiagram(images, payload.model_type);
-      send(res, 200, { ...parsed, model: MODEL });
+
+      const raw = await readBody(req);
+      let payload;
+      try {
+        payload = JSON.parse(raw || '{}');
+      } catch {
+        sendApi(req, res, 400, { error: 'Malformed JSON request body' }, quotaHeaders);
+        return;
+      }
+      const images = Array.isArray(payload.images) ? payload.images.filter(Boolean) : [payload.image].filter(Boolean);
+      if (!images.length) {
+        sendApi(req, res, 400, { error: 'Missing image data URL' }, quotaHeaders);
+        return;
+      }
+      if (activeParseRequests >= MAX_CONCURRENT_PARSES) {
+        sendApi(req, res, 429, { error: 'The scanner is busy. Try again shortly.' }, {
+          ...quotaHeaders,
+          'retry-after': '1',
+        });
+        return;
+      }
+
+      activeParseRequests += 1;
+      try {
+        const parsed = await parseDiagram(images, payload.model_type);
+        sendApi(req, res, 200, { ...parsed, model: MODEL }, quotaHeaders);
+      } finally {
+        activeParseRequests -= 1;
+      }
       return;
     }
 
-    let file = decodeURIComponent(url.pathname === '/' ? '/automata.html' : url.pathname);
-    file = path.normalize(file).replace(/^(\.\.[/\\])+/, '');
-    const full = path.join(ROOT, file);
-    if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
+    if (isApiRequest) {
+      sendApi(req, res, 404, { error: 'API route not found' });
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      send(res, 405, 'Method not allowed', { allow: 'GET, HEAD' });
+      return;
+    }
+
+    const publicFile = PUBLIC_FILES.get(url.pathname);
+    if (!publicFile) {
       send(res, 404, 'Not found');
       return;
     }
-    res.writeHead(200, { 'content-type': mime(full) });
-    fs.createReadStream(full).pipe(res);
+    const full = path.join(ROOT, publicFile);
+    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) {
+      send(res, 404, 'Not found');
+      return;
+    }
+    res.writeHead(200, { 'content-type': mime(full), ...STATIC_HEADERS });
+    if (req.method === 'HEAD') res.end();
+    else fs.createReadStream(full).pipe(res);
   } catch (err) {
-    send(res, err.status || 500, { error: err.message || String(err) });
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    const status = err.status || 500;
+    if (!err.status) console.error(err);
+    const message = err.status ? (err.message || String(err)) : 'Internal server error';
+    if (isApiRequest) sendApi(req, res, status, { error: message });
+    else send(res, status, { error: message });
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Automata tool running at http://localhost:${PORT}/automata.html`);
-  console.log(`OpenAI model: ${MODEL}`);
-});
+function startServer() {
+  if (server.listening) return server;
+  server.listen(PORT, HOST, () => {
+    const displayHost = HOST === '::1' ? '[::1]' : HOST;
+    console.log(`Automata tool running at http://${displayHost}:${PORT}/automata.html`);
+    console.log(`Listening on loopback only (${HOST})`);
+    console.log(`OpenAI model: ${MODEL}`);
+  });
+  return server;
+}
+
+if (require.main === module) startServer();
+
+module.exports = { server, startServer };
