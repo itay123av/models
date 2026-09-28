@@ -198,6 +198,25 @@ body{
 .ai-review-item:hover{background:#fde68a}
 .ai-review-main{font-weight:800;font-size:12.5px;direction:ltr;text-align:left}
 .ai-review-sub{font-size:11px;color:#92400e;margin-top:3px;line-height:1.35}
+.ai-review-note{font-size:11.5px;color:#78350f;line-height:1.4;margin:-2px 0 4px}
+.ai-review-section{font-size:11px;font-weight:900;color:#92400e;letter-spacing:.02em;margin:12px 2px 0}
+.ai-review-card{cursor:default}
+.ai-review-card:hover{background:var(--amber-soft)}
+.ai-review-card.doubt{border-color:#ea580c;border-width:2px;background:#fff7ed}
+.ai-review-title{font-weight:800;font-size:12.5px;color:#7c2d12}
+.ai-review-link{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;width:100%;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;text-align:right;color:inherit}
+.ai-review-link .ai-review-main{text-align:right}
+.ai-review-concern{font-size:12px;font-weight:800;color:#c2410c}
+.ai-review-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.ai-review-chips .chip{padding:4px 10px;font-size:12px;min-height:0}
+.ai-review-chips .chip.hint{border-color:#ea580c;color:#c2410c}
+.ai-review-chips .ai-review-ok{margin-inline-start:auto;border-color:var(--green);color:#15803d}
+.ai-review-diag{margin-top:12px;font-size:11px;color:#78350f}
+.ai-review-diag summary{cursor:pointer;font-weight:800;color:#92400e}
+.ai-review-diag div{border-top:1px dashed #fcd34d;padding:5px 2px;line-height:1.35;overflow-wrap:anywhere}
+.node.ai-doubt .ncirc{stroke:#ea580c;stroke-dasharray:8 5}
+.ndoubt circle{fill:#ea580c;stroke:#fff;stroke-width:2.5}
+.ndoubt text{fill:#fff;font-size:15px;font-weight:900;pointer-events:none}
 .rule-edit{display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 8px;margin:5px 0;text-align:right;cursor:pointer;color:var(--ink);font-family:'Heebo',sans-serif}
 .rule-edit:hover{border-color:var(--indigo);background:var(--indigo-soft)}
 .rule-edit.ai-low{border-color:#f59e0b;background:var(--amber-soft);color:#78350f}
@@ -1237,6 +1256,53 @@ function aiStatePositionFromScanBBox(meta){
   return {x:Math.max(margin,Math.min(frameW-margin,cx*frameW)),y:Math.max(margin,Math.min(frameH-margin,cy*frameH)),
     bbox:cloneScanValue(n.bbox),bboxAudit:cloneScanValue(n)};
 }
+/* ה-bbox מנורמל (0..1) לכל ציר בנפרד, ולכן המיפוי הישיר ל-frame קבוע מועך
+   תמונת פורטרט (900×1600) אנכית פי ~3 — מצבים רחוקים בדף מתנגשים על הקנבס.
+   כאן חוזרים לפיקסלי המקור, מגדילים באותו קנה מידה בשני הצירים עד שהזוג
+   הקרוב ביותר מרוחק מספיק לעיגולים ולתוויות, ומפרידים חפיפות שנותרו. */
+function aiScanImageSize(payload,opts){
+  const size=v=>v&&Number(v.width)>0&&Number(v.height)>0?{width:Number(v.width),height:Number(v.height)}:null;
+  const norm=opts&&opts.sessionEvidence&&opts.sessionEvidence.imageNormalization;
+  let found=size(norm&&norm.normalized_size);
+  if(found)return found;
+  for(const st of aiStateList(payload)){
+    const crop=st&&st.state_label_evidence&&st.state_label_evidence.crop;
+    found=size(crop&&crop.original_size);if(found)return found;
+  }
+  return null;
+}
+function layoutAiTopologyStates(scanSessionId,imageSize){
+  const W=imageSize?imageSize.width:1000,H=imageSize?imageSize.height:680,gap=R*4,margin=R+100;
+  const pts=current.states.filter(s=>s.aiTopologyPosition&&!s.manuallyReviewed&&s.scanPositionEvidence&&s.scanPositionEvidence.bbox&&
+      (s.aiScanSession===scanSessionId||(s.aiScanSessions||[]).includes(scanSessionId)))
+    .map(s=>{const b=s.scanPositionEvidence.bbox;return {s,x:(b.x+b.w/2)*W,y:(b.y+b.h/2)*H};});
+  if(!pts.length)return;
+  const bounds=()=>({x:Math.min(...pts.map(p=>p.x)),y:Math.min(...pts.map(p=>p.y)),
+    w:Math.max(...pts.map(p=>p.x))-Math.min(...pts.map(p=>p.x)),h:Math.max(...pts.map(p=>p.y))-Math.min(...pts.map(p=>p.y))});
+  let minD=Infinity;
+  pts.forEach((p,i)=>pts.slice(i+1).forEach(q=>{const d=Math.hypot(p.x-q.x,p.y-q.y);if(d>1e-6&&d<minD)minD=d;}));
+  const b0=bounds(),span=Math.max(b0.w,b0.h);
+  let k=Number.isFinite(minD)?gap/minD:1;
+  if(span>0)k=Math.min(Math.max(k,700/span),2400/span);
+  pts.forEach(p=>{p.x=(p.x-b0.x)*k;p.y=(p.y-b0.y)*k;});
+  /* התקרה על גודל הפריסה או מרכזים זהים עלולים להשאיר זוגות צפופים — דוחפים
+     כל זוג לאורך הקו שביניהם; כיוון ההדדיות נשמר ולכן גם הסידור המרחבי. */
+  for(let iter=0;iter<80;iter++){
+    let moved=false;
+    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+      const a=pts[i],c=pts[j],d=Math.hypot(c.x-a.x,c.y-a.y);
+      if(d>=gap-0.5)continue;
+      const ux=d>1e-6?(c.x-a.x)/d:Math.cos(j*2.4),uy=d>1e-6?(c.y-a.y)/d:Math.sin(j*2.4),push=(gap-d)/2;
+      a.x-=ux*push;a.y-=uy*push;c.x+=ux*push;c.y+=uy*push;moved=true;
+    }
+    if(!moved)break;
+  }
+  const b1=bounds();
+  pts.forEach(p=>{
+    p.s.x=Math.round(margin+p.x-b1.x);p.s.y=Math.round(margin+p.y-b1.y);
+    p.s.scanPositionEvidence=Object.assign({},p.s.scanPositionEvidence,{x:p.s.x,y:p.s.y,layout:'aspect-preserving',image_size:imageSize?{width:W,height:H}:null});
+  });
+}
 function ensureStateByLabel(label,meta,opts){ if(label==null||label==='') return null;
   opts=opts||{};
   label=String(label).trim();
@@ -1883,14 +1949,16 @@ function applyAiTransitionsToCanvas(payload,opts){
   current.aiScanIssues=scanUniqueIssues(incomingScanIssues);
   current.unresolvedLabelReads=cloneScanValue(Array.isArray(payload&&payload.unresolved_label_reads)?payload.unresolved_label_reads:[]);
   applyAiStates(payload,scanSessionId);
-  if(!list.length){ current.aiReviewDismissed=false; refreshAiStartIssues(); save(); renderAll(); fitView(); toast('לא נמצאו מעברים בקלט; תצפיות המצבים נשמרו לביקורת','danger'); return; }
+  const imageSize=aiScanImageSize(payload,opts);
+  if(!list.length){ layoutAiTopologyStates(scanSessionId,imageSize); current.aiReviewDismissed=false; refreshAiStartIssues(); save(); renderAll(); fitView(); toast('לא נמצאו מעברים בקלט; תצפיות המצבים נשמרו לביקורת','danger'); return; }
   let added=0, skipped=0;
   list.forEach(it=>{ if(addAiTransition(Object.assign({},it||{},{__scanSessionId:scanSessionId}))) added++; else skipped++; });
   refreshAiStartIssues();
   /* Pass A מספק מרכזי עיגולים באותו frame. אין להחליף ראיה טופולוגית זו
      בפריסת q0..qN מלאכותית רק מפני שהתוויות ממוספרות. Legacy one-pass
      ללא geometry ממשיך לקבל את פריסת הנחש הישנה. */
-  if(!current.states.some(s=>s.aiTopologyPosition))relayoutAiSequence();
+  if(current.states.some(s=>s.aiTopologyPosition))layoutAiTopologyStates(scanSessionId,imageSize);
+  else relayoutAiSequence();
   flagAiStructuralIssues();    /* סימון מצבים מבודדים/לא-נגישים לבדיקה — "מצב ברצף שדולג" */
   current.aiReviewDismissed=false;
   save(); renderAll(); fitView();
@@ -1898,12 +1966,36 @@ function applyAiTransitionsToCanvas(payload,opts){
   toast(`זוהו ${added} מעברים והם צוירו על הקנבס${lows?` · ${lows} דורשים בדיקה`:''}`, lows?'':'success');
   if(skipped) toast(`${skipped} מעברים דולגו כי חסר מקור/יעד`, 'danger');
 }
+const AI_START_ISSUE=/חץ התחלה|חצי התחלה|מצב התחלתי/;
+/* הודעות שחוזרות על כל מצב מסריקה (חוזה review-only / תצפית לא שלמה) אינן
+   מבדילות בין מצבים — כותרת הפאנל אומרת זאת פעם אחת. הודעות ה-confidence
+   הגולמיות מוחלפות בניסוח העברי של aiStateConcerns. */
+const AI_STATE_BOILERPLATE=/review[_ -]?only|תצפית המצב מן הסריקה אינה שלמה|confidence נפרד של is_(start|accepting)|is_(start|accepting)\.confidence is below/i;
+function aiStateFlagConfidence(ev,key){
+  const direct=ev&&ev[key+'_confidence'];
+  if(direct!=null&&Number.isFinite(Number(direct)))return Number(direct);
+  const field=ev&&ev[key];
+  return field&&typeof field==='object'&&Number.isFinite(Number(field.confidence))?Number(field.confidence):null;
+}
+/* ספקות ספציפיים של הסריקה לגבי מצב — מה שבאמת צריך את העין של המשתמש */
+function aiStateConcerns(s){
+  if(!s||s.manuallyReviewed||!s.scanStateEvidence)return [];
+  const ev=s.scanStateEvidence,out=[],acc=aiStateFlagConfidence(ev,'is_accepting'),start=aiStateFlagConfidence(ev,'is_start');
+  if(acc!=null&&acc<AI_LOW)out.push(s.isAccept?'לא ודאי שזה מצב מקבל':'ייתכן שזה מצב מקבל (עיגול כפול?)');
+  if(start!=null&&start<AI_LOW)out.push(s.isStart?'לא ודאי שזה המצב ההתחלתי':'ייתכן שזה המצב ההתחלתי');
+  if(s.displayLabelUnresolved)out.push('שם המצב לא נקרא בוודאות');
+  return out;
+}
 function collectAiReviewItems(){
   if(!current)return [];
   const items=[],seen=new Set(),globalIssues=scanUniqueIssues(current.aiScanIssues||[]),globalKeys=new Set(globalIssues.map(scanIssueKey));
   const add=(key,item)=>{if(seen.has(key))return;seen.add(key);items.push(item);};
   const local=list=>scanUniqueIssues(list||[]).filter(message=>!globalKeys.has(scanIssueKey(message)));
-  globalIssues.forEach(message=>add(`global:${scanIssueKey(message)}`,{kind:'global',id:'',title:'אזהרת סריקה',sub:message}));
+  /* אזהרות גלובליות הן אבחון טכני של הצינור ואינן חוסמות הרצה; רק היעדר מצב
+     התחלתי דורש פעולה, ולכן הוא פריט נפרד עם בחירה מהירה. */
+  globalIssues.forEach(message=>AI_START_ISSUE.test(message)
+    ?add(`start:${scanIssueKey(message)}`,{kind:'start',id:'',title:'מצב התחלתי',sub:message})
+    :add(`global:${scanIssueKey(message)}`,{kind:'global',id:'',title:'אזהרת סריקה',sub:message,diagnostic:true}));
   (current.unresolvedStateObservations||[]).forEach((u,i)=>add(`state-observation:${u.observationId||i}`,{
     kind:'state-observation',id:String(i),title:`תצפית מצב ${u.observationId||''}`,sub:u.reason||'נדרש לבחור תווית או מיזוג'}));
   (current.unresolvedScanTransitions||[]).forEach((u,i)=>add(`unresolved-transition:${u.transitionId||i}`,{
@@ -1914,12 +2006,13 @@ function collectAiReviewItems(){
     add(key,{kind:'global',id:String(i),title:`קריאת תווית לא משויכת ${u.crop_id||u.cropId||''}`,
       sub:messages.join(', ')||'הקריאה נשמרה לביקורת ואינה פעילה'});
   });
-  (current.states||[]).filter(s=>s.aiLow||(s.structuralIssues&&s.structuralIssues.length)||(!s.scanStructuralReviewed&&s.scanStructuralIssues&&s.scanStructuralIssues.length)).forEach(s=>{
-    const parts=[],visual=local(s.aiIssues),structure=local(s.structuralIssues),sourceStructure=!s.scanStructuralReviewed?local(s.scanStructuralIssues):[];
+  (current.states||[]).filter(s=>s.aiLow||(s.structuralIssues&&s.structuralIssues.length)||(!s.scanStructuralReviewed&&s.scanStructuralIssues&&s.scanStructuralIssues.length))
+    .map(s=>({s,concerns:aiStateConcerns(s)})).sort((a,b)=>b.concerns.length-a.concerns.length).forEach(({s,concerns})=>{
+    const parts=[],visual=local(s.aiIssues).filter(m=>!AI_STATE_BOILERPLATE.test(m)),structure=local(s.structuralIssues),sourceStructure=!s.scanStructuralReviewed?local(s.scanStructuralIssues):[];
     if(visual.length)parts.push('ביטחון חזותי: '+visual.join(', '));
     if(structure.length)parts.push('בדיקת מבנה: '+structure.join(', '));
     if(sourceStructure.length)parts.push('ראיית מבנה מקורית: '+sourceStructure.join(', '));
-    add(`state:${s.id}`,{kind:'state',id:s.id,title:s.label,sub:parts.join(' · ')||'המצב מסומן לביקורת'});
+    add(`state:${s.id}`,{kind:'state',id:s.id,title:s.label,sub:parts.join(' · '),concerns});
   });
   (current.transitions||[]).filter(t=>t.aiLow||t.semanticBlocked).forEach(t=>{
     const from=stById(t.from),to=stById(t.to),self=isSelfLoopTransition(t),parts=[],visual=local(t.aiIssues),semantic=local(t.semanticIssues);
@@ -1930,7 +2023,7 @@ function collectAiReviewItems(){
   });
   return items;
 }
-function aiIssueCount(){return collectAiReviewItems().length;}
+function aiIssueCount(){return collectAiReviewItems().filter(x=>!x.diagnostic).length;}
 function pdaRuleToAi(r){
   const P=pdaRuleParts(r), op=P.invalidAction?'UNKNOWN':(P.removeTop?'POP':(P.op==='push'?'PUSH':'NONE'));
   const ev=r.scanEvidence||{}, cf=ev.confidence||{};
@@ -2042,11 +2135,32 @@ function dismissAiReview(){ if(current){ current.aiReviewDismissed=true; save();
 function renderAiReviewPanel(){
   const p=$('aiReviewPanel'); if(!p) return;
   if(!current || current.aiReviewDismissed){ p.className='ai-review-panel'; p.innerHTML=''; return; }
-  const items=collectAiReviewItems();
-  if(!items.length){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  const items=collectAiReviewItems(),actions=items.filter(x=>!x.diagnostic),diag=items.filter(x=>x.diagnostic);
+  if(!actions.length){ p.className='ai-review-panel'; p.innerHTML=''; return; }
   p.className='ai-review-panel show';
-  p.innerHTML=`<div class="ai-review-head"><span>בדיקת AI · ${items.length} סימונים</span><button class="ai-review-close" onclick="dismissAiReview()" title="הסתר">×</button></div>`+
-    items.map(it=>`<button class="ai-review-item" onclick="focusAiIssue('${it.id}','${it.kind}')"><div class="ai-review-main">${esc(it.title)}</div><div class="ai-review-sub">${esc(it.sub)}</div></button>`).join('');
+  const itemBtn=it=>`<button class="ai-review-item" onclick="focusAiIssue('${it.id}','${it.kind}')"><div class="ai-review-main">${esc(it.title)}</div><div class="ai-review-sub">${esc(it.sub)}</div></button>`;
+  /* מועמדים למצב התחלתי: קודם מי שהסריקה חשדה בו, אחר כך לפי סדר התוויות */
+  const startPick=()=>current.states.map(s=>({s,hint:aiStateConcerns(s).some(c=>/התחלתי/.test(c))}))
+    .sort((a,b)=>(b.hint-a.hint)||String(a.s.label).localeCompare(String(b.s.label),'he',{numeric:true}))
+    .map(({s,hint})=>`<button class="chip${hint?' hint':''}" onclick="toggleStart('${s.id}')">${esc(s.label)}</button>`).join('');
+  const startRow=it=>`<div class="ai-review-item ai-review-card doubt"><div class="ai-review-title">לא סומן מצב התחלתי — בחר אחד</div>
+    <div class="ai-review-sub">${esc(it.sub)}</div><div class="ai-review-chips">${startPick()}</div></div>`;
+  const stateRow=it=>{const s=stById(it.id);if(!s)return itemBtn(it);const doubt=it.concerns.length>0;
+    return `<div class="ai-review-item ai-review-card${doubt?' doubt':''}">
+      <button class="ai-review-link" onclick="focusAiIssue('${s.id}','state')"><span class="ai-review-main">${esc(s.label)}</span>${doubt?`<span class="ai-review-concern">⚠ ${esc(it.concerns.join(' · '))}</span>`:''}</button>
+      ${it.sub?`<div class="ai-review-sub" dir="auto">${esc(it.sub)}</div>`:''}
+      <div class="ai-review-chips">
+        <button class="chip${s.isStart?' on':''}" onclick="toggleStart('${s.id}')">התחלתי</button>
+        <button class="chip${s.isAccept?' on':''}" onclick="toggleAccept('${s.id}')">מקבל</button>
+        <button class="chip ai-review-ok" onclick="markStateReviewed('${s.id}')">✓ נכון</button>
+      </div></div>`;};
+  const starts=actions.filter(x=>x.kind==='start'),states=actions.filter(x=>x.kind==='state'),rest=actions.filter(x=>x.kind!=='start'&&x.kind!=='state');
+  p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="הסתר">×</button></div>
+    <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.</div>`+
+    starts.map(startRow).join('')+
+    (states.length?`<div class="ai-review-section">מצבים · ${states.length}</div>`+states.map(stateRow).join(''):'')+
+    (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(itemBtn).join(''):'')+
+    (diag.length?`<details class="ai-review-diag"><summary>פרטים טכניים מהסריקה · ${diag.length}</summary>${diag.map(it=>`<div dir="auto">${esc(it.sub)}</div>`).join('')}</details>`:'');
 }
 function reviewAiList(list,i){ applyAiTransitionsToCanvas(list); }   /* תאימות ישנה: אין יותר אשף רציף */
 function longestDocumentSpan(flags,maxGap){
@@ -3133,11 +3247,13 @@ function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/
 function renderGraph(){
   if(!current){ $('edges').innerHTML=''; $('nodes').innerHTML=''; renderAiReviewPanel(); return; }
   $('nodes').innerHTML = current.states.map(s=>{
-    const cls='node'+(sel.type==='state'&&sel.id===s.id?' sel':'')+(armed===s.id?' armed':'')+(s.aiLow?' ai-low':'');
+    const doubt=s.aiLow&&aiStateConcerns(s);
+    const cls='node'+(sel.type==='state'&&sel.id===s.id?' sel':'')+(armed===s.id?' armed':'')+(s.aiLow?' ai-low':'')+(doubt&&doubt.length?' ai-doubt':'');
     return `<g class="${cls}" data-state-id="${s.id}" transform="translate(${s.x},${s.y})">
       <circle class="ncirc" r="${R}"></circle>
       ${s.isAccept?`<circle class="nacc" r="${R-6}"></circle>`:''}
       <text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central">${esc(s.label)}</text>
+      ${doubt&&doubt.length?`<g class="ndoubt" transform="translate(${Math.round(R*.74)},${-Math.round(R*.74)})"><title>${esc(doubt.join(' · '))}</title><circle r="12"></circle><text text-anchor="middle" dominant-baseline="central">?</text></g>`:''}
       ${s.isStart?`<path class="sarrow" d="M ${-R-30} 0 L ${-R-3} 0" marker-end="url(#arrow)"></path>`:''}
     </g>`; }).join('');
   $('edges').innerHTML = current.transitions.map(t=>{

@@ -1502,8 +1502,9 @@ test('two-stage canvas positions come from Pass A circle centers and numeric lab
   assert.equal(q0.aiTopologyPosition, true);
   assert.equal(q1.aiTopologyPosition, true);
   assert.ok(q0.x > q1.x && q0.y > q1.y, 'סדר מרכזי העיגולים נשמר ולא הוחלף בפריסת q0→q1');
-  assert.ok(Math.abs(q0.x - 850) < 1e-9);
-  assert.ok(Math.abs(q1.x - 150) < 1e-9);
+  const size = ctx.aiScanImageSize(merged, {}) || { width: 1000, height: 680 };
+  const sourceRatio = (0.7 * size.width) / (0.56 * size.height);
+  assert.ok(Math.abs((q0.x - q1.x) / (q0.y - q1.y) - sourceRatio) < 0.02, 'יחס הצירים של המקור נשמר');
   assert.equal(q0.scanPositionEvidence.bbox.x, states[0].bbox.x);
 });
 
@@ -2061,6 +2062,72 @@ test('a local self-loop assertion cannot override different immutable endpoints'
   assert.deepEqual(Array.from(missingEndpoint.issues), ['self-loop']);
 });
 
+test('portrait photo keeps its aspect ratio so vertically stacked states do not collide on the canvas', () => {
+  const ctx = loadClient();
+  const session = 'portrait-layout';
+  // מרכזי עיגולים כמו בצילום פורטרט 900×1600: q6 מתחת ל-q0 ו-q1 מימינו, בערך באותו מרחק
+  const states = [
+    topologyState('state-0', '', { bbox: { x: 0.054, y: 0.215, w: 0.08, h: 0.057 } }),
+    topologyState('state-1', '', { bbox: { x: 0.068, y: 0.340, w: 0.08, h: 0.05 } }),
+    topologyState('state-2', '', { bbox: { x: 0.275, y: 0.205, w: 0.08, h: 0.05 } }),
+  ];
+  const passA = topologyPass(session, states, [topologyConnector('arrow', 'connector', 'state-0', 'state-2', ['line'])]);
+  const crops = materializedCropManifest(ctx, passA, session);
+  const passB = labelsPass(session, passA.topology, crops);
+  const labels = { 'state-0': 'q0', 'state-1': 'q6', 'state-2': 'q1' };
+  passB.state_label_reads = crops.filter(c => c.kind === 'state_label').map(crop =>
+    topologyStateLabelRead(crop, labels[crop.observation_id], { scan_session_id: session }));
+  const merged = ctx.mergeTwoStageScan(passA, passB, crops, session);
+  silenceClientUi(ctx);
+  pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas(merged, { atomic: true, scanSessionId: session,
+    sessionEvidence: { imageNormalization: { normalized_size: { width: 900, height: 1600 } } } });
+  const byLabel = label => ctx.__getCurrent().states.find(s => s.label === label);
+  const q0 = byLabel('q0'), q6 = byLabel('q6'), q1 = byLabel('q1');
+  assert.ok(Math.hypot(q0.x - q6.x, q0.y - q6.y) >= 4 * 40 - 1, 'מצבים רחוקים בדף אינם מתנגשים על הקנבס');
+  assert.ok(q6.y - q0.y > Math.abs(q6.x - q0.x), 'q6 נשאר מתחת ל-q0');
+  const sourceRatio = ((0.275 + 0.04 - 0.054 - 0.04) * 900) / ((0.340 + 0.025 - 0.215 - 0.0285) * 1600);
+  assert.ok(Math.abs((q1.x - q0.x) / (q6.y - q0.y) - sourceRatio) < 0.05,
+    'המרחק האופקי q0→q1 והאנכי q0→q6 שומרים על היחס שבצילום (במיפוי הישן היחס היה ~2.7)');
+  assert.equal(q0.scanPositionEvidence.layout, 'aspect-preserving');
+});
+
+test('review panel separates actionable items from technical diagnostics and names the specific state doubt', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = pdaModel(ctx, [], [
+    { id: 'a', label: 'q0', isStart: false, isAccept: true, aiLow: true, aiImported: true,
+      aiIssues: ['topology contract is review-only', 'is_start.confidence is below review threshold'],
+      scanStateEvidence: { is_start_confidence: 0.48, is_accepting_confidence: 0.9 } },
+    { id: 'b', label: 'q6', isStart: false, isAccept: false, aiLow: true, aiImported: true,
+      aiIssues: ['topology contract is review-only', 'Possible second ring is faint'],
+      scanStateEvidence: { is_start: { value: false, confidence: 0.9 }, is_accepting: { value: false, confidence: 0.4 } } },
+    { id: 'c', label: 'q1', isStart: false, isAccept: false, aiLow: true, aiImported: true,
+      aiIssues: ['topology contract is review-only'], scanStateEvidence: { is_start_confidence: 0.95, is_accepting_confidence: 0.93 } },
+  ]);
+  model.aiScanIssues = ['geometric inventory count 11 does not match 10', 'לא זוהה חץ התחלה; לא נבחר מצב התחלתי אוטומטית'];
+
+  const items = Array.from(ctx.collectAiReviewItems());
+  const start = items.find(x => x.kind === 'start');
+  assert.ok(start && !start.diagnostic, 'היעדר מצב התחלתי הוא פריט פעולה ולא אבחון');
+  assert.equal(items.filter(x => x.diagnostic).length, 1);
+  const states = items.filter(x => x.kind === 'state');
+  assert.deepEqual(states.map(x => x.title), ['q0', 'q6', 'q1'], 'מצבים עם ספק ספציפי מופיעים ראשונים');
+  assert.deepEqual(Array.from(states[0].concerns), ['ייתכן שזה המצב ההתחלתי']);
+  assert.deepEqual(Array.from(states[1].concerns), ['ייתכן שזה מצב מקבל (עיגול כפול?)']);
+  assert.equal(states[2].concerns.length, 0);
+  assert.doesNotMatch(states.map(x => x.sub).join(' '), /review-only|confidence is below/, 'הודעות שחוזרות על כל מצב אינן משוכפלות');
+  assert.match(states[1].sub, /Possible second ring is faint/, 'ראיה חזותית ספציפית נשמרת');
+  assert.equal(ctx.aiIssueCount(), 4);
+  assert.equal(ctx.hasPendingAiExecutionReview(), true, 'ההצגה החדשה אינה משחררת את חסימת ההרצה');
+
+  ctx.markStateReviewed('b');
+  assert.equal(ctx.aiStateConcerns(model.states[1]).length, 0, 'אחרי אישור אנושי אין עוד ספק פתוח');
+  assert.equal(Array.from(ctx.collectAiReviewItems()).some(x => x.kind === 'state' && x.title === 'q6'), false);
+  ctx.toggleStart('a');
+  assert.equal(Array.from(ctx.collectAiReviewItems()).some(x => x.kind === 'start'), false, 'בחירת מצב התחלתי סוגרת את הפריט');
+});
+
 test('review summary deduplicates repeated display warnings but preserves distinct physical blockers', () => {
   const ctx = loadClient();
   const model = pdaModel(ctx, [{
@@ -2082,7 +2149,8 @@ test('review summary deduplicates repeated display warnings but preserves distin
   assert.ok(transitionItem);
   assert.doesNotMatch(transitionItem.sub, /Global blocker/i, 'אזהרה גלובלית אינה משוכפלת בכל מעבר');
   assert.equal((transitionItem.sub.match(/local warning/g) || []).length, 1);
-  assert.equal(ctx.aiIssueCount(), items.length);
+  assert.equal(items.find(x => x.title === 'אזהרת סריקה').diagnostic, true, 'אזהרה גלובלית היא אבחון ואינה נספרת לאישור');
+  assert.equal(ctx.aiIssueCount(), items.filter(x => !x.diagnostic).length);
   assert.equal(model.aiScanIssues.length, 2, 'הראיות הגולמיות במודל לא נמחקו');
   assert.equal(model.unresolvedLabelReads.length, 3, 'ה-unresolved evidence נשמר במלואו');
 });
