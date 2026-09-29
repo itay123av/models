@@ -379,6 +379,36 @@ const EPSILON = 'ε';
 // boundary for already-saved legacy model data.
 const BOTTOM = '⊥';
 
+// Letter shapes of the closed PDA action vocabulary in Hebrew handwriting.
+// This is general knowledge of Hebrew cursive, not samples of one writer and
+// not answers to an exercise. In a bounded crop-level experiment
+// (scripts/probe-action-words.cjs) it raised action accuracy from 7/14 to 11/14
+// on the user-confirmed 2026-08-24 sheet and from 5/12 to 10/12 on the
+// 2026-09-29 sheet; the remaining misses were low-confidence or UNKNOWN.
+// Comparing repeated words across a whole sheet was tried as well and made
+// errors correlated (7/14), so every crop is still read on its own.
+const PDA_ACTION_WORD_GUIDE = [
+  'The action vocabulary is CLOSED. There are exactly three meanings:',
+  '  PUSH = the word "דחוף" (usually with an operand: the symbol being pushed).',
+  '  POP  = the word "שלוף" with an independently visible operand: the symbol being popped. If the operand is missing or unreadable, preserve the POP word but return ? for its symbol; never copy STACK_TOP.',
+  '  NONE = the two words "ללא שינוי", or their abbreviation "לל״ש" (never an operand).',
+  'HOW HEBREW CURSIVE (כתב יד) LOOKS — use letter shapes, not guesses:',
+  '  • Hebrew runs RIGHT-TO-LEFT: the FIRST letter of a word is its RIGHTMOST glyph in the image.',
+  '  • ש (shin) looks like a Latin "e" or "C" with a small loop. ל (lamed) looks like "δ", "8" or "ʃ" with a loop rising ABOVE the other letters.',
+  '  • ח (het) looks like "n". ד (dalet) looks like "ɔ", "3" or a small "Ո". ו (vav) and י (yod) are a short vertical tick "ı" or an apostrophe.',
+  '  • א (alef) looks like "k", "lc" or "ic". נ (nun) looks like a narrow "J" or "ɔ". ״ (gershayim) is one or two short strokes above or between letters.',
+  '  • ף (final pe) is the LAST letter of both "דחוף" and "שלוף"; it is the LEFTMOST glyph: a small loop whose tail DESCENDS below the baseline, like "ʃ", "ƒ", "ʀ" or "ʀ8".',
+  'What the three forms therefore look like when read LEFT-to-RIGHT across the image:',
+  '  • "דחוף" and "שלוף" BOTH end in "וף", so their LEFT half looks the same ("ʀ8ı" / "ʃı": the descending final-pe, then a vertical tick). NEVER decide push vs pop from the left half.',
+  '  • Decide push vs pop ONLY from the TWO RIGHTMOST glyphs:',
+  '      "דחוף" (PUSH) ends with TWO ARCHES open at the bottom — ח then ד — like "ՈՈ", "nn", "Ոɔ" or "n7". No closed loop and no "e"/"C" curve at the right end.',
+  '      "שלוף" (POP) ends with a closed LOOP followed by an open curve — ל then ש — like "8C", "δe", "8ɛ" or "8ɾ". The rightmost glyph is an "e"/"C"-shaped ש.',
+  '  • "לל״ש" (NONE) → roughly "e״δδ" / "é88": the "e"-shaped ש at the LEFT end with one or two strokes above it, then TWO looped ל at the right. NO descending tail anywhere.',
+  '  • "ללא שינוי" (NONE) → two words, roughly "\'ıJ\'e kδδ": a left word whose right end is the "e"-shaped ש, and a right word made of "k" (א) plus two looped ל. NO descending tail.',
+  'These shapes are supporting visual cues, not sufficient decision rules. A faint or clipped tail is NOT evidence for NONE. Identify NONE only from the visible phrase/abbreviation itself. Distinguish PUSH from POP using the complete word, especially the two rightmost letters; a shared final-pe tail alone cannot decide. If the discriminating letters are not legible, return UNKNOWN rather than the closest action.',
+  'If the word is cut off, hidden, or does not match any of these shapes, the action is UNKNOWN with low confidence — never pick the closest word to fill the field.',
+];
+
 function normalizeSymbolValue(value) {
   const raw = Array.isArray(value) ? value.join('') : String(value ?? '');
   const s = raw.trim();
@@ -4160,6 +4190,31 @@ function normalizeLabelsStageResult(value, topologyEnvelope, crops, modelType, s
       issues.push('label read transition_id/line_id does not match its crop manifest entry');
     }
     const bbox = evidenceBox(row.bbox || row.line_bbox, 'crop-local label bbox', issues);
+    // Row identity and pixel provenance are different: a clipped zoom can be
+    // read from its owning context without moving the rule to another row.
+    const evidenceCropId = String(row.evidence_crop_id ?? cropId).trim();
+    const evidenceMatches = cropAudit.cropIdMap.get(evidenceCropId) || [];
+    const evidenceCrop = evidenceMatches.length === 1 ? evidenceMatches[0] : null;
+    const ownEvidence = Boolean(matchingCrop && evidenceCrop &&
+      evidenceCrop.transition_id === transitionId &&
+      (evidenceCropId === cropId || evidenceCrop.kind === 'label_block'));
+    let originalEvidenceBbox = null;
+    if (!ownEvidence) issues.push('evidence_crop_id must identify the row zoom or a unique same-transition label_block');
+    else {
+      const local = normalizeLineBbox(bbox), frame = normalizeLineBbox(evidenceCrop.crop_bbox);
+      if (evidenceCrop.scan_incomplete) issues.push('selected evidence crop is malformed or incomplete');
+      if (!frame.localized) issues.push('selected evidence crop lacks valid original-frame crop_bbox');
+      if (local.localized && frame.localized) {
+        originalEvidenceBbox = {
+          x: frame.box.x + local.box.x * frame.box.w,
+          y: frame.box.y + local.box.y * frame.box.h,
+          w: local.box.w * frame.box.w, h: local.box.h * frame.box.h,
+        };
+      }
+      if (evidenceCropId !== cropId) {
+        issues.push('label ink read from same-transition context; primary row localization requires review');
+      }
+    }
     const zones = row.zones && typeof row.zones === 'object' ? row.zones : {};
     const leftText = String(zones.left_text ?? '');
     const middleText = String(zones.middle_text ?? '');
@@ -4225,6 +4280,8 @@ function normalizeLabelsStageResult(value, topologyEnvelope, crops, modelType, s
     if (!Number.isFinite(overallConfidence) || overallConfidence < 0.75) issues.push('label-read confidence is below review threshold');
     const normalized = {
       crop_id: cropId,
+      evidence_crop_id: evidenceCropId,
+      original_evidence_bbox: originalEvidenceBbox,
       transition_id: transitionId,
       line_id: lineId,
       raw_label_text: rawText,
@@ -4654,6 +4711,7 @@ function labelsStageSchema() {
           type: 'object', additionalProperties: false,
           properties: {
             crop_id: { type: 'string' },
+            evidence_crop_id: { type: 'string', description: 'The image whose local coordinate frame contains bbox: either this row crop_id or its same-transition label_block crop_id. Row identity stays in crop_id.' },
             transition_id: { type: 'string' },
             line_id: { type: 'string' },
             raw_label_text: { type: 'string' },
@@ -4680,7 +4738,7 @@ function labelsStageSchema() {
             confidence: { type: 'number' },
             issues: issueArraySchema(),
           },
-          required: ['crop_id', 'transition_id', 'line_id', 'raw_label_text', 'zones', 'bbox',
+          required: ['crop_id', 'evidence_crop_id', 'transition_id', 'line_id', 'raw_label_text', 'zones', 'bbox',
             'read_input', 'stack_action', 'push_value', 'stack_top', 'pop_symbol', 'confidence', 'issues'],
         },
       },
@@ -4873,6 +4931,7 @@ function buildTopologyLineGeometryAuditPrompt(connectorManifest, fullRoles, tile
     'For each immutable connector, locate the single contiguous/visually grouped label block physically owned by that connector. label_block_bbox must contain that block in original-frame coordinates with a small margin, while excluding the connector stroke, arrowhead, state circles, blue notebook ruling, and neighbouring connectors’ labels as far as the pixels allow.',
     'Within that block, count VISIBLE PHYSICAL TEXT BASELINES only. One handwritten transition-rule row is one baseline even when it contains several separated words/symbol zones; do not count individual glyphs, words, punctuation, ascenders, page-ruling intersections, connector strokes, or visual wrapping artifacts as extra lines. A neighbouring connector label is not part of this block.',
     'Emit exactly visible_line_count line_hints. Each bbox must contain all ink on one physical baseline with a small margin and must not include an adjacent baseline. Preserve an existing line_id only when it still denotes the same physical baseline; otherwise use a fresh opaque line id. Never create a line merely to match a prior count or expected automaton semantics.',
+    'WRAPPED FRAGMENTS: a lone short glyph directly under the right-hand word is not evidence of a second complete rule. Localize its ACTUAL ink width, not the full width of the row above it. Preserve it as a tight physical fragment if separate, so geometric suffix grouping can associate it without losing the original box. Never widen an isolated operand fragment into an INPUT-to-ACTION baseline. Do not read its identity or guess its meaning.',
     'Audit self-loop labels around the full state circumference, crowded diagonal-return labels, vertical connectors, and the bottom-left region carefully. Geometry and proximity to the supplied connector are the only binding evidence. If ownership or a baseline boundary is uncertain, retain the best localized bbox with low confidence and an explicit issue rather than borrowing neighbouring ink.',
     'No OCR: do not output raw text, state labels, input symbols, stack-top symbols, action types, or action words. Return only the strict line-geometry JSON keyed by the supplied transition_ids.',
   ].join('\n');
@@ -5547,11 +5606,15 @@ async function parseLabelsStage(topologyEnvelope, crops, modelType, requestedSes
     'kind=line is a TARGET ZOOM for one physical baseline and must produce exactly one label_read carrying crop_id, transition_id, and line_id verbatim. Use it for character detail, but do not let a clipped, shifted, connector-only, or malformed line crop erase a row that is clearly visible in its owning label_block. In that case transcribe the same indexed row from the label_block, add an issue explaining the recovery, and lower confidence. If the block and zoom disagree or row identity remains ambiguous, return UNKNOWN/? rather than combining glyphs or synthesizing text.',
     'Emit exactly one state_label_read for every kind=state_label crop, carrying crop_id and observation_id verbatim. NEVER emit a state_label_read for a kind=line or kind=label_block crop. Before returning, verify that state_label_reads.length equals the number of kind=state_label manifest rows and that their crop_id set is identical. Copy only the literal state name ink into visible_label (for example q0, q_3, A). If it is absent or unreadable, return "?" with low confidence/issues. Never invent q0/qN from position, start-arrow status, numbering sequence, or neighbouring states.',
     'A state_label_read may supply visible_label only. It must never return or alter bbox, is_start, is_accepting, geometry, connector ownership, endpoints, transition ids, or any topology property. Those remain immutable Stage A evidence.',
-    'bbox is crop-local normalized 0..1 evidence for visible ink in that line crop. Do not reuse original-frame topology coordinates as crop-local coordinates.',
+    'PIXEL PROVENANCE: crop_id always remains the assigned kind=line identity. Set evidence_crop_id to the image in which the complete row ink is visible: that line crop, or its SAME-transition kind=label_block. bbox is normalized 0..1 relative to evidence_crop_id, not necessarily crop_id. When recovering from context, locate the ink inside that context and report its context-local bbox; never use negative/out-of-range zoom coordinates. Never select another row zoom, another transition, or a state-label crop as evidence. Do not reuse original-frame coordinates as crop-local coordinates.',
+    'INACTIVE FIELDS: for PUSH set pop_symbol.value to ε; for POP set push_value.value to ε; for NONE set both to ε. These are not printed action operands: they mark an inactive structured slot only. A missing ACTIVE operand must stay ? and must never be filled from stack_top.',
     'For PDA lines, locate comma and slash as physical anchors before OCR. zones.left_text is only ink left/before comma; middle_text only between comma and slash; right_text only after/right of slash. raw_label_text is audit evidence and cannot override zones. If a glyph/anchor/action is unreadable, preserve what is visible, use ? in its structured field, lower confidence, and add an issue. Never turn missing ink into ε.',
     'PDA ZONE INDEPENDENCE CHECK: inspect LEFT, MIDDLE, and RIGHT as three separate visual tasks before forming structured fields. Never copy the readable MIDDLE stack symbol into an unclear LEFT input, and never copy a PUSH/POP symbol into either condition field. If LEFT ink is unclear, read_input must be ? even when MIDDLE is A/S/⊥. Determine PUSH/POP/NONE only from the approved Hebrew action word visibly present in RIGHT; a bare A, S, ⊥, plus, or minus does not establish an action. Read the WHOLE Hebrew word shape: דחוף means PUSH, שלוף means POP, and the two-word phrase ללא שינוי or abbreviation לל״ש means NONE. Do not collapse ללא שינוי into דחוף merely because one cramped trailing stroke looks similar. A visible Latin A/S following דחוף or שלוף belongs to the action symbol; ללא שינוי has no action symbol under the currently approved notation. Distinguish handwriting from any surviving notebook ruling: a ruling line is background and must not turn ⊥ into 1 or become part of a symbol. Carefully distinguish handwritten ε from Latin c, but preserve ? if the pixels do not decide it. Before returning each row, verify that read_input came from LEFT pixels, pop_value from MIDDLE pixels, and the action plus its symbol from RIGHT pixels.',
+    ...(mode !== 'tm' && mode !== 'dfa' && mode !== 'nfa' ? ['HEBREW ACTION WORD — LETTER SHAPES (read the RIGHT zone with these cues):', ...PDA_ACTION_WORD_GUIDE] : []),
     'Preserve contradictions. Never make PUSH equal STACK_TOP just for consistency; never derive POP symbol from STACK_TOP; never normalize photographed Z0/Z₀/Z_0/⟂ into ⊥; never execute or repair NONE with extra visible symbols.',
     'Each crop has its own local coordinates. The explicit target_line_bboxes_in_context mapping may associate a zoom with its owning block, never with another transition. A block can recover clipped ink for that SAME mapped row, including Hebrew words or an action operand written below its baseline; this is not an additional rule. Never change row IDs or invent a continuation. Record which view supplied recovered ink in issues.',
+    'LOCALIZATION CHECK: a line zoom may contain only paper/ruling because its tentative bbox is wrong. Inspect its SAME-transition label_block context before returning unknown. A LOCAL_LOOP_CONTEXT may include the owning circle and full loop neighbourhood. For a single-row loop, recover the one uniquely associated label from that context even outside the tentative line box; record the recovered location and localization disagreement in issues. Never borrow another connector label or assign multiple possible labels by proximity alone. Keep topology and row IDs unchanged. An isolated wrapped operand is not a complete extra rule: report that fact and its parent row in issues, keep the extra row unknown for review, and read the operand as part of the parent only when its spatial association is unambiguous.',
+    'INPUT GLYPH CHECK: a, b, c, and ε are distinct literal symbols. Before choosing ε inspect the LEFT glyph at full crop resolution: a closed bowl with a right-hand stem/tail supports handwritten a; an ascender with a bowl supports b; an open curve may be c; epsilon has open lobes and a middle stroke. These are visual cues, not a forced alphabet. Compare the entire glyph, including faint closure/stem strokes, independently of the action or expected language. If the pixels cannot distinguish a/c/ε, return ? with the alternatives in issues, not ε as a default.',
     ...(previousAttempt ? [
       'TARGETED SECOND LOOK: the preceding Luna read for this exact immutable batch was incomplete or low-confidence. Re-inspect the crop pixels independently. Do not repeat a previous guess merely for consistency and do not fill a missing field from automaton semantics.',
       `PREVIOUS ATTEMPT — audit context only, never pixel evidence: ${JSON.stringify(previousAttempt)}`,
@@ -6326,6 +6389,7 @@ module.exports = {
   // deterministically without a network call to the vision model.
   BOTTOM,
   EPSILON,
+  PDA_ACTION_WORD_GUIDE,
   normalizeSymbolValue,
   normalizeStackAction,
   ruleSemanticIssues,

@@ -1045,6 +1045,34 @@ test('12za. labels stage preserves foreign/duplicate/partial reads but blocks th
   assert.deepEqual(out.topology, topologyBefore, 'invalid label evidence still cannot mutate topology');
 });
 
+test('label context provenance maps its own pixels, preserves row identity and rejects foreign evidence', () => {
+  const envelope=server.normalizeTopologyStageResult(mockedTopologyRaw(1),'context-provenance');
+  const line=mockedCrop('zoom','line_1'),block=mockedCrop('context','','label_block');
+  block.crop_bbox=unitBox(.2,.3,.4,.2);
+  const row={...mockedLabelRead('zoom','line_1','A','B'),evidence_crop_id:'context',bbox:unitBox(.1,.2,.5,.3)};
+  const normalize=(r,crops=[line,block])=>server.normalizeLabelsStageResult({label_reads:[r]},envelope,crops,'pda','context-provenance').label_reads[0];
+  const result=normalize(row);
+  assert.equal(result.crop_id,'zoom');assert.equal(result.line_id,'line_1');
+  assert.equal(result.evidence_crop_id,'context');
+  for(const [key,value] of Object.entries({x:.24,y:.34,w:.2,h:.06})) assert.ok(Math.abs(result.original_evidence_bbox[key]-value)<1e-9);
+  assert.ok(result.issues.some(x=>x.includes('primary row localization requires review')));
+  assert.ok(!result.issues.some(x=>x.includes('crop-local label bbox')));
+  for(const bad of [
+    {...block,transition_id:'foreign'},
+    {...block,kind:'line',line_id:'line_2'},
+    {...block,kind:'state_label',observation_id:'state_left'},
+  ]) {
+    const failed=normalize(row,[line,bad]);
+    assert.equal(failed.original_evidence_bbox,null);
+    assert.ok(failed.issues.some(x=>x.includes('evidence_crop_id must')));
+  }
+  assert.equal(normalize(row,[line,block,block]).original_evidence_bbox,null,'duplicate crop identity cannot supply evidence');
+  assert.equal(normalize({...row,bbox:unitBox(-.1,.1,.5,.4)}).original_evidence_bbox,null,'no clipping malformed coordinates into validity');
+  assert.equal(normalize({...row,evidence_crop_id:'missing'}).original_evidence_bbox,null);
+  const legacy=normalize(mockedLabelRead('zoom','line_1','A','B'));
+  assert.equal(legacy.evidence_crop_id,'zoom','older responses retain the original line-local coordinate contract');
+});
+
 test('12zb. two-stage JSON schemas require structured counts and immutable identity keys', () => {
   const topologySchema = server.topologyStageSchema();
   const labelsSchema = server.labelsStageSchema();
@@ -1057,7 +1085,7 @@ test('12zb. two-stage JSON schemas require structured counts and immutable ident
   const readRequired = labelsSchema.properties.label_reads.items.required;
   assert.ok(readRequired.includes('stack_top'), 'Vision receives an explicitly named condition, not a pop instruction');
   assert.equal(readRequired.includes('pop_value'), false);
-  for (const key of ['crop_id', 'transition_id', 'line_id', 'zones', 'bbox']) assert.ok(readRequired.includes(key));
+  for (const key of ['crop_id', 'evidence_crop_id', 'transition_id', 'line_id', 'zones', 'bbox']) assert.ok(readRequired.includes(key));
   assert.ok(labelsSchema.required.includes('state_label_reads'));
   const stateReadRequired = labelsSchema.properties.state_label_reads.items.required;
   for (const key of ['crop_id', 'observation_id', 'visible_label', 'confidence']) {
@@ -1094,6 +1122,25 @@ test('Vision stack_top is a condition for every action and never fills the POP o
     assert.equal(result.label_reads[0].pop_symbol.value,action==='POP'?'B':'ε');
     if(action==='POP')assert.equal(result.label_reads[0].scan_incomplete,true,'mismatching POP evidence is not repaired');
     assert.equal(JSON.stringify(raw),before,'wire evidence was not mutated');
+  }
+});
+
+test('12zb2. PDA label prompts carry the Hebrew cursive action-word guide; TM and FA prompts do not', async () => {
+  const guide = server.PDA_ACTION_WORD_GUIDE;
+  assert.ok(Array.isArray(guide) && guide.length > 5);
+  assert.ok(guide.some(line => line.includes('לל״ש')) && guide.some(line => line.includes('ללא שינוי')));
+  assert.ok(guide.some(line => /TWO RIGHTMOST glyphs/.test(line)), 'push vs pop is decided from the right end of the word');
+  assert.ok(guide.some(line => /UNKNOWN/.test(line)), 'an unreadable word stays UNKNOWN instead of the closest word');
+  for (const [modelType, expected] of [['pda', true], ['tm', false], ['dfa', false], ['nfa', false]]) {
+    const session = `scan-guide-${modelType}`;
+    const topology = server.normalizeTopologyStageResult(mockedTopologyRaw(), session);
+    const prompts = [];
+    await server.parseLabelsStage(topology, [mockedCrop('crop_1', 'line_1')], modelType, session, {
+      labelEscalationEnabled: false, labelTargetedRetryEnabled: false,
+      callVisionJson: async request => { prompts.push(request.prompt); return { label_reads: [], state_label_reads: [], issues: [] }; },
+    });
+    assert.ok(prompts.length > 0);
+    assert.equal(prompts.every(p => p.includes(guide[guide.length - 2])), expected, `${modelType} prompt guide presence`);
   }
 });
 

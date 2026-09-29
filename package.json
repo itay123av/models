@@ -7,6 +7,7 @@
     "test": "node --test pda.test.js client-pda.test.js server.test.js scan-accuracy.test.js gemini-probe.test.js",
     "test:gemini-probe": "node scripts/probe-gemini-ocr.cjs",
     "test:scan-image": "node scripts/scan-image-diagnostic.cjs",
-    "test:scan-accuracy": "node scan-accuracy.js"
+    "test:scan-accuracy": "node scan-accuracy.js",
+    "test:label-replay": "node scripts/replay-label-stage.cjs"
   }
 }
