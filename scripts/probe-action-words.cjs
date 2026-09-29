@@ -4,8 +4,10 @@
 // compare repeated words by the same hand; "isolated" sends the same guide but
 // forbids cross-image comparison. Credentials are read by server.js and never
 // written to evidence. Reference answers are used only for scoring afterwards.
+// PAID and outside the app's scan budget guard (a direct API call, about
+// $0.005 per run); nothing is sent without --live.
 //
-// node scripts/probe-action-words.cjs <evidence-dir> <reference.json> [sheet|isolated]
+// node scripts/probe-action-words.cjs <evidence-dir> <reference.json> [sheet|isolated] --live
 const fs = require('node:fs');
 const path = require('node:path');
 const { PDA_ACTION_WORD_GUIDE } = require('../server');
@@ -29,7 +31,8 @@ const ISOLATED = [
 
 async function main() {
   const [dir, referencePath, variant = 'sheet'] = process.argv.slice(2);
-  if (!dir || !referencePath || !['sheet', 'isolated'].includes(variant)) throw new Error('usage: <evidence-dir> <reference.json> [sheet|isolated]');
+  if (!dir || !referencePath || !['sheet', 'isolated'].includes(variant)) throw new Error('usage: <evidence-dir> <reference.json> [sheet|isolated] --live');
+  if (!process.argv.includes('--live')) throw new Error('paid probe: pass --live to send the request');
   const request = JSON.parse(fs.readFileSync(path.join(dir, 'request-labels.json'), 'utf8'));
   const lines = request.crops.map((crop, index) => ({ crop, index, file: path.join(dir, `crop-${index}-line.png`) }))
     .filter(x => x.crop.kind === 'line' && fs.existsSync(x.file));

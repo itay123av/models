@@ -81,5 +81,27 @@ change.
   $0.39 of logged label-stage calls plus about $0.04 of direct probes. These
   are application price estimates, not an invoice.
 
+## Provenance note
+
+All measurements above ran between 02:05 and 02:19 on 2026-09-29, with the
+guide exactly as first written.
+
+Between 14:21 and 14:43 a concurrent session edited the working tree:
+
+- the POP line now requires an independently visible operand;
+- a caution line was added ("supporting visual cues, not sufficient decision
+  rules");
+- new pixel-provenance (`evidence_crop_id`), localization and input-glyph
+  rules were added to the label prompt and schema.
+
+Commit `ed24c5c` swept those server-side edits in together with this work.
+That session's matching client change (`pixel_provenance` in `automata.html`)
+was still uncommitted at the time.
+
+The combined prompt that production now runs has **not** been re-measured.
+
+Both experiment scripts are paid and bypass the app's per-scan budget guard.
+They now refuse to send anything without `--live`.
+
 Private evidence (crops, raw answers, reference files) is under the ignored
 `scan-guard-contract/` and `scan-sept29-live-verify/` directories.

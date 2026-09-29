@@ -1,11 +1,14 @@
 // Re-runs ONLY the production label stage (parseLabelsStage) on the crops and
 // topology saved by an earlier scan (request-labels.json in an evidence dir).
-// Paid, but bounded by the server's own per-scan limits; topology is not
-// re-scanned. The reference file is read only after the model has answered,
-// for scoring. Output: <dir>/replay-labels-<timestamp>.json
+// PAID: calling parseLabelsStage directly bypasses the HTTP handler's per-scan
+// usage scope, so the app's scan budget guard does NOT apply. One run of a
+// 7-state sheet cost about $0.03-0.04 (7-11 label calls). Nothing is sent
+// without --live. Topology is not re-scanned. The reference file is read only
+// after the model has answered, for scoring.
+// Output: <dir>/replay-labels-<timestamp>.json
 //
-// node scripts/replay-label-stage.cjs <evidence-dir> <reference.json>
-//   REPLAY_SCORE_ONLY=<response-labels.json>  score a saved answer, no model call
+// node scripts/replay-label-stage.cjs <evidence-dir> <reference.json> --live
+//   REPLAY_SCORE_ONLY=<response-labels.json>  score a saved answer, no model call (no --live needed)
 //   REPLAY_SERVER=<path to another server.js>  A/B a different prompt version
 //   REPLAY_TAG=<name>                          tag the output file (e.g. old/new)
 const fs = require('node:fs');
@@ -16,7 +19,9 @@ const val = f => (f && typeof f === 'object' ? (f.value ?? f.type ?? '') : (f ??
 
 async function main() {
   const [dir, referencePath] = process.argv.slice(2);
-  if (!dir || !referencePath) throw new Error('usage: <evidence-dir> <reference.json>');
+  if (!dir || !referencePath) throw new Error('usage: <evidence-dir> <reference.json> --live');
+  if (!process.env.REPLAY_SCORE_ONLY && !process.argv.includes('--live'))
+    throw new Error('paid label-stage replay: pass --live to send requests (or REPLAY_SCORE_ONLY to score a saved answer)');
   const request = JSON.parse(fs.readFileSync(path.join(dir, 'request-labels.json'), 'utf8'));
   const startedAt = Date.now();
   // REPLAY_SCORE_ONLY=<response-labels.json> scores an earlier saved answer the same way, without a model call.
