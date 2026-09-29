@@ -1986,6 +1986,72 @@ function aiStateConcerns(s){
   if(s.displayLabelUnresolved)out.push('שם המצב לא נקרא בוודאות');
   return out;
 }
+/* קריאות תווית שלא שויכו חוסמות הרצה, ולכן לכל אחת צריך מסלול פתרון מפורש.
+   שורה או מצב שיש להם מקבילה על הקנבס (כלל "?" או עיגול "?") נסגרים כשהמשתמש
+   תיקן ואישר את המקבילה — המקבילה עצמה ממשיכה לחסום עד אז. כל השאר נסגרים
+   בלחיצה "בדקתי", שמעבירה את הראיה להיסטוריה ולא מוחקת אותה. */
+function unresolvedLabelReadMessages(u){
+  const rawIssues=Array.isArray(u&&u.issues)?u.issues:(u&&u.issues?[u.issues]:[]);
+  return scanUniqueIssues([...rawIssues,u&&u.reason||'']);
+}
+function unresolvedLabelReadKey(u){
+  const evidenceIdentity=stableScanString(u.reads||u.evidence||u.raw_label_text||null);
+  return ['unresolved-label',u.kind||'',u.observation_id||'',u.connector_observation_id||'',u.transition_id||'',u.line_id||'',u.crop_id||u.cropId||'',u.placeholder_index??'',unresolvedLabelReadMessages(u).join('\u001f'),evidenceIdentity].join(':');
+}
+function unresolvedLabelReadTarget(u){
+  if(!u||!current)return null;
+  if(u.kind==='label_line'&&u.transition_id){
+    const t=current.transitions.find(x=>x.aiTransitionId===u.transition_id);
+    if(!t)return null;
+    return {type:'rule',transition:t,ruleIndex:(t.rules||[]).findIndex(r=>r.aiLineId&&r.aiLineId===u.line_id)};
+  }
+  if(u.kind==='state_label'&&u.observation_id){
+    const s=current.states.find(x=>(x.aiObservationIds||[]).includes(u.observation_id));
+    return s?{type:'state',state:s}:null;
+  }
+  return null;
+}
+function unresolvedLabelReadSettled(u){
+  const target=unresolvedLabelReadTarget(u);
+  if(!target)return false;
+  if(target.type==='state')return Boolean(target.state.manuallyReviewed||target.state.labelManuallyReviewed);
+  const rule=(target.transition.rules||[])[target.ruleIndex];
+  return Boolean(rule&&rule.manuallyReviewed);
+}
+function unresolvedLabelReadText(u){
+  const target=unresolvedLabelReadTarget(u);
+  if(target&&target.type==='rule'){
+    const from=stById(target.transition.from),to=stById(target.transition.to),self=isSelfLoopTransition(target.transition);
+    const where=`${from?from.label:'?'} ${self?'↺':'→'} ${to?to.label:'?'}`;
+    return {title:`שורת תווית שלא נקראה · ${where}`,hint:target.ruleIndex>=0
+      ?'על החץ נוצר במקומה כלל "?". פתח אותו, השלם לפי התמונה ושמור.'
+      :'כלל ה-"?" שלה כבר לא על החץ. אם בתמונה יש כאן כלל — הוסף אותו ידנית, ואז סמן "בדקתי".'};
+  }
+  if(u&&u.kind==='label_line')return {title:'שורת תווית שלא נקראה',hint:'החץ שלה לא צויר על הקנבס. השווה לתמונה, הוסף ידנית מה שחסר, ואז סמן "בדקתי".'};
+  if(u&&u.kind==='state_label')return {title:`שם מצב שלא נקרא${target?` · ${target.state.label}`:''}`,
+    hint:target?'בחר את המצב, תקן את שמו ואשר אותו.':'העיגול שלו לא נמצא על הקנבס. השווה לתמונה, הוסף ידנית אם חסר, ואז סמן "בדקתי".'};
+  if(u&&u.kind==='missing_connector')return {title:'ייתכן שחסר חץ',hint:'הסריקה ספרה חץ שלא הצליחה לשייך למצבים, ולא הומצא חץ במקומו. השווה לתמונה; אם חסר חץ — צייר אותו ידנית, ואז סמן "בדקתי".'};
+  if(u&&u.kind==='connector')return {title:'חץ שלא צויר',hint:'לחץ הזה חזר מזהה חסר או כפול, ולכן הוא לא צויר. השווה לתמונה; אם הוא קיים — צייר אותו ידנית, ואז סמן "בדקתי".'};
+  return {title:'קריאת תווית שלא שויכה',hint:'הקריאה חזרה ממקום לא צפוי ולא שויכה לאף כלל. השווה לתמונה, הוסף ידנית מה שחסר, ואז סמן "בדקתי".'};
+}
+function pendingUnresolvedLabelReads(){ return (current&&current.unresolvedLabelReads||[]).filter(u=>!unresolvedLabelReadSettled(u)); }
+function focusUnresolvedLabelRead(index){
+  const u=(current&&current.unresolvedLabelReads||[])[index],target=unresolvedLabelReadTarget(u);
+  if(!target){ toast('אין לקריאה הזאת מקבילה על הקנבס — השווה לתמונה וסמן "בדקתי"'); return; }
+  if(target.type==='state'){ focusAiIssue(target.state.id,'state'); return; }
+  if(current.type==='pda'&&target.ruleIndex>=0){ editPdaTransition(target.transition.id,target.ruleIndex); return; }
+  selectTransition(target.transition.id);
+}
+function acknowledgeUnresolvedLabelRead(index){
+  const list=current&&current.unresolvedLabelReads||[],u=list[index]; if(!u)return;
+  /* זהות התצוגה מאחדת כפילויות זהות — סוגרים את כולן יחד, אחרת אותו כרטיס חוזר */
+  const key=unresolvedLabelReadKey(u),acknowledgedAt=new Date().toISOString();
+  const closing=list.filter(x=>unresolvedLabelReadKey(x)===key);
+  current.unresolvedLabelReads=list.filter(x=>unresolvedLabelReadKey(x)!==key);
+  current.resolvedLabelReadHistory=[...(current.resolvedLabelReadHistory||[]),
+    ...closing.map(x=>Object.assign(cloneScanValue(x),{resolution:'acknowledged',acknowledged_at:acknowledgedAt}))];
+  save(); renderAll(); toast('סומן כנבדק; הראיה נשמרה בהיסטוריה','success');
+}
 function collectAiReviewItems(){
   if(!current)return [];
   const items=[],seen=new Set(),globalIssues=scanUniqueIssues(current.aiScanIssues||[]),globalKeys=new Set(globalIssues.map(scanIssueKey));
@@ -2001,10 +2067,10 @@ function collectAiReviewItems(){
   (current.unresolvedScanTransitions||[]).forEach((u,i)=>add(`unresolved-transition:${u.transitionId||i}`,{
     kind:'unresolved',id:String(i),title:`מעבר לא משויך ${u.transitionId||''}`,sub:'הראיות נשמרו — לחץ לבחירת מקור ויעד'}));
   (current.unresolvedLabelReads||[]).forEach((u,i)=>{
-    const rawIssues=Array.isArray(u.issues)?u.issues:(u.issues?[u.issues]:[]),messages=scanUniqueIssues([...rawIssues,u.reason||'']),evidenceIdentity=stableScanString(u.reads||u.evidence||u.raw_label_text||null);
-    const key=['unresolved-label',u.kind||'',u.observation_id||'',u.connector_observation_id||'',u.transition_id||'',u.line_id||'',u.crop_id||u.cropId||'',u.placeholder_index??'',messages.join('\u001f'),evidenceIdentity].join(':');
-    add(key,{kind:'global',id:String(i),title:`קריאת תווית לא משויכת ${u.crop_id||u.cropId||''}`,
-      sub:messages.join(', ')||'הקריאה נשמרה לביקורת ואינה פעילה'});
+    if(unresolvedLabelReadSettled(u))return;
+    const text=unresolvedLabelReadText(u);
+    add(unresolvedLabelReadKey(u),{kind:'label-read',id:String(i),title:text.title,sub:text.hint,
+      detail:unresolvedLabelReadMessages(u).join(', ')||'הקריאה נשמרה לביקורת ואינה פעילה',canFocus:Boolean(unresolvedLabelReadTarget(u))});
   });
   (current.states||[]).filter(s=>s.aiLow||(s.structuralIssues&&s.structuralIssues.length)||(!s.scanStructuralReviewed&&s.scanStructuralIssues&&s.scanStructuralIssues.length))
     .map(s=>({s,concerns:aiStateConcerns(s)})).sort((a,b)=>b.concerns.length-a.concerns.length).forEach(({s,concerns})=>{
@@ -2125,6 +2191,7 @@ function resolveUnresolvedStateObservation(index){
 }
 function focusAiIssue(id,kind){
   if(kind==='global') return;
+  if(kind==='label-read'){ focusUnresolvedLabelRead(Number(id)); return; }
   if(kind==='unresolved'){ resolveUnresolvedTransition(Number(id)); return; }
   if(kind==='state-observation'){ resolveUnresolvedStateObservation(Number(id)); return; }
   if(kind==='state'){ sel={type:'state',id}; renderGraph(); renderInspector(); renderArmBanner(); return; }
@@ -2154,12 +2221,16 @@ function renderAiReviewPanel(){
         <button class="chip${s.isAccept?' on':''}" onclick="toggleAccept('${s.id}')">מקבל</button>
         <button class="chip ai-review-ok" onclick="markStateReviewed('${s.id}')">✓ נכון</button>
       </div></div>`;};
+  const labelReadRow=it=>`<div class="ai-review-item ai-review-card"><div class="ai-review-title">${esc(it.title)}</div>
+    <div class="ai-review-sub">${esc(it.sub)}</div><div class="ai-review-sub" dir="auto">${esc(it.detail)}</div>
+    <div class="ai-review-chips">${it.canFocus?`<button class="chip" onclick="focusUnresolvedLabelRead(${Number(it.id)})">פתח</button>`:''}
+      <button class="chip ai-review-ok" onclick="acknowledgeUnresolvedLabelRead(${Number(it.id)})">✓ בדקתי</button></div></div>`;
   const starts=actions.filter(x=>x.kind==='start'),states=actions.filter(x=>x.kind==='state'),rest=actions.filter(x=>x.kind!=='start'&&x.kind!=='state');
   p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="הסתר">×</button></div>
     <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.</div>`+
     starts.map(startRow).join('')+
     (states.length?`<div class="ai-review-section">מצבים · ${states.length}</div>`+states.map(stateRow).join(''):'')+
-    (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(itemBtn).join(''):'')+
+    (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(it=>it.kind==='label-read'?labelReadRow(it):itemBtn(it)).join(''):'')+
     (diag.length?`<details class="ai-review-diag"><summary>פרטים טכניים מהסריקה · ${diag.length}</summary>${diag.map(it=>`<div dir="auto">${esc(it.sub)}</div>`).join('')}</details>`:'');
 }
 function reviewAiList(list,i){ applyAiTransitionsToCanvas(list); }   /* תאימות ישנה: אין יותר אשף רציף */
@@ -3131,7 +3202,7 @@ function deletePdaRule(id,index){ const t=trById(id); if(!t||!Array.isArray(t.ru
 function clearGraphData(){
   if(!current)return;
   current.states=[];current.transitions=[];
-  current.aiScanIssues=[];current.aiScanIssueEvidence=[];current.unresolvedLabelReads=[];current.unresolvedScanTransitions=[];current.unresolvedStateObservations=[];
+  current.aiScanIssues=[];current.aiScanIssueEvidence=[];current.unresolvedLabelReads=[];current.resolvedLabelReadHistory=[];current.unresolvedScanTransitions=[];current.unresolvedStateObservations=[];
   current.scanEvidenceHistory=[];current.scanStateEvidenceHistory=[];current.unresolvedScanTransitionHistory=[];current.unresolvedStateObservationHistory=[];
   current.aiScanSessions=[];current.activeAiScanSessionId='';current.aiReviewDismissed=false;
   sel={type:null,id:null};armed=null;
@@ -3434,7 +3505,7 @@ function nfaAccepts(input){ input=String(input); const start=current.states.find
   return states.some(id=>stById(id).isAccept); }
 function hasPendingAiExecutionReview(){
   if(!current)return false;
-  if((current.unresolvedStateObservations||[]).length||(current.unresolvedScanTransitions||[]).length||(current.unresolvedLabelReads||[]).length)return true;
+  if((current.unresolvedStateObservations||[]).length||(current.unresolvedScanTransitions||[]).length||pendingUnresolvedLabelReads().length)return true;
   if((current.states||[]).some(s=>s.aiLow&&!s.manuallyReviewed))return true;
   return (current.transitions||[]).some(t=>t.aiLow||t.scanIncomplete||
     (t.rules||[]).some(r=>r.aiLow||r.scanIncomplete)||

@@ -2143,7 +2143,7 @@ test('review summary deduplicates repeated display warnings but preserves distin
 
   const items = Array.from(ctx.collectAiReviewItems());
   assert.equal(items.filter(x => x.title === 'אזהרת סריקה').length, 1);
-  assert.equal(items.filter(x => x.title.startsWith('קריאת תווית לא משויכת')).length, 2,
+  assert.equal(items.filter(x => x.kind === 'label-read').length, 2,
     'כפילות זהה מאוחדת, אך שתי שורות פיזיות שונות נשארות שני blockers');
   const transitionItem = items.find(x => x.kind === 'transition');
   assert.ok(transitionItem);
@@ -2153,4 +2153,53 @@ test('review summary deduplicates repeated display warnings but preserves distin
   assert.equal(ctx.aiIssueCount(), items.filter(x => !x.diagnostic).length);
   assert.equal(model.aiScanIssues.length, 2, 'הראיות הגולמיות במודל לא נמחקו');
   assert.equal(model.unresolvedLabelReads.length, 3, 'ה-unresolved evidence נשמר במלואו');
+});
+
+test('an unread label line is settled by reviewing its "?" placeholder rule, not by a dead-end blocker', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const placeholder = Object.assign(ctx.makeRulePDA('?', '?', 'push', '?'), { aiLineId: 'line-1', aiLow: true, scanIncomplete: true });
+  const model = pdaModel(ctx, [{ id: 'arrow', aiTransitionId: 'transition_1', from: 'q2', to: 'q3', rules: [placeholder], aiLow: true, scanIncomplete: true }]);
+  model.unresolvedLabelReads = [{ kind: 'label_line', transition_id: 'transition_1', line_id: 'line-1', crop_id: 'crop-1', reason: 'קריאת label חסרה לשורה' }];
+  model.unresolvedStateObservations = [];
+  model.unresolvedScanTransitions = [];
+
+  const item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'label-read');
+  assert.ok(item && item.canFocus, 'the blocker points at the placeholder rule it duplicates');
+  assert.match(item.title, /q2 → q3/);
+  assert.equal(ctx.hasPendingAiExecutionReview(), true);
+
+  // The human fixes the rule in the editor: the rule becomes reviewed and runnable.
+  Object.assign(model.transitions[0].rules[0], ctx.makeRulePDA('b', 'A', 'none', ''), { aiLineId: 'line-1', aiLow: false, scanIncomplete: false, manuallyReviewed: true });
+  Object.assign(model.transitions[0], { aiLow: false, scanIncomplete: false });
+  assert.equal(Array.from(ctx.collectAiReviewItems()).some(x => x.kind === 'label-read'), false, 'the settled read leaves the review list');
+  assert.equal(ctx.hasPendingAiExecutionReview(), false, 'running is no longer blocked forever');
+  assert.equal(model.unresolvedLabelReads.length, 1, 'the evidence itself is kept');
+});
+
+test('reads without a canvas counterpart are closed by an explicit "checked" that archives the evidence', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = pdaModel(ctx, []);
+  const missing = { kind: 'missing_connector', reason: 'נספר connector פיזי שלא הוחזר כאובייקט; לא הומצא חץ', issues: ['visible connector count mismatch'], placeholder_index: 0 };
+  model.unresolvedLabelReads = [missing, JSON.parse(JSON.stringify(missing)),
+    { kind: 'state_label', observation_id: 'state_9', crop_id: 'crop-s9', reason: 'unreadable', issues: ['unreadable'] }];
+  model.unresolvedStateObservations = [];
+  model.unresolvedScanTransitions = [];
+
+  let items = Array.from(ctx.collectAiReviewItems()).filter(x => x.kind === 'label-read');
+  assert.equal(items.length, 2, 'identical duplicates show as one card');
+  const missingItem = items.find(x => x.title === 'ייתכן שחסר חץ');
+  assert.ok(missingItem && !missingItem.canFocus);
+  assert.equal(ctx.hasPendingAiExecutionReview(), true);
+
+  ctx.acknowledgeUnresolvedLabelRead(Number(missingItem.id));
+  assert.equal(model.unresolvedLabelReads.length, 1, 'both identical duplicates close together');
+  assert.equal(model.resolvedLabelReadHistory.length, 2);
+  assert.ok(model.resolvedLabelReadHistory.every(x => x.resolution === 'acknowledged' && x.acknowledged_at && x.kind === 'missing_connector'));
+  assert.equal(ctx.hasPendingAiExecutionReview(), true, 'the unrelated state-label read still blocks');
+
+  // A state with that physical observation, once its label is reviewed, settles the state-label read.
+  model.states.push({ id: 'q9', label: 'q9', x: 0, y: 0, aiObservationIds: ['state_9'], labelManuallyReviewed: true });
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
 });
