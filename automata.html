@@ -214,6 +214,9 @@ body{
 .ai-review-diag{margin-top:12px;font-size:11px;color:#78350f}
 .ai-review-diag summary{cursor:pointer;font-weight:800;color:#92400e}
 .ai-review-diag div{border-top:1px dashed #fcd34d;padding:5px 2px;line-height:1.35;overflow-wrap:anywhere}
+.ai-review-panel.collapsed{width:auto;padding:0;border:none;background:transparent;box-shadow:none;overflow:visible}
+.ai-review-pill{border:1.5px solid #f59e0b;background:#fffbeb;color:#92400e;font-family:'Heebo',sans-serif;font-weight:800;font-size:12.5px;border-radius:999px;padding:7px 14px;cursor:pointer;box-shadow:0 8px 22px rgba(217,119,6,.18)}
+.ai-review-pill:hover{background:#fde68a}
 .node.ai-doubt .ncirc{stroke:#ea580c;stroke-dasharray:8 5}
 .ndoubt circle{fill:#ea580c;stroke:#fff;stroke-width:2.5}
 .ndoubt text{fill:#fff;font-size:15px;font-weight:900;pointer-events:none}
@@ -225,7 +228,7 @@ body{
 .rule-edit.rule-bad{border-color:#dc2626;background:#fef2f2;color:#7f1d1d}
 .rule-sem{font-size:10.5px;font-weight:700;margin-top:4px;line-height:1.4;color:#b91c1c}
 .pda-sem{margin-top:9px;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5;border-radius:9px;padding:8px 10px;text-align:center;line-height:1.5}
-@media (max-width:760px){.ai-review-panel{left:12px;right:12px;top:56px;width:auto;max-height:34vh}}
+@media (max-width:760px){.ai-review-panel{left:12px;right:12px;top:56px;width:auto;max-height:34vh}.ai-review-panel.collapsed{left:auto}}
 /* tape / film strip */
 .tape{position:relative; display:inline-block; background:var(--bg); border:1.5px solid var(--line); border-radius:14px; padding:16px 14px 12px}
 .tape::before,.tape::after{content:''; position:absolute; left:10px; right:10px; height:6px; background-image:radial-gradient(circle, var(--line) 2px, transparent 2.3px); background-size:15px 6px}
@@ -2198,12 +2201,16 @@ function focusAiIssue(id,kind){
   if(current && current.type==='pda'){ editPdaTransition(id); return; }
   selectTransition(id);   /* אוטומט סופי: הבחירה פותחת את עורך הסימנים בלוח הצד */
 }
+/* מזעור בלבד: כל עוד יש פריטים שחוסמים הרצה, הרשימה נשארת זמינה בכפתור קטן */
 function dismissAiReview(){ if(current){ current.aiReviewDismissed=true; save(); renderAiReviewPanel(); } }
+function expandAiReview(){ if(current){ current.aiReviewDismissed=false; save(); renderAiReviewPanel(); } }
 function renderAiReviewPanel(){
   const p=$('aiReviewPanel'); if(!p) return;
-  if(!current || current.aiReviewDismissed){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  if(!current){ p.className='ai-review-panel'; p.innerHTML=''; return; }
   const items=collectAiReviewItems(),actions=items.filter(x=>!x.diagnostic),diag=items.filter(x=>x.diagnostic);
   if(!actions.length){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  if(current.aiReviewDismissed){ p.className='ai-review-panel show collapsed';
+    p.innerHTML=`<button class="ai-review-pill" onclick="expandAiReview()" title="פתח את רשימת הבדיקה">⚠ בדיקת סריקה · ${actions.length} לאישור</button>`; return; }
   p.className='ai-review-panel show';
   const itemBtn=it=>`<button class="ai-review-item" onclick="focusAiIssue('${it.id}','${it.kind}')"><div class="ai-review-main">${esc(it.title)}</div><div class="ai-review-sub">${esc(it.sub)}</div></button>`;
   /* מועמדים למצב התחלתי: קודם מי שהסריקה חשדה בו, אחר כך לפי סדר התוויות */
@@ -2226,7 +2233,7 @@ function renderAiReviewPanel(){
     <div class="ai-review-chips">${it.canFocus?`<button class="chip" onclick="focusUnresolvedLabelRead(${Number(it.id)})">פתח</button>`:''}
       <button class="chip ai-review-ok" onclick="acknowledgeUnresolvedLabelRead(${Number(it.id)})">✓ בדקתי</button></div></div>`;
   const starts=actions.filter(x=>x.kind==='start'),states=actions.filter(x=>x.kind==='state'),rest=actions.filter(x=>x.kind!=='start'&&x.kind!=='state');
-  p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="הסתר">×</button></div>
+  p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="מזער — הרשימה נשארת זמינה">–</button></div>
     <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.</div>`+
     starts.map(startRow).join('')+
     (states.length?`<div class="ai-review-section">מצבים · ${states.length}</div>`+states.map(stateRow).join(''):'')+
@@ -3302,15 +3309,39 @@ function edgeGeom(t){ const a=stById(t.from), b=stById(t.to);
 
 /* ─── render: graph ─── */
 function applyView(){ $('canvas').setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); }
+/* הפאנלים הצפים מכסים חלקים מהקנבס. מחפשים את המלבן הפנוי הגדול: חותכים
+   את הקנבס מול כל פאנל (מהגדול לקטן) ובוחרים בכל פעם את הצד הגדול שנשאר.
+   אם נשאר פחות מ-40% בציר כלשהו (מסך צר) — חוזרים לקנבס המלא. */
+function canvasFreeRect(wrap,cw,ch){
+  const full={x:0,y:0,w:cw,h:ch};
+  try{
+    const base=wrap.getBoundingClientRect();
+    if(!base||!(base.width>0)||typeof getComputedStyle!=='function')return full;
+    const occluders=['tabBar','controlPanel','aiReviewPanel','stackFloat','tapeFloat','guideFloat'].map(id=>document.getElementById(id))
+      .filter(el=>el&&getComputedStyle(el).display!=='none')
+      .map(el=>{const r=el.getBoundingClientRect();return {x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height};})
+      .filter(o=>o.w>0&&o.h>0).sort((a,b)=>b.w*b.h-a.w*a.h);
+    let free=full;
+    for(const o of occluders){
+      const ox2=o.x+o.w,oy2=o.y+o.h,fx2=free.x+free.w,fy2=free.y+free.h;
+      if(ox2<=free.x||o.x>=fx2||oy2<=free.y||o.y>=fy2)continue;
+      const sides=[{x:free.x,y:free.y,w:o.x-free.x,h:free.h},{x:ox2,y:free.y,w:fx2-ox2,h:free.h},
+        {x:free.x,y:free.y,w:free.w,h:o.y-free.y},{x:free.x,y:oy2,w:free.w,h:fy2-oy2}].filter(r=>r.w>0&&r.h>0);
+      if(!sides.length)return full;
+      free=sides.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a);
+    }
+    return free.w>=cw*0.4&&free.h>=ch*0.4?free:full;
+  }catch(e){ return full; }
+}
 function fitView(){
-  const wrap=$('canvasArea')||$('stage'); const cw=wrap.clientWidth||1000, ch=wrap.clientHeight||680, ar=cw/ch;
+  const wrap=$('canvasArea')||$('stage'); const cw=wrap.clientWidth||1000, ch=wrap.clientHeight||680;
   if(!current || !current.states.length){ view={x:0,y:0,w:cw,h:ch}; applyView(); return; }
   const xs=current.states.map(s=>s.x), ys=current.states.map(s=>s.y);
   const hasLoops=current.transitions.some(isSelfLoopTransition);
-  let minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
-  let w=maxx-minx, h=maxy-miny;
-  if(w/h < ar){ const nw=h*ar; minx-=(nw-w)/2; w=nw; } else { const nh=w/ar; miny-=(nh-h)/2; h=nh; }
-  view={x:minx,y:miny,w,h}; applyView();
+  const minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
+  /* s = יחידות עולם לפיקסל; הגרף ממורכז במלבן הפנוי ולא במרכז הקנבס */
+  const free=canvasFreeRect(wrap,cw,ch), s=Math.max((maxx-minx)/free.w,(maxy-miny)/free.h);
+  view={x:(minx+maxx)/2-(free.x+free.w/2)*s, y:(miny+maxy)/2-(free.y+free.h/2)*s, w:cw*s, h:ch*s}; applyView();
 }
 function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/view.w;
   const cx=view.x+view.w/2, cy=view.y+view.h/2; view.w=w; view.h*=ratio; view.x=cx-view.w/2; view.y=cy-view.h/2; applyView(); }
@@ -3512,7 +3543,8 @@ function hasPendingAiExecutionReview(){
     (t.scanRuleEvidence||[]).some(r=>r.aiLow||r.scanIncomplete));
 }
 function simReady(){ const v=computeValidation();
-  if(hasPendingAiExecutionReview()){ toast('יש רכיבים מסריקה שעדיין דורשים אישור; אשר או תקן אותם לפני הרצה','danger'); return false; }
+  if(hasPendingAiExecutionReview()){ if(current.aiReviewDismissed)expandAiReview();
+    toast('יש רכיבים מסריקה שעדיין דורשים אישור — הם ברשימת "בדיקת סריקה"','danger'); return false; }
   if(v.starts.length!==1){ toast('צריך בדיוק מצב התחלתי אחד','danger'); return false; }
   if(current.type==='pda'&&!current.ndet&&v.ambiguities&&v.ambiguities.length){ toast('יש כמה כללים שעשויים להתאים; בחר NPDA או ערוך את הכללים לפני הרצה','danger'); return false; }
   if(!current.ndet && !v.deterministic){ toast('האוטומט אינו דטרמיניסטי — תקן לפני הרצה','danger'); return false; }

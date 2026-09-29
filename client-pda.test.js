@@ -2203,3 +2203,30 @@ test('reads without a canvas counterpart are closed by an explicit "checked" tha
   model.states.push({ id: 'q9', label: 'q9', x: 0, y: 0, aiObservationIds: ['state_9'], labelManuallyReviewed: true });
   assert.equal(ctx.hasPendingAiExecutionReview(), false);
 });
+
+test('a minimized review list stays reachable and reopens by itself when a run is blocked', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = pdaModel(ctx, []);
+  model.unresolvedLabelReads = [{ kind: 'missing_connector', reason: 'x', issues: ['x'], placeholder_index: 0 }];
+  model.unresolvedStateObservations = [];
+  model.unresolvedScanTransitions = [];
+  ctx.dismissAiReview();
+  assert.equal(model.aiReviewDismissed, true);
+  assert.equal(ctx.simReady(), false, 'the pending read still blocks running');
+  assert.equal(model.aiReviewDismissed, false, 'the blocked run brings the list back');
+});
+
+test('fit-to-view uses the largest canvas area not covered by floating panels, and falls back on a crowded screen', () => {
+  const ctx = loadClient();
+  const rect = (left, top, width, height) => ({ getBoundingClientRect: () => ({ left, top, width, height, right: left + width, bottom: top + height }) });
+  const panels = { controlPanel: rect(1160, 58, 264, 600), aiReviewPanel: rect(808, 64, 340, 378), tabBar: rect(0, 0, 1440, 50) };
+  ctx.document.getElementById = id => panels[id] || null;
+  ctx.getComputedStyle = () => ({ display: 'block' });
+  const wrap = rect(0, 0, 1440, 900);
+  assert.deepEqual({ ...ctx.canvasFreeRect(wrap, 1440, 900) }, { x: 0, y: 50, w: 808, h: 850 },
+    'left of the review panel and below the tab bar');
+  panels.controlPanel = rect(100, 0, 1300, 900);
+  assert.deepEqual({ ...ctx.canvasFreeRect(wrap, 1440, 900) }, { x: 0, y: 0, w: 1440, h: 900 },
+    'a sliver under 40% is useless, so the whole canvas is used');
+});
