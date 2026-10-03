@@ -53,6 +53,10 @@ body{
 .bf-title{font-weight:800; color:var(--ink-strong); font-size:16px}
 .panel-float{top:58px; right:14px; width:238px; max-height:calc(100dvh - 74px); display:flex; flex-direction:column}
 .panel-float .float-head{padding:9px 14px; font-size:14px}
+.float-toggle{margin-inline-start:auto; border:none; background:transparent; color:var(--muted); font-size:15px; line-height:1; width:30px; height:28px; border-radius:8px; cursor:pointer}
+.float-toggle:hover{background:#f3f4f6; color:var(--ink-strong)}
+.float.collapsed .float-body{display:none}
+.float.collapsed .float-head{border-bottom:none}
 .panel-float .float-body{overflow-y:auto; padding:10px 12px}
 .cp-model{display:flex; align-items:center; gap:8px}
 .cp-model .mtype{font-size:10px; font-weight:800; color:#fff; background:var(--indigo); padding:3px 8px; border-radius:999px; letter-spacing:.5px}
@@ -228,7 +232,8 @@ body{
 .rule-edit.rule-bad{border-color:#dc2626;background:#fef2f2;color:#7f1d1d}
 .rule-sem{font-size:10.5px;font-weight:700;margin-top:4px;line-height:1.4;color:#b91c1c}
 .pda-sem{margin-top:9px;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5;border-radius:9px;padding:8px 10px;text-align:center;line-height:1.5}
-@media (max-width:760px){.ai-review-panel{left:12px;right:12px;top:56px;width:auto;max-height:34vh}.ai-review-panel.collapsed{left:auto}}
+/* בין 561 ל-760: לוח הבקרה (238px) נשאר מימין — רשימת הבדיקה לידו ולא מאחוריו */
+@media (max-width:760px){.ai-review-panel{left:12px;right:262px;top:56px;width:auto;max-height:34vh}.ai-review-panel.collapsed{left:auto}}
 /* tape / film strip */
 .tape{position:relative; display:inline-block; background:var(--bg); border:1.5px solid var(--line); border-radius:14px; padding:16px 14px 12px}
 .tape::before,.tape::after{content:''; position:absolute; left:10px; right:10px; height:6px; background-image:radial-gradient(circle, var(--line) 2px, transparent 2.3px); background-size:15px 6px}
@@ -371,8 +376,15 @@ details.legend[open]>summary{margin-bottom:10px}
 @media(max-width:560px){
   .tabbar-brand{display:none}
   .panel-float{left:8px; right:8px; width:auto; top:54px; max-height:58dvh}
-  .tape-float{max-width:94vw; bottom:12px}
+  .tape-float{max-width:94vw; bottom:64px; max-height:max(72px, calc(42dvh - 126px)); overflow:auto}   /* מעל כפתור המדריך, ולא עולה על לוח הבקרה */
   .guide-float{bottom:12px}
+  /* אוטומט מחסנית: כרטיס המחסנית והסרט חולקים את הרצועה התחתונה. הגובה
+     המרבי נגזר מגובה לוח הבקרה (58dvh+54px) כדי שאף כרטיס לא יעלה עליו. */
+  body.has-stack .stack-float{top:auto; left:auto; right:8px; bottom:64px; max-width:calc(50vw - 12px); max-height:max(72px, calc(42dvh - 126px)); overflow:auto}
+  body.has-stack .tape-float{left:8px; transform:none; max-width:calc(50vw - 12px)}
+  /* רשימת הבדיקה כגיליון תחתון מעל הכרטיסים; לוח הבקרה נשאר גלוי למעלה */
+  .ai-review-panel{top:auto; bottom:12px; left:8px; right:8px; max-height:44dvh; z-index:25}
+  .ai-review-panel.collapsed{left:auto; right:8px}
 }
 /* ── סריקת שרטוט (מצלמה) ── */
 .scan-modal{width:min(480px,92vw)}
@@ -451,14 +463,14 @@ details.legend[open]>summary{margin-bottom:10px}
   <!-- BRAND (top-left) -->
   <!-- TABS BAR (full-width, top) -->
   <div class="tabbar" id="tabBar">
-    <button class="tab-add" onclick="newModel()" title="מודל חדש (אוטומט סופי / מכונת טיורינג)">+</button>
+    <button class="tab-add" onclick="newModel()" title="מודל חדש (אוטומט סופי / אוטומט מחסנית / מכונת טיורינג)">+</button>
     <div class="tabs" id="tabs"></div>
     <div class="tabbar-brand"><div class="brand-icon">Σ</div><span>מודלים חישוביים</span></div>
   </div>
 
   <!-- CONTROL PANEL (top-right, draggable) -->
   <div class="float panel-float" id="controlPanel">
-    <div class="float-head"><span class="grip"></span><span>לוח בקרה</span></div>
+    <div class="float-head"><span class="grip"></span><span>לוח בקרה</span><button class="float-toggle" id="cpToggle" onclick="toggleControlPanel()" title="מזער את לוח הבקרה" aria-expanded="true">▴</button></div>
     <div class="float-body">
       <div class="cp-model">
         <span class="mtype" id="modelType">DFA</span>
@@ -583,7 +595,9 @@ function _buildDialog({title, message, body, buttons, dismissValue=null}){
       <div class="dialog-body"></div><div class="modal-actions"></div></div>`;
     if(body) bg.querySelector('.dialog-body').appendChild(body);
     const actions=bg.querySelector('.modal-actions');
-    const close=val=>{ document.removeEventListener('keydown',escH); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150); resolve(val); };
+    /* הדיאלוג נעלם באנימציה של 150ms אך ה-Promise נפתר מיד; closing מסמן אותו
+       כך ש-closeTopModal לא יסגור אותו שוב במקום את הדיאלוג שמתחתיו */
+    const close=val=>{ document.removeEventListener('keydown',escH); bg.classList.add('closing'); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150); resolve(val); };
     (buttons||[]).forEach(btn=>{ const b=document.createElement('button');
       b.className='btn'+(btn.primary?' btn-primary':'')+(btn.danger?' btn-delete':''); b.textContent=btn.text;
       b.onclick=()=>close(btn.value); actions.appendChild(b); });
@@ -680,10 +694,37 @@ function openAutomaton(id){ current=DB.automata.find(a=>a.id===id)||DB.automata[
   if(current) DB.settings.lastId=current.id; sel={type:null,id:null}; armed=null; save(); renderAll(); fitView(); }
 
 function nextLabel(){ const used=new Set(current.states.map(s=>s.label)); let i=0; while(used.has('q'+i)) i++; return 'q'+i; }
+/* מצב חדש נוחת במקום פנוי: מתחילים ממרכז השטח הגלוי שאינו מוסתר בפאנלים
+   ומתרחקים בטבעות עד נקודה במרחק ≥ 3R מכל מצב קיים (קודם הוזז כל מצב חדש
+   ב-30px בלבד, והעיגולים נערמו זה על זה). */
+function freeStateSpot(){
+  const wrap=$('canvasArea')||$('stage'), cw=wrap.clientWidth||1000, ch=wrap.clientHeight||680, k=view.w/cw;
+  /* כאן גם שטח פנוי קטן עדיף על מרכז הקנבס, שעלול להיות מתחת ללוח הבקרה —
+     כל עוד עיגול נכנס בו. visible=false: אין בכלל מקום גלוי למצב. */
+  const vis=canvasFreeRect(wrap,cw,ch,0), roomy=vis.w>=2.6*R/k&&vis.h>=2.6*R/k, area=roomy?vis:{x:0,y:0,w:cw,h:ch};
+  const cx=view.x+(area.x+area.w/2)*k, cy=view.y+(area.y+area.h/2)*k, gap=R*3, r=R/k;
+  const clear=(x,y)=>current.states.every(s=>Math.hypot(s.x-x,s.y-y)>=gap);
+  const at=(x,y)=>{ const px=(x-view.x)/k, py=(y-view.y)/k, inArea=px>=area.x+r&&px<=area.x+area.w-r&&py>=area.y+r&&py<=area.y+area.h-r;
+    return {x,y,inView:inArea,visible:roomy&&inArea}; };
+  if(clear(cx,cy))return at(cx,cy);
+  for(let ring=1;ring<=14;ring++){
+    const steps=ring*8;
+    for(let i=0;i<steps;i++){
+      const ang=i/steps*Math.PI*2, x=cx+Math.cos(ang)*ring*gap*0.9, y=cy+Math.sin(ang)*ring*gap*0.9;
+      if(clear(x,y))return at(x,y);
+    }
+  }
+  return at(cx,cy);
+}
 function addStateCentered(){
-  const cx=view.x+view.w/2, cy=view.y+view.h/2, n=current.states.length, off=(n%6)*30-60;
-  const s={id:uid(), label:nextLabel(), x:cx+off, y:cy+off*0.55, isStart:n===0, isAccept:false};
-  current.states.push(s); armed=null; sel={type:'state',id:s.id}; save(); renderAll(); toast('מצב נוסף — גרור אותו למקום');
+  let spot=freeStateSpot(), collapsed=false;
+  /* בטלפון לוח הבקרה הפתוח משאיר רצועה צרה מדי: ממזערים אותו כדי שהמצב החדש ייראה */
+  if(!spot.visible&&innerWidth<=560&&!$('controlPanel').classList.contains('collapsed')){ setControlPanelCollapsed(true); collapsed=true; spot=freeStateSpot(); }
+  const n=current.states.length;
+  const s={id:uid(), label:nextLabel(), x:spot.x, y:spot.y, isStart:n===0, isAccept:false};
+  current.states.push(s); armed=null; sel={type:'state',id:s.id}; save(); renderAll();
+  if(!spot.inView)fitView();
+  toast(collapsed?'מצב נוסף — לוח הבקרה מוזער כדי שיראה (▾ פותח אותו שוב)':'מצב נוסף — אפשר לגרור אותו למקום אחר');
 }
 function deleteState(id){ const wasStart=stById(id)&&stById(id).isStart;
   current.states=current.states.filter(s=>s.id!==id);
@@ -992,11 +1033,19 @@ function aiLayoutPos(index){
 /* pop_value = STACK_TOP (האזור האמצעי) · pop_symbol = ACTION.symbol של שליפה
    (האזור הימני). שני שדות נפרדים בכוונה, כדי שאפשר יהיה להחזיק סתירה
    ביניהם ולדווח עליה במקום לתקן בשקט. */
-const _aiR=(read,pop,act,push,c,popSym)=>({ read_input:{value:read,confidence:(c&&c.read)??0.93},
-  stack_action:{type:act,confidence:(c&&c.act)??0.94},
-  push_value:{value:push,confidence:(c&&c.push)??0.92},
-  pop_value:{value:pop,confidence:(c&&c.pop)??0.92},
-  pop_symbol:{value:act==='POP'?(popSym??pop):'ε',confidence:(c&&c.popSym)??0.92} });
+/* הדוגמה עוברת את אותו ייבוא כמו סריקה אמיתית, ולכן היא נושאת גם את ראיית
+   שלושת האזורים, הטקסט הגולמי ומיקום השורה. בלעדיהם כל כלל נחסם כ"לא
+   נמצא סימן קריא" — והדוגמה הפסיקה להדגים את שני הסימונים המכוונים. */
+const _aiR=(read,pop,act,push,c,popSym)=>{
+  const sym=act==='PUSH'?push:(act==='POP'?(popSym??pop):''), word=({PUSH:'דחוף',POP:'שלוף',NONE:'ללא שינוי'})[act]||'';
+  const right=act==='NONE'?word:`${sym} ${word}`;
+  return { raw_label_text:`${read},${pop} / ${right}`, zones:{left_text:read,middle_text:pop,right_text:right},
+    line_bbox:{x:0.1,y:0.1,w:0.2,h:0.04},
+    read_input:{value:read,confidence:(c&&c.read)??0.93},
+    stack_action:{type:act,confidence:(c&&c.act)??0.94},
+    push_value:{value:act==='PUSH'?push:'ε',confidence:(c&&c.push)??0.92},
+    pop_value:{value:pop,confidence:(c&&c.pop)??0.92},
+    pop_symbol:{value:act==='POP'?(popSym??pop):'ε',confidence:(c&&c.popSym)??0.92} }; };
 const _aiT=(id,s,d,rules)=>({ transition_id:id, visible_rule_line_count:rules.length,source_state:{id:s,confidence:0.95},
   target_state:{id:d,confidence:0.95}, rules, cropped_image_segment_url:'' });
 const AI_SAMPLE={
@@ -3312,7 +3361,7 @@ function applyView(){ $('canvas').setAttribute('viewBox', `${view.x} ${view.y} $
 /* הפאנלים הצפים מכסים חלקים מהקנבס. מחפשים את המלבן הפנוי הגדול: חותכים
    את הקנבס מול כל פאנל (מהגדול לקטן) ובוחרים בכל פעם את הצד הגדול שנשאר.
    אם נשאר פחות מ-40% בציר כלשהו (מסך צר) — חוזרים לקנבס המלא. */
-function canvasFreeRect(wrap,cw,ch){
+function canvasFreeRect(wrap,cw,ch,minRatio=0.4){
   const full={x:0,y:0,w:cw,h:ch};
   try{
     const base=wrap.getBoundingClientRect();
@@ -3330,7 +3379,7 @@ function canvasFreeRect(wrap,cw,ch){
       if(!sides.length)return full;
       free=sides.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a);
     }
-    return free.w>=cw*0.4&&free.h>=ch*0.4?free:full;
+    return free.w>=cw*minRatio&&free.h>=ch*minRatio?free:full;
   }catch(e){ return full; }
 }
 function fitView(){
@@ -3640,19 +3689,29 @@ function pdaSuccCfg(c, input){ const out=[];
   }
   return out;
 }
+function pdaCfgKey(c){ return c.state+'|'+c.pos+'|'+c.stack.join('\u0001'); }
+/* כל הקונפיגורציות שכבר הוצגו בריצה. מסלול שחוזר לאחת מהן (למשל לולאת ε
+   שאינה משנה את המחסנית) לא יגלה שום דבר חדש — כמו ב-npdaAccepts — ולכן
+   אינו מוצג שוב. נגזר מההיסטוריה, כדי שחזרה אחורה תשאיר אותו עקבי. */
+function npdaSeenKeys(s){
+  if(!s.seen){ s.seen=new Set(); s.history.forEach(h=>h.forEach(c=>s.seen.add(pdaCfgKey(c)))); s.configs.forEach(c=>s.seen.add(pdaCfgKey(c))); }
+  return s.seen;
+}
 function npdaStep(s){
   if(s.configs.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול שמסיים במצב מקבל עם המחסנית בתחתית ✓'; return; }
-  const next=[], seen=new Set();
-  for(const c of s.configs) for(const nc of pdaSuccCfg(c, s.input)){ const k=nc.state+'|'+nc.pos+'|'+nc.stack.join(''); if(seen.has(k))continue; seen.add(k); next.push(nc); }
+  const next=[], seen=npdaSeenKeys(s);
+  let revisits=0;
+  for(const c of s.configs) for(const nc of pdaSuccCfg(c, s.input)){ const k=pdaCfgKey(nc); if(seen.has(k)){ revisits++; continue; } seen.add(k); next.push(nc); }
   s.history.push(s.configs); s.configs=next; s.step=(s.step||0)+1;
-  if(!next.length){ s.status='rejected'; s.reason='כל המסלולים נתקעו ✗'; }
+  if(!next.length){ s.status='rejected'; s.reason=revisits?'כל המסלולים נתקעו או חזרו לקונפיגורציות שכבר נבדקו (לולאה) ✗':'כל המסלולים נתקעו ✗'; }
   else if(next.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול מקבל ✓'; }
   else if(s.step>4000 || next.length>1500){ s.status='stopped'; s.reason='נעצר — ריבוי מסלולים/צעדים'; }
 }
 function npdaAccepts(input){
   input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
-  const seen=new Set(), queue=[{state:start.id, pos:0, stack:[PDA_BOTTOM]}]; let g=0;
-  while(queue.length && g++<400000){ const c=queue.shift(); const key=c.state+'|'+c.pos+'|'+c.stack.join('');
+  const seen=new Set(), queue=[{state:start.id, pos:0, stack:[PDA_BOTTOM]}]; let g=0, head=0;
+  /* מצביע ראש במקום shift(): shift מעתיק את כל התור בכל צעד (O(n²)) */
+  while(head<queue.length && g++<400000){ const c=queue[head++]; const key=pdaCfgKey(c);
     if(seen.has(key)) continue; seen.add(key);
     if(pdaCfgAccepts(c,input.length)) return true;
     for(const nc of pdaSuccCfg(c,input)) queue.push(nc);
@@ -3677,15 +3736,31 @@ function pdaStep(s){
     s.reason=`נתקעה — הפעולה על המחסנית נחסמה (${PDA_BOTTOM} אינו ניתן לדחיפה או לשליפה) ✗`; return; }
   s.step=(s.step||0)+1; s.nd=apps.length>1;
   if(pdaCfgAccepts(s, s.input.length)){ s.status='accepted'; s.reason=`הגענו למצב מקבל, כל הקלט נקרא והמחסנית חזרה לתחתית (${PDA_BOTTOM}) ✓`; }
+  else if(!apps[0].P.read&&pdaStepEpsilonLoop(s)){ s.status='rejected'; s.lastVia=null; s.reason=PDA_EPS_LOOP_REASON; }
   else if(s.step>5000){ s.status='stopped'; s.reason='נעצר — ריצה ארוכה מדי (ייתכן לולאת ε)'; }
 }
+/* לולאת ε אינסופית בריצה דטרמיניסטית. במהלך רצף מעברי ε סימן הקלט הנוכחי
+   קבוע, ולכן ההמשך תלוי רק במצב ובראש המחסנית: פריט שנדחף ונשאר מתחת לראש
+   לעולם אינו נקרא. אם המחסנית עלתה יותר מ-|Q|·|Γ| רמות מעל הנקודה הנמוכה
+   ביותר ברצף, זוג (מצב, ראש) חוזר בשני גבהים — והמכונה תחזור על אותו קטע
+   ותגדל לנצח בלי לקרוא קלט. חזרה לקונפיגורציה זהה היא לולאה מאותה סיבה.
+   ריצה כזאת לעולם אינה מסתיימת, ולכן המילה אינה מתקבלת. */
+function pdaEpsilonLoopLimit(){
+  const syms=new Set([PDA_BOTTOM]);
+  current.transitions.forEach(t=>(t.rules||[]).forEach(r=>{ const P=pdaRuleParts(r);
+    if(P.guard)syms.add(P.guard); P.push.forEach(x=>syms.add(x)); if(P.popSym)syms.add(P.popSym); }));
+  return Math.max(1,current.states.length)*syms.size;
+}
+const PDA_EPS_LOOP_REASON='נעצרה — לולאת ε אינסופית: המכונה חוזרת על מעברי ε בלי לקרוא קלט ולעולם לא תסיים, ולכן המילה אינה מתקבלת ✗';
 function pdaAccepts(input){
   if(current.ndet) return npdaAccepts(input);
   input=String(input); const start=current.states.find(s=>s.isStart); if(!start) return false;
-  let state=start.id, pos=0, stack=pdaInitialStack(), seen=new Set(), g=0;
+  const limit=pdaEpsilonLoopLimit();
+  let state=start.id, pos=0, stack=pdaInitialStack(), seen=new Set(), streakMin=stack.length, g=0;
   while(g++<200000){
     if(pos===input.length && stById(state).isAccept && pdaStackDone(stack)) return true;
-    const key=state+'|'+pos+'|'+stack.join(''); if(seen.has(key)) return false;
+    /* seen מתאפס בכל קריאת קלט: pos עולה בלבד, ולכן חזרה אפשרית רק בתוך רצף ε */
+    const key=state+'|'+stack.join('\u0001'); if(seen.has(key)) return false;
     seen.add(key);
     const apps=pdaApplicable(state, pos, stack, input);
     if(!apps.length) return false;
@@ -3694,14 +3769,24 @@ function pdaAccepts(input){
     const next=pdaApplyToStack(P, stack);
     if(next===null) return false;
     stack=next;
-    if(P.read) pos++;
+    if(P.read){ pos++; seen=new Set(); streakMin=stack.length; }
+    else{ streakMin=Math.min(streakMin,stack.length); if(stack.length-streakMin>limit) return false; }
     state=apps[0].t.to;
   }
   return false;
 }
+/* אותו מבחן לולאה עבור הריצה צעד-אחר-צעד. מחושב מתוך ההיסטוריה (כל
+   הקונפיגורציות באותו pos הן רצף ה-ε הנוכחי), כך שחזרה אחורה וקדימה
+   אינה משאירה מצב מיושן. */
+function pdaStepEpsilonLoop(s){
+  const run=s.history.filter(h=>h.pos===s.pos), key=s.stack.join('\u0001');
+  if(run.some(h=>h.state===s.state&&h.stack.join('\u0001')===key))return true;
+  const min=Math.min(s.stack.length,...run.map(h=>h.stack.length));
+  return s.stack.length-min>pdaEpsilonLoopLimit();
+}
 function simBack(){ if(!SIM||!SIM.history.length)return; const h=SIM.history.pop();
   if(SIM.tm){ SIM.stateId=h.stateId; SIM.head=h.head; SIM.tape[h.head]=h.prev; SIM.lastTransId=h.lastTransId; if(SIM.trail)SIM.trail.pop(); SIM.steps=Math.max(0,(SIM.steps||1)-1); SIM.status='running'; SIM.reason=''; return; }
-  if(SIM.npda){ SIM.configs=h; SIM.step=Math.max(0,(SIM.step||1)-1); SIM.status='running'; SIM.reason=''; return; }
+  if(SIM.npda){ SIM.configs=h; SIM.seen=null; SIM.step=Math.max(0,(SIM.step||1)-1); SIM.status='running'; SIM.reason=''; return; }
   if(SIM.pda){ SIM.state=h.state; SIM.pos=h.pos; SIM.stack=h.stack; SIM.lastVia=h.lastVia; SIM.step=Math.max(0,(SIM.step||1)-1); SIM.status='running'; SIM.reason=''; return; }
   if(SIM.nfa){ SIM.states=h; SIM.pos=Math.max(0,SIM.pos-1); SIM.via=[]; SIM.status='running'; SIM.reason=''; return; }
   SIM.stateId=h.stateId; SIM.pos=h.pos; SIM.lastTransId=h.lastTransId; if(SIM.trail)SIM.trail.pop(); SIM.status='running'; SIM.reason=''; }
@@ -3880,6 +3965,7 @@ function pdaCfgCardHTML(c,len,input){
 function renderStack(){
   const card=$('stackFloat'), bar=$('stackBar');
   if(!card||!bar) return;
+  document.body.classList.toggle('has-stack',Boolean(current&&current.type==='pda'));   /* פריסת מסך צר תלויה בכרטיס המחסנית */
   if(!current || current.type!=='pda'){ card.style.display='none'; return; }
   card.style.display='';
   if(SIM && SIM.npda){
@@ -3995,14 +4081,14 @@ function openLibrary(){
     if(open){ openAutomaton(open.dataset.open); closeTopModal(); }
     else if(dup){ dupAutomaton(dup.dataset.dup); closeTopModal(); openLibrary(); }
     else if(ren){ const a=DB.automata.find(x=>x.id===ren.dataset.ren);
-      promptDialog('שם חדש',{value:a.name}).then(v=>{ if(v){ a.name=v; save(); renderTopbar(); closeTopModal(); openLibrary(); } }); }
+      promptDialog('שם חדש',{value:a.name}).then(v=>{ if(v){ a.name=v; save(); renderTopbar(); renderTabs(); closeTopModal(); openLibrary(); } }); }
     else if(exp){ const a=DB.automata.find(x=>x.id===exp.dataset.exp); download(safeName(a.name)+'.json', JSON.stringify(a,null,2)); }
     else if(del){ const a=DB.automata.find(x=>x.id===del.dataset.del);
       confirmDialog('למחוק מודל?',`"${a.name}" יימחק לצמיתות.`,{danger:true,confirmText:'מחק'}).then(ok=>{ if(ok){ delAutomaton(del.dataset.del); closeTopModal(); openLibrary(); } }); }
   });
   dlg.then(v=>{ if(v==='new') newModel(); });
 }
-function closeTopModal(){ const all=qa('.modal-bg'); const el=all[all.length-1]; if(el)el.remove(); }
+function closeTopModal(){ const all=qa('.modal-bg:not(.closing)'); const el=all[all.length-1]; if(el)el.remove(); }
 function safeName(n){ return String(n||'model').replace(/[\\/:*?"<>|]+/g,'_').slice(0,40); }
 function newModel(){
   const wrap=document.createElement('div');
@@ -4025,7 +4111,7 @@ function newModel(){
   .then(v=>{ if(v!==SUBMIT)return; const name=(wrap.querySelector('#nmName').value||'').trim()||nm[tp]||'מודל חדש';
     const a=newAutomaton(name, (tp==='npda'?'pda':tp==='nfa'?'dfa':tp)); if(tp==='npda'||tp==='nfa') a.ndet=true; DB.automata.push(a); openAutomaton(a.id); });
 }
-function renameModel(){ if(!current)return; promptDialog('שם המודל',{value:current.name}).then(v=>{ if(v){ current.name=v; save(); renderTopbar(); } }); }
+function renameModel(){ if(!current)return; promptDialog('שם המודל',{value:current.name}).then(v=>{ if(v){ current.name=v; save(); renderTopbar(); renderTabs(); } }); }
 function dupAutomaton(id){ const a=DB.automata.find(x=>x.id===id); const c=JSON.parse(JSON.stringify(a));
   c.id=uid(); c.name=a.name+' (עותק)'; const map={};
   c.states.forEach(s=>{ const n=uid(); map[s.id]=n; s.id=n; });
@@ -4043,7 +4129,8 @@ function importData(data){ let arr=data.automata||(data.states?[data]:null);
   if(!Array.isArray(arr)){ toast('מבנה קובץ לא מזוהה','danger'); return; }
   let n=0; arr.forEach(a=>{ if(!a||!Array.isArray(a.states))return; a.id=uid(); a.tests=a.tests||[]; a.type=a.type||'dfa';
     a.alphabet=a.alphabet||[]; a.transitions=a.transitions||[]; normalizeTransitionTopology(a); DB.automata.push(a); n++; });
-  save(); toast(`יובאו ${n} מודלים`,'success'); qa('.modal-bg').forEach(m=>m.remove()); if(n) openAutomaton(DB.automata[DB.automata.length-1].id);
+  if(!n){ toast('לא נמצאו בקובץ מודלים תקינים','danger'); return; }
+  save(); toast(n===1?'יובא מודל אחד':`יובאו ${n} מודלים`,'success'); qa('.modal-bg').forEach(m=>m.remove()); openAutomaton(DB.automata[DB.automata.length-1].id);
 }
 
 /* ─── render all ─── */
@@ -4121,6 +4208,19 @@ function setIcons(){
   set('stepBtn', ico('fwd')+' צעד');
   set('batchBtn', ico('check')+' בדיקה עצמית');
 }
+/* מזעור לוח הבקרה לשורת הכותרת בלבד — בעיקר בטלפון, שם הלוח תופס יותר
+   מחצי המסך. ההעדפה נשמרת רק בדפדפן של הצופה. */
+function setControlPanelCollapsed(collapsed){
+  const p=$('controlPanel'),b=$('cpToggle'); if(!p)return;
+  p.classList.toggle('collapsed',collapsed);
+  if(b){ b.textContent=collapsed?'▾':'▴'; b.title=collapsed?'הרחב את לוח הבקרה':'מזער את לוח הבקרה'; b.setAttribute('aria-expanded',String(!collapsed)); }
+}
+function toggleControlPanel(){
+  const collapsed=!$('controlPanel').classList.contains('collapsed');
+  setControlPanelCollapsed(collapsed);
+  try{ localStorage.setItem('automata_cp_collapsed',collapsed?'1':''); }catch(e){}
+  fitView();
+}
 function makeDraggable(el, handle){
   let sx=0, sy=0, ox=0, oy=0, dragging=false;
   handle.addEventListener('pointerdown', e=>{
@@ -4145,7 +4245,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>אוטומט מחסנית ${current.ndet?'לא-דטרמיניסטי':'דטרמיניסטי'}:</b> מצבים + <b>מחסנית</b> שמתחילה עם <b>⊥</b> בתחתית.</li>
       ${current.ndet
         ? '<li><b>לא-דטרמיניסטי:</b> כשכמה מעברים אפשריים — <b>כל המסלולים נבדקים במקביל</b> (לכל מסלול מחסנית משלו). המילה <b>מתקבלת אם קיים מסלול מקבל</b> אחד.</li>'
-        : '<li><b>דטרמיניסטי:</b> בכל צעד נבחר מעבר <b>יחיד</b> (מסלול אחד, מחסנית אחת); אם יש יותר ממעבר אפשרי תופיע אזהרה.</li>'}
+        : '<li><b>דטרמיניסטי:</b> בכל צעד מתאים מעבר <b>יחיד</b> (מסלול אחד, מחסנית אחת). אם יותר מכלל אחד עשוי להתאים — ההרצה נחסמת עם הסבר, ואפשר לתקן את הכללים או לבחור אוטומט לא-דטרמיניסטי.</li>'}
       <li><b>כלל מעבר:</b> <b>קלט · מה בראש המחסנית · פעולה</b> (דחיפה / שליפה / ללא).</li>
       <li><b>«מה בראש המחסנית»</b> = תנאי: מה חייב להיות בראש כדי שהמעבר יתבצע (ε = לא משנה). הוא <b>לא נשלף</b> אלא אם בחרת «שליפה».</li>
       <li><b>דחיפה</b> מוסיפה פריט חדש <b>מעל</b> הראש הקיים — הראש הישן נשאר ויורד שכבה אחת. הסימן שנדחף <b>רשאי להיות שונה</b> מראש המחסנית, אך לעולם אינו יכול להיות <b>⊥</b>.</li>
@@ -4201,6 +4301,7 @@ function init(){
   load(); setIcons();
   if(!DB.automata.length) seedExamples();
   qa('.float-head').forEach(h=>{ const card=h.closest('.float'); if(card) makeDraggable(card, h); });
+  try{ if(localStorage.getItem('automata_cp_collapsed')==='1') setControlPanelCollapsed(true); }catch(e){}
   $('tabs').addEventListener('click', e=>{ const x=e.target.closest('[data-close]'), tab=e.target.closest('[data-tab]');
     if(x){ e.stopPropagation(); closeTab(x.dataset.close); } else if(tab){ openAutomaton(tab.dataset.tab); } });
   $('canvas').addEventListener('pointerdown', onDown);

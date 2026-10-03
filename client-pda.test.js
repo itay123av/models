@@ -2230,3 +2230,115 @@ test('fit-to-view uses the largest canvas area not covered by floating panels, a
   assert.deepEqual({ ...ctx.canvasFreeRect(wrap, 1440, 900) }, { x: 0, y: 0, w: 1440, h: 900 },
     'a sliver under 40% is useless, so the whole canvas is used');
 });
+
+test('a deterministic PDA with an ε-push loop is rejected quickly instead of exhausting memory', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  pdaModel(ctx, [{ id: 'loop', from: 'q2', to: 'q2', rules: [ctx.makeRulePDA('', '⊥', 'push', 'A'), ctx.makeRulePDA('', 'A', 'push', 'A')] }]);
+  const started = Date.now();
+  assert.equal(ctx.pdaAccepts(''), false);
+  assert.equal(ctx.pdaAccepts('ab'), false);
+  assert.ok(Date.now() - started < 2000, 'the run ends instead of growing the stack 200000 times');
+  const s = ctx.simInit('');
+  let steps = 0;
+  while (s.status === 'running' && steps++ < 10000) ctx.simStepObj(s);
+  assert.equal(s.status, 'rejected', 'step-by-step agrees with the quick run');
+  assert.match(s.reason, /לולאת ε/);
+  assert.ok(steps < 50, 'the stepper detects the loop after a few steps');
+});
+
+test('the ε-loop test never rejects a legitimate run of ε-pops that empties a deep stack', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  pdaModel(ctx, [
+    { id: 'push', from: 'q2', to: 'q2', rules: [ctx.makeRulePDA('a', '', 'push', 'A')] },
+    { id: 'first-pop', from: 'q2', to: 'q4', rules: [ctx.makeRulePDA('b', 'A', 'pop', '', 'A')] },
+    { id: 'drain', from: 'q4', to: 'q4', rules: [ctx.makeRulePDA('', 'A', 'pop', '', 'A')] },
+    { id: 'done', from: 'q4', to: 'q3', rules: [ctx.makeRulePDA('', '⊥', 'none')] },
+  ], [
+    { id: 'q2', label: 'q2', isStart: true, isAccept: false },
+    { id: 'q4', label: 'q4', isStart: false, isAccept: false },
+    { id: 'q3', label: 'q3', isStart: false, isAccept: true },
+  ]);
+  for (const w of ['ab', 'aaaab', 'aaaaaaaaaaaaaaaaaaab']) {
+    assert.equal(ctx.pdaAccepts(w), true, `${w} is accepted by the quick run`);
+    const s = ctx.simInit(w);
+    let steps = 0;
+    while (s.status === 'running' && steps++ < 10000) ctx.simStepObj(s);
+    assert.equal(s.status, 'accepted', `${w} is accepted step by step`);
+  }
+  assert.equal(ctx.pdaAccepts('b'), false);
+});
+
+test('the non-deterministic PDA stepper drops revisited configurations, also after stepping back', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const spinning = pdaModel(ctx, [{ id: 'spin', from: 'q2', to: 'q2', rules: [ctx.makeRulePDA('', '⊥', 'none')] }]);
+  spinning.ndet = true;
+  const s = ctx.simInit('a');
+  let steps = 0;
+  while (s.status === 'running' && steps++ < 10000) ctx.simStepObj(s);
+  assert.equal(s.status, 'rejected', 'a path that only revisits itself ends instead of running 4000 steps');
+  assert.match(s.reason, /חזרו לקונפיגורציות שכבר נבדקו/);
+  assert.ok(steps < 10);
+  assert.equal(ctx.npdaAccepts('a'), false);
+
+  const accepting = pdaModel(ctx, [
+    { id: 'push', from: 'q2', to: 'q2', rules: [ctx.makeRulePDA('a', '⊥', 'push', 'A'), ctx.makeRulePDA('', 'A', 'none')] },
+    { id: 'pop', from: 'q2', to: 'q3', rules: [ctx.makeRulePDA('b', 'A', 'pop', '', 'A')] },
+  ]);
+  accepting.ndet = true;
+  assert.equal(ctx.npdaAccepts('ab'), true, 'dropping revisits never loses an accepting path');
+  vm.runInContext("SIM=simInit('ab'); while(SIM.status==='running')simStepObj(SIM); globalThis.__first=SIM.status;" +
+    "simBack(); simBack(); while(SIM.status==='running')simStepObj(SIM); globalThis.__again=SIM.status;", ctx);
+  assert.equal(ctx.__first, 'accepted');
+  assert.equal(ctx.__again, 'accepted', 'after going back the seen-set is rebuilt and the verdict repeats');
+});
+
+test('new states land in free canvas space, at least three radii from every existing state', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const rect = (left, top, width, height) => ({ clientWidth: width, clientHeight: height,
+    getBoundingClientRect: () => ({ left, top, width, height, right: left + width, bottom: top + height }) });
+  const nodes = { canvasArea: rect(0, 0, 1440, 900), controlPanel: rect(1160, 58, 264, 600), tabBar: rect(0, 0, 1440, 50),
+    canvas: { setAttribute: () => {} } };
+  ctx.document.getElementById = id => nodes[id] || null;
+  ctx.getComputedStyle = () => ({ display: 'block' });
+  vm.runInContext('view={x:0,y:0,w:1440,h:900}', ctx);
+  const model = { type: 'dfa', states: [], transitions: [], tests: [] };
+  ctx.__setCurrent(model);
+  for (let i = 0; i < 8; i++) ctx.addStateCentered();
+  const states = model.states;
+  let min = Infinity;
+  for (let i = 0; i < states.length; i++) for (let j = i + 1; j < states.length; j++)
+    min = Math.min(min, Math.hypot(states[i].x - states[j].x, states[i].y - states[j].y));
+  assert.ok(min >= 3 * 40 - 1, `states are at least 3R apart (was 34px before), got ${min}`);
+  assert.ok(states.every(s => s.x < 1160 - 40 && s.y > 50 + 40), 'none lands under the control panel or the tab bar');
+  assert.deepEqual(states.map(s => s.isStart), [true, false, false, false, false, false, false, false]);
+});
+
+test('importing a file without any valid model reports it instead of a success message', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const toasts = [];
+  ctx.toast = (message, kind) => toasts.push([message, kind]);
+  const before = vm.runInContext('DB.automata.length', ctx);
+  ctx.importData({ automata: [{ name: 'broken' }] });
+  assert.deepEqual(toasts[0], ['לא נמצאו בקובץ מודלים תקינים', 'danger']);
+  assert.equal(vm.runInContext('DB.automata.length', ctx), before);
+  ctx.importData({ automata: [{ name: 'ok', type: 'dfa', states: [], transitions: [] }] });
+  assert.deepEqual(toasts[1], ['יובא מודל אחד', 'success']);
+});
+
+test('the built-in scan sample passes the real import and shows exactly its two intended doubts', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas(vm.runInContext('AI_SAMPLE', ctx), { atomic: true, scanSessionId: 'sample' });
+  const label = id => model.states.find(s => s.id === id).label;
+  const flagged = model.transitions.filter(t => (t.rules || []).some(r => r.aiLow)).map(t => `${label(t.from)}→${label(t.to)}`);
+  assert.deepEqual(flagged.sort(), ['q0→q1', 'q2→q2']);
+  assert.equal(model.states.filter(s => s.aiLow).length, 0);
+  assert.equal(model.states.find(s => s.isStart).label, 'q0');
+  assert.deepEqual(model.states.filter(s => s.isAccept).map(s => s.label), ['q8']);
+});
