@@ -2350,3 +2350,23 @@ test('the folder path in the offline scan message keeps its backslashes', () => 
   assert.ok(html.includes(['C:', 'Users', 'its', 'Documents', 'modeles'].join(B + B)), 'the template literal escapes every backslash');
   assert.ok(!html.includes(['C:', 'Users', 'its', 'Documents', 'modeles'].join(B)), 'no unescaped copy is left');
 });
+
+test('unreadable saved data is copied aside before the examples overwrite it', () => {
+  const ctx = loadClient();
+  const store = new Map([['automata_data_v1', '{"automata":[{"name":"important work"']]);
+  ctx.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
+  const realError = console.error;
+  console.error = () => {};   // load() logs the expected parse error
+  try { ctx.load(); } finally { console.error = realError; }
+  const backupKey = vm.runInContext('LOAD_BACKUP_KEY', ctx);
+  assert.match(backupKey, /^automata_data_v1_unreadable_\d+$/);
+  assert.equal(store.get(backupKey), '{"automata":[{"name":"important work"', 'the raw text is kept exactly');
+  assert.equal(vm.runInContext('DB.automata.length', ctx), 0);
+
+  const healthy = loadClient();
+  const good = new Map([['automata_data_v1', JSON.stringify({ automata: [{ name: 'ok', type: 'dfa', states: [], transitions: [] }] })]]);
+  healthy.localStorage = { getItem: k => (good.has(k) ? good.get(k) : null), setItem: (k, v) => good.set(k, v), removeItem: () => {} };
+  healthy.load();
+  assert.equal(vm.runInContext('LOAD_BACKUP_KEY', healthy), '', 'readable data makes no backup');
+  assert.equal(vm.runInContext('DB.automata.length', healthy), 1);
+});

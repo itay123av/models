@@ -654,8 +654,12 @@ function normalizeTransitionTopology(model){
   model.transitions.forEach(t=>{if(t&&typeof t==='object')t.selfLoop=Boolean(t.from!=null&&t.from===t.to);});
   return model;
 }
-function load(){ try{ const raw=localStorage.getItem(STORE); if(raw){ const d=JSON.parse(raw);
-  DB.automata=(d.automata||[]).map(normalizeTransitionTopology); DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e); } }
+/* אם הנתונים השמורים אינם קריאים, init ימלא דוגמאות ו-save ידרוס אותם.
+   לפני כן נשמר עותק של הטקסט הגולמי תחת מפתח נפרד, והמשתמש מקבל הודעה. */
+let LOAD_BACKUP_KEY='';
+function load(){ let raw=null; try{ raw=localStorage.getItem(STORE); if(raw){ const d=JSON.parse(raw);
+  DB.automata=(d.automata||[]).map(normalizeTransitionTopology); DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e);
+  if(raw){ LOAD_BACKUP_KEY=STORE+'_unreadable_'+Date.now(); try{ localStorage.setItem(LOAD_BACKUP_KEY,raw); }catch(_){ LOAD_BACKUP_KEY=''; } } } }
 /* Vision scans carry many JPEG crops as data: URLs.  Keeping those pixels in
    the in-memory evidence is useful during the current review session, but
    persisting every duplicate crop in localStorage quickly exceeds the
@@ -4300,6 +4304,7 @@ function exportCurrent(){ if(!current){ toast('אין מודל','danger'); retur
 function init(){
   load(); setIcons();
   if(!DB.automata.length) seedExamples();
+  if(LOAD_BACKUP_KEY) setTimeout(()=>toast(`הנתונים השמורים לא נקראו. עותק שלהם נשמר בדפדפן תחת «${LOAD_BACKUP_KEY}» ולא נמחק.`,'danger',15000),0);
   qa('.float-head').forEach(h=>{ const card=h.closest('.float'); if(card) makeDraggable(card, h); });
   try{ if(localStorage.getItem('automata_cp_collapsed')==='1') setControlPanelCollapsed(true); }catch(e){}
   $('tabs').addEventListener('click', e=>{ const x=e.target.closest('[data-close]'), tab=e.target.closest('[data-tab]');
