@@ -2342,3 +2342,11 @@ test('the built-in scan sample passes the real import and shows exactly its two 
   assert.equal(model.states.find(s => s.isStart).label, 'q0');
   assert.deepEqual(model.states.filter(s => s.isAccept).map(s => s.label), ['q8']);
 });
+
+test('the folder path in the offline scan message keeps its backslashes', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'automata.html'), 'utf8');
+  const B = String.fromCharCode(92);
+  // Inside the template literal a single backslash is an escape: \U, \i, \D, \m rendered as plain letters.
+  assert.ok(html.includes(['C:', 'Users', 'its', 'Documents', 'modeles'].join(B + B)), 'the template literal escapes every backslash');
+  assert.ok(!html.includes(['C:', 'Users', 'its', 'Documents', 'modeles'].join(B)), 'no unescaped copy is left');
+});
