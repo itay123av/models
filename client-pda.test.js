@@ -2370,3 +2370,39 @@ test('unreadable saved data is copied aside before the examples overwrite it', (
   assert.equal(vm.runInContext('LOAD_BACKUP_KEY', healthy), '', 'readable data makes no backup');
   assert.equal(vm.runInContext('DB.automata.length', healthy), 1);
 });
+
+test('renaming a state to a name another state already has is refused', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const toasts = [];
+  ctx.toast = (message, kind) => toasts.push([message, kind]);
+  const model = { type: 'dfa', states: [{ id: 'a', label: 'q0' }, { id: 'b', label: 'q1' }], transitions: [], tests: [] };
+  ctx.__setCurrent(model);
+  ctx.renameState('b', 'q0');
+  assert.equal(model.states[1].label, 'q1', 'a duplicate name would let label-based scan flows connect the wrong state');
+  assert.deepEqual(toasts[0], ['כבר קיים מצב בשם «q0» — בחר שם אחר', 'danger']);
+  ctx.renameState('b', '   ');
+  assert.equal(model.states[1].label, 'q1', 'an empty name keeps the old one');
+  ctx.renameState('b', 'סוף');
+  assert.equal(model.states[1].label, 'סוף');
+  ctx.renameState('b', 'סוף');
+  assert.equal(toasts.length, 1, 'keeping the same name is not a conflict');
+});
+
+test('a single Turing-machine rule can be deleted without deleting the whole arrow', async () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  let answer = false;
+  vm.runInContext('confirmDialog=()=>Promise.resolve(globalThis.__answer)', ctx);
+  const model = { type: 'tm', states: [{ id: 'q0', label: 'q0', isStart: true }, { id: 'q1', label: 'q1', isAccept: true }],
+    transitions: [{ id: 't', from: 'q0', to: 'q0', rules: [{ read: '0', write: '1', move: 'R' }, { read: '1', write: '0', move: 'R' }] }], tests: [] };
+  ctx.__setCurrent(model);
+  ctx.__answer = answer;
+  ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
+  assert.equal(model.transitions[0].rules.length, 2, 'cancelling keeps the rule');
+  ctx.__answer = true;
+  ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(model.transitions[0].rules.map(r => r.read), ['1'], 'only the chosen rule is removed');
+  ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
+  assert.equal(model.transitions.length, 0, 'deleting the last rule removes the empty arrow');
+});

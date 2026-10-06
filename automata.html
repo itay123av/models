@@ -735,7 +735,12 @@ function deleteState(id){ const wasStart=stById(id)&&stById(id).isStart;
   current.transitions=current.transitions.filter(t=>t.from!==id&&t.to!==id);
   if(wasStart && current.states.length && !current.states.some(s=>s.isStart)) current.aiScanIssues=[...new Set([...(current.aiScanIssues||[]),'המצב ההתחלתי נמחק; יש לבחור מצב התחלתי במפורש'])];
   if(sel.id===id) sel={type:null,id:null}; armed=null; save(); renderAll(); toast('המצב נמחק'); }
-function renameState(id,val){ const s=stById(id); if(s){ s.label=(val||'').trim()||s.label; save(); renderAll(); } }
+/* שם מצב ייחודי: חלק מזרימות הסריקה מאתרות מצב לפי שמו (למשל חיבור מעבר
+   שלא שויך), ושני מצבים בשם זהה היו מחברים אותו למצב הלא נכון. */
+function renameState(id,val){ const s=stById(id); if(!s)return; const next=(val||'').trim();
+  if(!next||next===s.label){ renderInspector(); return; }
+  if(current.states.some(x=>x.id!==id&&x.label===next)){ toast(`כבר קיים מצב בשם «${next}» — בחר שם אחר`,'danger'); renderInspector(); return; }
+  s.label=next; save(); renderAll(); }
 function toggleAccept(id){ const s=stById(id); s.isAccept=!s.isAccept; save(); renderAll(); }
 function toggleStart(id){ const s=stById(id); if(!s)return;
   const next=!s.isStart; current.states.forEach(x=>{ x.isStart=false; }); s.isStart=next;
@@ -806,6 +811,15 @@ function addRuleTransition(from,to,read,write,move,targetTransitionId){
   if(t){ t.scanIncomplete=Boolean(t.endpointReview&&(t.endpointReview.source||t.endpointReview.target)||(t.rules||[]).some(r=>r.scanIncomplete||r.aiLow)); t.aiLow=t.scanIncomplete; }
   save(); renderAll();
 }
+/* מחיקת כלל בודד בחץ של מכונת טיורינג — כמו באוטומט מחסנית. קודם היה אפשר
+   רק למחוק את כל המעבר, ואז להזין מחדש את שאר הכללים שעליו. */
+function deleteTmRule(id,index){ const t=trById(id); if(!t||!Array.isArray(t.rules)||!t.rules[index])return;
+  confirmDialog('למחוק את הכלל?','רק שורת הכלל הזאת תימחק; שאר הכללים שעל החץ יישארו.',{danger:true,confirmText:'מחק כלל'}).then(ok=>{
+    if(!ok)return; t.rules.splice(index,1);
+    if(!t.rules.length){ deleteTransition(id); return; }
+    t.scanIncomplete=Boolean(t.endpointReview&&(t.endpointReview.source||t.endpointReview.target)||t.rules.some(r=>r.scanIncomplete||r.aiLow));
+    t.aiIssues=t.rules.flatMap(r=>r.aiIssues||[]); t.aiLow=Boolean(t.scanIncomplete||t.aiIssues.length);
+    save(); renderAll(); toast('הכלל נמחק'); }); }
 function editTmRule(transitionId,index){
   const t=trById(transitionId),prev=t&&t.rules&&t.rules[index];if(!t||!prev)return;
   promptTransitionTM(t.from,t.to,{rule:prev,onSave:next=>{
@@ -3469,7 +3483,7 @@ function renderInspector(){
         ${physicalIdentity}
         ${endpointEditor}
         ${structureReview}
-        <div class="help-box">${(t.rules||[]).map((r,i)=>`<button class="rule-edit ${r.aiLow||r.scanIncomplete?'ai-low':''}" onclick="editTmRule('${t.id}',${i})">קריאה <b>${esc(r.read)}</b> → כתיבה <b>${esc(r.write)}</b>, ${r.move==='?'?'כיוון לא־קריא':tmMoveText(r.move)}${r.aiIssues&&r.aiIssues.length?`<div class="rule-sem">⚠ ${r.aiIssues.map(esc).join(' · ')}</div>`:''}</button>`).join('')||'אין כללים'}</div>
+        <div class="help-box">${(t.rules||[]).map((r,i)=>`<div style="display:grid;grid-template-columns:1fr auto;gap:5px;align-items:start"><button class="rule-edit ${r.aiLow||r.scanIncomplete?'ai-low':''}" onclick="editTmRule('${t.id}',${i})">קריאה <b>${esc(r.read)}</b> → כתיבה <b>${esc(r.write)}</b>, ${r.move==='?'?'כיוון לא־קריא':tmMoveText(r.move)}${r.aiIssues&&r.aiIssues.length?`<div class="rule-sem">⚠ ${r.aiIssues.map(esc).join(' · ')}</div>`:''}</button><button class="btn btn-sm btn-delete" onclick="deleteTmRule('${t.id}',${i})" title="מחק רק את הכלל הזה">${ico('trash')}</button></div>`).join('')||'אין כללים'}</div>
         <div class="insp-actions" style="margin-top:12px">
           <button class="btn btn-sm" onclick="promptTransitionTM('${t.from}','${t.to}',{targetTransitionId:'${t.id}'})">${ico('plus')} הוסף כלל</button>
           <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
