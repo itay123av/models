@@ -2431,3 +2431,41 @@ test('a blocked run says where the problem is: start state, duplicate transition
   r = run({ type: 'dfa', states: [st('q0', { isStart: true })], transitions: [{ id: 'x', from: 'q0', to: 'q0', symbols: ['a'] }] });
   assert.equal(r.ok, true, 'a valid machine still runs');
 });
+
+test('immediate deletions can be undone, and an undo never rolls back a later change', () => {
+  const ctx = loadClient();
+  // the real save() runs (the harness storage is a no-op), so the save sequence the undo checks really advances
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; toast=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  const model = { id: 'm1', name: 'עבודה', type: 'dfa', tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1', isAccept: true }],
+    transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }] };
+  const db = vm.runInContext('DB', ctx);
+  db.automata = [model];
+  ctx.__setCurrent(model);
+
+  ctx.deleteState('b');
+  assert.equal(ctx.__getCurrent().states.length, 1);
+  assert.equal(ctx.__getCurrent().transitions.length, 0, 'the state took its transitions with it');
+  assert.equal(ctx.undoLast(), true);
+  assert.deepEqual(Array.from(ctx.__getCurrent().states, s => s.label), ['q0', 'q1']);
+  assert.equal(ctx.__getCurrent().transitions.length, 1, 'undo brings the transitions back too');
+
+  ctx.resetBoard();
+  assert.equal(ctx.__getCurrent().states.length, 0);
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(ctx.__getCurrent().states.length, 2, 'clearing the board is undoable');
+
+  ctx.deleteTransition('t');
+  ctx.save();      // any later saved change
+  assert.equal(ctx.undoLast(), false, 'a later change blocks the undo instead of being rolled back');
+  assert.equal(ctx.__getCurrent().transitions.length, 0);
+
+  const second = { id: 'm2', name: 'שני', type: 'dfa', tests: [], states: [], transitions: [] };
+  db.automata.push(second);
+  ctx.delAutomaton('m1');
+  assert.deepEqual(Array.from(db.automata, a => a.id), ['m2']);
+  assert.equal(ctx.undoLast(), true);
+  assert.deepEqual(Array.from(db.automata, a => a.id), ['m1', 'm2'], 'the model returns to its place in the tab order');
+  assert.equal(ctx.__getCurrent().id, 'm1');
+  assert.equal(ctx.undoLast(), false, 'an undo is used once');
+});
