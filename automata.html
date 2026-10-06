@@ -3612,9 +3612,16 @@ function hasPendingAiExecutionReview(){
 function simReady(){ const v=computeValidation();
   if(hasPendingAiExecutionReview()){ if(current.aiReviewDismissed)expandAiReview();
     toast('יש רכיבים מסריקה שעדיין דורשים אישור — הם ברשימת "בדיקת סריקה"','danger'); return false; }
-  if(v.starts.length!==1){ toast('צריך בדיוק מצב התחלתי אחד','danger'); return false; }
-  if(current.type==='pda'&&!current.ndet&&v.ambiguities&&v.ambiguities.length){ toast('יש כמה כללים שעשויים להתאים; בחר NPDA או ערוך את הכללים לפני הרצה','danger'); return false; }
-  if(!current.ndet && !v.deterministic){ toast('האוטומט אינו דטרמיניסטי — תקן לפני הרצה','danger'); return false; }
+  /* הודעות החסימה אומרות איפה הבעיה: לוח הבדיקה הוסר, ובלי מיקום התלמיד
+     לא יודע מה לתקן */
+  if(!v.starts.length){ toast('אין מצב התחלתי — בחר מצב ולחץ «מצב התחלתי» בלוח הבקרה','danger'); return false; }
+  if(v.starts.length>1){ toast(`יש ${v.starts.length} מצבים התחלתיים (${v.starts.map(s=>s.label).join(', ')}) — צריך בדיוק אחד`,'danger'); return false; }
+  if(current.type==='pda'&&!current.ndet&&v.ambiguities&&v.ambiguities.length){ const a=v.ambiguities[0];
+    toast(`במצב ${a.state.label} כמה כללים עשויים להתאים יחד (${a.sym}). ערוך את הכללים, או בחר אוטומט מחסנית לא-דטרמיניסטי.`,'danger'); return false; }
+  if(!current.ndet && !v.deterministic){ const d=(v.dupes||[])[0];
+    toast(!d?'האוטומט אינו דטרמיניסטי — תקן לפני הרצה':current.type==='tm'
+      ?`במצב ${d.state.label} יש יותר מכלל אחד עבור הקריאה '${d.sym}' — מכונת טיורינג צריכה כלל אחד לכל קריאה`
+      :`האוטומט אינו דטרמיניסטי: מ-${d.state.label} יוצא יותר ממעבר אחד על '${d.sym}'. תקן, או בחר אוטומט סופי לא-דטרמיניסטי.`,'danger'); return false; }
   return true; }
 function simInit(w){ const st=current.states.find(s=>s.isStart);
   if(current.type==='tm'){ const tape={}; const chars=[...String(w)];

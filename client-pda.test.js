@@ -2406,3 +2406,28 @@ test('a single Turing-machine rule can be deleted without deleting the whole arr
   ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
   assert.equal(model.transitions.length, 0, 'deleting the last rule removes the empty arrow');
 });
+
+test('a blocked run says where the problem is: start state, duplicate transition, TM read, PDA ambiguity', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const toasts = [];
+  ctx.toast = (message, kind) => toasts.push(message);
+  const st = (id, extra) => Object.assign({ id, label: id, x: 0, y: 0, isStart: false, isAccept: false }, extra);
+  const run = model => { ctx.__setCurrent(Object.assign({ tests: [], transitions: [] }, model)); toasts.length = 0; const ok = ctx.simReady(); return { ok, message: toasts[0] || '' }; };
+
+  let r = run({ type: 'dfa', states: [st('q0'), st('q1')] });
+  assert.equal(r.ok, false); assert.match(r.message, /אין מצב התחלתי/);
+  r = run({ type: 'dfa', states: [st('q0', { isStart: true }), st('q1', { isStart: true })] });
+  assert.match(r.message, /2 מצבים התחלתיים \(q0, q1\)/);
+  r = run({ type: 'dfa', states: [st('q0', { isStart: true }), st('q1')],
+    transitions: [{ id: 'x', from: 'q0', to: 'q0', symbols: ['a'] }, { id: 'y', from: 'q0', to: 'q1', symbols: ['a'] }] });
+  assert.match(r.message, /מ-q0 יוצא יותר ממעבר אחד על 'a'/);
+  r = run({ type: 'tm', states: [st('q0', { isStart: true }), st('q1')],
+    transitions: [{ id: 'x', from: 'q0', to: 'q0', rules: [{ read: '1', write: '0', move: 'R' }] }, { id: 'y', from: 'q0', to: 'q1', rules: [{ read: '1', write: '1', move: 'L' }] }] });
+  assert.match(r.message, /במצב q0 יש יותר מכלל אחד עבור הקריאה '1'/);
+  r = run({ type: 'pda', ndet: false, states: [st('q0', { isStart: true }), st('q1')],
+    transitions: [{ id: 'x', from: 'q0', to: 'q0', rules: [ctx.makeRulePDA('a', '⊥', 'push', 'A')] }, { id: 'y', from: 'q0', to: 'q1', rules: [ctx.makeRulePDA('a', '⊥', 'none')] }] });
+  assert.match(r.message, /במצב q0 כמה כללים עשויים להתאים יחד/);
+  r = run({ type: 'dfa', states: [st('q0', { isStart: true })], transitions: [{ id: 'x', from: 'q0', to: 'q0', symbols: ['a'] }] });
+  assert.equal(r.ok, true, 'a valid machine still runs');
+});
