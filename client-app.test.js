@@ -263,6 +263,42 @@ test('JSON import errors are in Hebrew and say where the problem is', () => {
   assert.match(ctx.jsonErrorText('{"a":"line\nbreak"}'), /ירידת שורה/);
 });
 
+/* ── Ctrl+Z ─────────────────────────────────────────────────────────── */
+
+test('Ctrl+Z undoes the last deletion (same window as the «בטל» button), also on a Hebrew keyboard layout', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  const toasts = [];
+  ctx.toast = (m, k) => toasts.push({ m, k });
+  ctx.toastAction = () => {};
+  const model = { id: 'm1', name: 'עבודה', type: 'dfa', tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1' }], transitions: [] };
+  vm.runInContext('DB', ctx).automata = [model];
+  ctx.__setCurrent(model);
+  const key = extra => Object.assign({ key: 'z', code: 'KeyZ', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false,
+    prevented: false, preventDefault() { this.prevented = true; } }, extra);
+
+  ctx.deleteState('b');
+  const e = key({ key: 'ז' });                 // Ctrl+Z בפריסה עברית: key הוא ז, code נשאר KeyZ
+  assert.equal(ctx.handleUndoShortcut(e), true);
+  assert.equal(e.prevented, true);
+  assert.equal(ctx.__getCurrent().states.length, 2, 'the state is back');
+
+  assert.equal(ctx.handleUndoShortcut(key()), true, 'still handled when there is nothing to undo');
+  assert.match(toasts.at(-1).m, /אין מה לבטל/);
+  assert.equal(ctx.handleUndoShortcut(key({ shiftKey: true })), false, 'Ctrl+Shift+Z is not undo');
+  assert.equal(ctx.handleUndoShortcut(key({ ctrlKey: false })), false, 'plain z is not undo');
+  assert.equal(ctx.handleUndoShortcut(key({ ctrlKey: false, metaKey: true })), true, 'Cmd+Z on a Mac');
+
+  const guide = { innerHTML: '' };
+  ctx.__elements.guideBody = guide;
+  for (const m of [{ type: 'dfa' }, { type: 'dfa', ndet: true }, { type: 'pda' }, { type: 'tm' }]) {
+    ctx.__setCurrent(Object.assign({ states: [], transitions: [] }, m));
+    ctx.renderGuide();
+    assert.match(guide.innerHTML, /Ctrl\+Z/, `the ${m.type}${m.ndet ? ' ndet' : ''} guide mentions Ctrl+Z`);
+  }
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */

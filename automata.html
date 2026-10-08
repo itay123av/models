@@ -586,6 +586,7 @@ function toastAction(msg,actionText,onAction,duration=10000,onExpire){ const t=$
   const hide=()=>{ hideToast(t); if(onExpire)onExpire(); };
   t.textContent=''; const text=document.createElement('span'); text.textContent=msg;
   const b=document.createElement('button'); b.type='button'; b.className='toast-action'; b.textContent=actionText;
+  if(actionText==='בטל'){ b.title='בטל (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts','Control+Z'); }
   b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} hideToast(t); onAction(); };
   t.append(text,b); t.className='toast show';
   /* העכבר או הפוקוס (Tab) על ההודעה עוצרים את הספירה */
@@ -598,6 +599,16 @@ function undoLast(){ const token=UNDO; if(!token)return false; UNDO=null;
 function offerUndo(message,restore){ if(!restore){ toast(message); return; }
   const token={restore,seq:SAVE_SEQ}; UNDO=token;
   toastAction(message,'בטל',undoLast,10000,()=>{ if(UNDO===token)UNDO=null; }); }
+/* Ctrl+Z (או Cmd+Z) = הכפתור «בטל» שבהודעה, באותו חלון זמן. לפי e.code,
+   כדי שיעבוד גם בפריסת מקלדת עברית (שם e.key הוא «ז»). בשדה טקסט לא מגיעים
+   לכאן — שם Ctrl+Z מבטל הקלדה כרגיל. */
+function handleUndoShortcut(e){
+  if(!(e.ctrlKey||e.metaKey)||e.shiftKey||e.altKey)return false;
+  if(e.code!=='KeyZ'&&String(e.key).toLowerCase()!=='z')return false;
+  e.preventDefault();
+  if(!UNDO){ toast('אין מה לבטל — אפשר לבטל מחיקה רק כל עוד ההודעה עליה מוצגת'); return true; }
+  const t=$('toast'); if(t&&t.querySelector&&t.querySelector('.toast-action'))hideToast(t);
+  undoLast(); return true; }
 function modelUndoPoint(){ return current?{id:current.id,json:JSON.stringify(current)}:null; }
 function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return;
   const back=JSON.parse(point.json); Object.keys(m).forEach(k=>delete m[k]); Object.assign(m,back);
@@ -4515,6 +4526,8 @@ function makeDraggable(el, handle){
 }
 function toggleGuide(){ const b=$('guideBody'), c=$('guideChev'), btn=$('guideBtn'); const open=b.style.display!=='none';
   b.style.display=open?'none':'block'; if(c)c.textContent=open?'▴':'▾'; if(btn)btn.setAttribute('aria-expanded',String(!open)); }
+/* שורה משותפת לכל גרסאות המדריך */
+const GUIDE_UNDO_TIP='<li>מחקת בטעות? לחץ <b>«בטל»</b> בהודעה שמופיעה, או <b>Ctrl+Z</b>.</li>';
 function renderGuide(){ const el=$('guideBody'); if(!el) return;
   if(current && current.type==='pda'){ el.innerHTML=`<ul>
       <li><b>אוטומט מחסנית ${current.ndet?'לא-דטרמיניסטי':'דטרמיניסטי'}:</b> מצבים + <b>מחסנית</b> שמתחילה עם <b>⊥</b> בתחתית.</li>
@@ -4530,6 +4543,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li>על חץ אחד יכולים לשבת <b>כמה כללים עצמאיים</b>. בכל צעד נבחר רק הכלל שמתאים גם לקלט וגם לראש המחסנית; ייתכן שאף כלל אינו מתאים.</li>
       <li><b>לחיצה כפולה</b> על מצב = כלל-עצמי.</li>
       <li><b>קבלה:</b> כל הקלט נקרא, נמצאים ב<b>מצב מקבל</b>, והמחסנית חזרה ל<b>תחתית (⊥)</b>.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   if(current && current.type==='dfa' && current.ndet){ el.innerHTML=`<ul>
       <li><b>אוטומט סופי לא-דטרמיניסטי (NFA):</b> מאותו מצב מותר <b>כמה מעברים על אותו סימן</b>, וגם מעברי-<b>ε</b> (מעבר בלי לקרוא אות).</li>
@@ -4537,6 +4551,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>בניית מעבר:</b> לחץ מצב מקור ואז יעד, והקלד סימן. למעבר <b>ε</b> (בלי לקרוא אות) — לחץ על <b>הכפתור ε</b> שבחלון, או בעורך המעבר שבלוח הבקרה.</li>
       <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
       <li><b>קבלה:</b> המילה מתקבלת אם <b>קיים ולו מסלול אחד</b> שמסיים ב<b>מצב מקבל</b>.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   el.innerHTML = (current && current.type==='tm') ? `<ul>
       <li><b>מכונת טיורינג:</b> סרט עם ראש קורא/כותב שזז ימינה/שמאלה.</li>
@@ -4548,6 +4563,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li>בכל מצב — <b>כלל אחד לכל תו נקרא</b> (המכונה דטרמיניסטית).</li>
       <li><b>קבלה:</b> עוצרת ומקבלת כשמגיעה למצב מקבל; אין כלל מתאים ⟵ נדחית; ריצה שלא נגמרת נעצרת אחרי 20000 צעדים.</li>
       <li>«הסרט שלך» = התוכן ההתחלתי של הסרט.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>` : `<ul>
       <li>עיגול = מצב · עיגול כפול = מצב <b>מקבל</b>.</li>
       <li>חץ נכנס מבחוץ = המצב <b>ההתחלתי</b> (המצב הראשון שתיצור; אפשר לשנות בלוח הבקרה).</li>
@@ -4557,6 +4573,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>דטרמיניסטי:</b> מכל מצב — לכל היותר מעבר אחד על כל סימן. אם אין מעבר על הסימן הנוכחי, המילה נדחית (אוטומט לא מלא).</li>
       <li>מעברי <b>ε</b> (בלי לקרוא אות) קיימים רק ב<b>אוטומט סופי לא-דטרמיניסטי</b> — בוחרים אותו ב-+ (מודל חדש).</li>
       <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`;
 }
 function renderModeBits(){ const wi=$('simWord');
@@ -4590,6 +4607,7 @@ function init(){
   document.addEventListener('keydown', e=>{
     if(e.target.matches('input,textarea,select')) return;
     if(topModal()) return;   /* חלון פתוח: Backspace/Escape לא מוחקים או מבטלים בחירה מאחוריו */
+    if(handleUndoShortcut(e)) return;
     const g=(e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('[data-state-id],[data-trans-id]');
     if(g){ e.preventDefault(); if(g.dataset.stateId)onStateClick(g.dataset.stateId); else { armed=null; selectTransition(g.dataset.transId); } return; }
     if(e.key==='Delete'||e.key==='Backspace'){ if(sel.type==='state') deleteState(sel.id); else if(sel.type==='transition') deleteTransition(sel.id); }
