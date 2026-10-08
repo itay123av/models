@@ -2558,3 +2558,124 @@ test('immediate deletions can be undone, and an undo never rolls back a later ch
   assert.equal(ctx.__getCurrent().id, 'm1');
   assert.equal(ctx.undoLast(), false, 'an undo is used once');
 });
+
+/* תיקון בצעד אחד של אות קלט שחוזרת: אותו סימן מפוקפק בכמה כללים נשאל פעם אחת. */
+function glyphScan(ctx, rows) {
+  // rows: [transitionId, from, to, [[read, conf, top], ...]]
+  const transitions = rows.map(([id, from, to, rules]) => scannedTransition(id, from, to, rules.map(([read, conf, top]) => scannedRule({
+    raw_label_text: `${read},${top} / A דחוף`,
+    zones: { left_text: read, middle_text: top, right_text: 'A דחוף' },
+    read_input: { value: read, confidence: conf },
+    pop_value: { value: top, confidence: 0.9 },
+    push_value: { value: 'A', confidence: 0.9 },
+    scan_incomplete: true,   // like the real two-stage server: every scanned row is review-only
+  }))));
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q0', is_start: true, confidence: 0.95 }, { id: 'q1', confidence: 0.95 }, { id: 'q2', confidence: 0.95 }], transitions },
+    { atomic: true, scanSessionId: 'scan-glyph' });
+  return model;
+}
+const ruleOf = (model, from, to, i) => {
+  const label = id => model.states.find(s => s.id === id).label;
+  return model.transitions.find(t => label(t.from) === from && label(t.to) === to).rules[i];
+};
+
+test('a repeated doubtful input glyph is asked once, and one answer fixes only the rules the human left checked', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = glyphScan(ctx, [
+    ['t01', 'q0', 'q1', [['ε', 0.7, '⊥']]],
+    ['t21', 'q2', 'q1', [['ε', 0.78, 'S'], ['ε', 0.7, 'A']]],
+    ['t12', 'q1', 'q2', [['b', 0.93, 'A']]],
+  ]);
+  const groups = Array.from(ctx.inputGlyphGroups());
+  assert.equal(groups.length, 1, 'only the repeated ε becomes a question; a single b does not');
+  assert.equal(groups[0].symbol, 'ε');
+  assert.equal(groups[0].members.length, 3);
+  assert.deepEqual(Array.from(ctx.inputGlyphChoices(groups[0])), ['ε', 'b'], 'choices are ε and the letters read on this sheet; anything else is typed');
+
+  const html = ctx.inputGlyphCardHtml(groups[0], 0);
+  assert.match(html, /הקלט נקרא «<span dir="ltr">ε<\/span>» ב-3 כללים/);
+  assert.equal((html.match(/data-glyph-member=/g) || []).length, 3, 'one checkable image per rule');
+
+  // The q0→q1 glyph is really ε in this test: the human unchecks it and answers "a" for the other two.
+  const pick = groups[0].members.map(m => model.transitions.find(x => x.id === m.transitionId).rules[m.ruleIndex] !== ruleOf(model, 'q0', 'q1', 0));
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', pick), true);
+
+  for (const i of [0, 1]) {
+    const r = ruleOf(model, 'q2', 'q1', i);
+    assert.equal(r.read, 'a');
+    assert.equal(r.inputReview.value, 'a');
+    assert.equal(r.inputReview.original, 'ε');
+    assert.equal(r.scanEvidence.structured.read_input, 'ε', 'the original evidence is kept as read');
+    assert.match(r.raw_label_text, /^ε,/);
+    assert.equal(r.scanIncomplete, true, 'the action word and the stack were not checked, so the rule stays locked');
+    assert.equal(r.manuallyReviewed, undefined);
+    assert.equal(r.aiIssues.some(x => /האזור השמאלי/.test(x)), false, 'the input doubt itself is closed');
+    const ai = ctx.pdaRuleToAi(r);
+    assert.equal(ai.read_input.value, 'a');
+    assert.equal(ai.read_input.confidence, null, 'the editor no longer flags the human-checked input as low confidence');
+    assert.equal(ai.stack_action.confidence, 0.9);
+  }
+  const untouched = ruleOf(model, 'q0', 'q1', 0);
+  assert.equal(untouched.read, '', 'the unchecked image keeps its ε');
+  assert.equal(untouched.inputReview, undefined);
+  assert.equal(ctx.hasPendingAiExecutionReview(), true);
+  assert.equal(Array.from(ctx.inputGlyphGroups()).length, 0, 'a lone remaining ε is no longer a repeated question');
+  const t21 = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition' && x.title === 'q2 → q1');
+  assert.match(t21.sub, /קלט אושר בידי אדם \(a, a\)/);
+});
+
+test('the glyph question never guesses: confident letters, single reads and bad answers change nothing', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = glyphScan(ctx, [
+    ['t01', 'q0', 'q1', [['b', 0.92, 'A'], ['b', 0.9, 'S']]],
+    ['t12', 'q1', 'q2', [['c', 0.6, 'A']]],
+    ['t21', 'q2', 'q1', [['ε', 0.95, 'S'], ['?', 0.2, 'A'], ['?', 0.2, 'S']]],
+  ]);
+  assert.equal(Array.from(ctx.inputGlyphGroups()).length, 0,
+    'confident repeated b, a single doubtful c, a single ε and unreadable "?" are not grouped');
+
+  const second = glyphScan(ctx, [
+    ['t01', 'q0', 'q1', [['ε', 0.95, '⊥']]],
+    ['t21', 'q2', 'q1', [['ε', 0.96, 'S']]],
+  ]);
+  assert.equal(Array.from(ctx.inputGlyphGroups()).length, 1, 'a repeated ε is asked even when the model was sure of it');
+  const before = JSON.stringify(second.transitions);
+  for (const bad of ['', '?', 'ab', '⊥', ',', ' ']) assert.equal(ctx.applyInputGlyphReview(0, bad, [true, true]), false, `answer «${bad}» is refused`);
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', [false, false]), false, 'nothing checked → nothing changes');
+  assert.equal(ctx.applyInputGlyphReview(0, 'a'), false, 'without a readable selection nothing changes');
+  assert.equal(JSON.stringify(second.transitions), before);
+
+  assert.equal(ctx.applyInputGlyphReview(0, 'ε', [true, true]), true, 'confirming ε as read is an answer too');
+  assert.ok(second.transitions.every(t => t.rules.every(r => r.read === '' && r.inputReview && r.inputReview.original === 'ε')));
+  assert.ok(second.transitions.every(t => t.rules.every(r => r.scanIncomplete)), 'still locked until each rule is confirmed');
+  assert.ok(model);
+});
+
+test('a glyph answer can be undone, and the final confirmation in the editor keeps its record', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; toast=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  const model = glyphScan(ctx, [['t21', 'q2', 'q1', [['ε', 0.78, 'S'], ['ε', 0.7, 'A']]]]);
+  model.id = 'm-glyph';
+  vm.runInContext('DB', ctx).automata = [model];
+
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', [true, true]), true);
+  assert.equal(ruleOf(ctx.__getCurrent(), 'q2', 'q1', 0).read, 'a');
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(ruleOf(ctx.__getCurrent(), 'q2', 'q1', 0).read, '', 'undo restores the scanned ε');
+  assert.equal(ruleOf(ctx.__getCurrent(), 'q2', 'q1', 0).inputReview, undefined);
+
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', [true, true]), true);
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__glyphAi=ai; globalThis.__glyphOpts=opts; }', ctx);
+  const t = ctx.__getCurrent().transitions[0];
+  ctx.editPdaTransition(t.id, 0);
+  assert.equal(ctx.__glyphAi.read_input.value, 'a');
+  assert.equal(ctx.__glyphAi.inputReview.original, 'ε');
+  ctx.__glyphOpts.onSave(ctx.makeRulePDA('a', 'S', 'push', 'A'));
+  const saved = ctx.__getCurrent().transitions[0].rules[0];
+  assert.equal(saved.manuallyReviewed, true);
+  assert.equal(saved.inputReview.value, 'a', 'the group answer stays on record after the full rule is confirmed');
+  assert.equal(saved.scanEvidence.structured.read_input, 'ε');
+});

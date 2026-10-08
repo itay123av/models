@@ -3,7 +3,10 @@
  * automata.html, pda-core.js and the payload from ONE origin. Embedded image
  * data URLs are stripped (they make the payload huge and are not needed to draw).
  *
- *   node scripts/replay-ui-server.cjs <result.json|payload.json> [port=8799]
+ *   node scripts/replay-ui-server.cjs <result.json|payload.json> [port=8799] [--keep-images]
+ *
+ * --keep-images keeps the embedded crop images (several MB), which the post-scan
+ * review needs to show the row pictures, e.g. the repeated-input-glyph card.
  *
  * Then, in the browser pane at http://127.0.0.1:<port>/ (its storage is separate
  * from the user's), run in the page:
@@ -12,11 +15,12 @@
  *   applyAiTransitionsToCanvas(p,{atomic:true,scanSessionId:p.scan_session_id}); renderAll(); fitView();
  * Free: no model calls. Stop it when done. */
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
-const source = process.argv[2], port = Number(process.argv[3] || 8799);
+const args = process.argv.slice(2), keepImages = args.includes('--keep-images');
+const [source, portArg] = args.filter(a => !a.startsWith('--')), port = Number(portArg || 8799);
 if (!source) throw new Error('usage: node scripts/replay-ui-server.cjs <result.json|payload.json> [port]');
 const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
 const payload = raw.payload || raw;   // result.json from scan-image-diagnostic wraps it
-const body = JSON.stringify(payload, (k, v) => (typeof v === 'string' && v.startsWith('data:') ? '' : v));
+const body = JSON.stringify(payload, (k, v) => (!keepImages && typeof v === 'string' && v.startsWith('data:') ? '' : v));
 const root = path.join(__dirname, '..');
 http.createServer((req, res) => {
   const url = req.url.split('?')[0];
