@@ -263,6 +263,31 @@ test('JSON import errors are in Hebrew and say where the problem is', () => {
   assert.match(ctx.jsonErrorText('{"a":"line\nbreak"}'), /ירידת שורה/);
 });
 
+/* ── קלטים קיצוניים ─────────────────────────────────────────────────── */
+
+test('a long state name shrinks, then is cut with "…" inside the circle; the full name stays in the tooltip and spoken label', () => {
+  const ctx = loadClient();
+  const nodes = { innerHTML: '' }, edges = { innerHTML: '' };
+  Object.assign(ctx.__elements, { nodes, edges, stageEmpty: { style: {} }, canvas: { querySelector: () => null } });
+  vm.runInContext('renderAiReviewPanel=()=>{};', ctx);
+  const long = 'מצב_עם_שם_ארוך_מאוד';
+  faModel(ctx, false, []);
+  ctx.__getCurrent().states[0].label = long;
+  ctx.__getCurrent().states[1].label = 'q12345';
+  ctx.renderGraph();
+  const texts = [...nodes.innerHTML.matchAll(/<text class="nlabel"([^>]*)>([^<]*)<\/text>/g)].map(m => ({ attrs: m[1], text: m[2] }));
+  assert.equal(texts.length, 2);
+  assert.ok(texts[0].text.endsWith('…') && texts[0].text.length <= 9, `cut to fit: ${texts[0].text}`);
+  assert.match(texts[0].attrs, /font-size:\s*1[0-3]px/);
+  assert.match(nodes.innerHTML, new RegExp(`<title>${long}</title>`), 'full name on hover');
+  assert.match(nodes.innerHTML, new RegExp(`aria-label="מצב ${long}, התחלתי"`), 'full name for screen readers');
+  assert.equal(texts[1].text, 'q12345', 'a medium name is only made smaller');
+  assert.match(texts[1].attrs, /font-size/);
+  ctx.__getCurrent().states[1].label = 'q1';
+  ctx.renderGraph();
+  assert.doesNotMatch(nodes.innerHTML, /<text class="nlabel"[^>]*font-size[^>]*>q1</, 'short names keep the normal size');
+});
+
 /* ── Ctrl+Z ─────────────────────────────────────────────────────────── */
 
 test('Ctrl+Z undoes the last deletion (same window as the «בטל» button), also on a Hebrew keyboard layout', () => {

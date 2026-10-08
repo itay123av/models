@@ -3658,6 +3658,13 @@ function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/
    ולכן נשמר איזה מהם היה בפוקוס, והפוקוס מוחזר אליו אחרי הציור. */
 function graphFocusKey(){ const a=document.activeElement, g=a&&a.closest&&a.closest('[data-state-id],[data-trans-id]');
   return g?(g.dataset.stateId?`[data-state-id="${g.dataset.stateId}"]`:`[data-trans-id="${g.dataset.transId}"]`):null; }
+/* שם מצב ארוך גלש מהעיגול על החצים והמצבים השכנים: מקטינים בהדרגה, ומעל 8
+   תווים חותכים עם … — השם המלא נשאר ב-title (ריחוף) ובשם שקורא מסך מקריא. */
+function stateLabelSvg(label){
+  const full=String(label==null?'':label), chars=[...full], n=chars.length;
+  const size=n<=4?0:(n<=6?15:12), text=n>8?chars.slice(0,7).join('')+'…':full;
+  return `<text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central"${size?` style="font-size:${size}px"`:''}>${esc(text)}</text>`
+    +(text!==full?`<title>${esc(full)}</title>`:''); }
 function stateAriaLabel(s){ return 'מצב '+s.label+(s.isStart?', התחלתי':'')+(s.isAccept?', מקבל':'')+(armed===s.id?', נבחר כמקור למעבר':''); }
 function renderGraph(){
   if(!current){ $('edges').innerHTML=''; $('nodes').innerHTML=''; renderAiReviewPanel(); return; }
@@ -3668,7 +3675,7 @@ function renderGraph(){
     return `<g class="${cls}" data-state-id="${s.id}" transform="translate(${s.x},${s.y})" tabindex="0" role="button" aria-label="${esc(stateAriaLabel(s))}">
       <circle class="ncirc" r="${R}"></circle>
       ${s.isAccept?`<circle class="nacc" r="${R-6}"></circle>`:''}
-      <text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central">${esc(s.label)}</text>
+      ${stateLabelSvg(s.label)}
       ${doubt&&doubt.length?`<g class="ndoubt" transform="translate(${Math.round(R*.74)},${-Math.round(R*.74)})"><title>${esc(doubt.join(' · '))}</title><circle r="12"></circle><text text-anchor="middle" dominant-baseline="central">?</text></g>`:''}
       ${s.isStart?`<path class="sarrow" d="M ${-R-30} 0 L ${-R-3} 0" marker-end="url(#arrow)"></path>`:''}
     </g>`; }).join('');
