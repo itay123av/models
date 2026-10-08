@@ -195,3 +195,135 @@ test('tab badges distinguish NFA and NPDA from their deterministic versions', ()
   const badges = [...tabs.innerHTML.matchAll(/class="tab-type">([^<]*)</g)].map(m => m[1]);
   assert.deepEqual(badges, ['DFA', 'NFA', 'PDA', 'NPDA', 'TM']);
 });
+
+/* ── נגישות ─────────────────────────────────────────────────────────── */
+
+/* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
+function fakeTarget(kinds, extra = {}) {
+  return Object.assign({
+    closest(sel) { return sel.split(',').some(x => kinds.includes(x.trim())) ? this : null; },
+    matches(sel) { return sel.split(',').some(x => kinds.includes(x.trim())); },
+    classList: { contains: c => Boolean(extra.on && c === 'on') },
+    clicks: 0, click() { this.clicks++; },
+  }, extra);
+}
+function fakeKey(key, target, opts = {}) {
+  return Object.assign({ key, target, shiftKey: false, isComposing: false, prevented: false, preventDefault() { this.prevented = true; } }, opts);
+}
+
+test('dialog keyboard: Enter on a focused button activates that button, not the primary (Enter on «ביטול» used to delete)', () => {
+  const ctx = loadClient();
+  const primary = { clicks: 0, click() { this.clicks++; } };
+  const bg = { querySelector: () => primary };
+  let dismissed = 0;
+  const cancel = fakeTarget(['button']);
+  let e = fakeKey('Enter', cancel);
+  ctx.dialogKey(e, bg, () => dismissed++);
+  assert.equal(primary.clicks, 0, 'Enter on «ביטול» does not press «מחק»');
+  assert.equal(e.prevented, false, 'the button keeps its own Enter behaviour');
+
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['input'])), bg, () => dismissed++);
+  assert.equal(primary.clicks, 1, 'Enter in a field still confirms');
+
+  const chip = fakeTarget(['button', '.chip']);
+  ctx.dialogKey(fakeKey('Enter', chip), bg, () => dismissed++);
+  assert.equal(chip.clicks, 1, 'Enter on an unselected choice selects it');
+  assert.equal(primary.clicks, 2, '…and confirms');
+  const onChip = fakeTarget(['button', '.chip'], { on: true });
+  ctx.dialogKey(fakeKey('Enter', onChip), bg, () => dismissed++);
+  assert.equal(onChip.clicks, 0, 'an already selected choice is not toggled again');
+  assert.equal(primary.clicks, 3);
+
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['textarea'])), bg, () => dismissed++);
+  assert.equal(primary.clicks, 3, 'Enter in a textarea is a new line');
+  ctx.dialogKey(fakeKey('Escape', fakeTarget(['input'])), bg, () => dismissed++);
+  assert.equal(dismissed, 1);
+});
+
+test('dialog keyboard: Tab stays inside the dialog', () => {
+  const ctx = loadClient();
+  let focused = '';
+  const a = { getClientRects: () => [1], focus() { focused = 'a'; } };
+  const b = { getClientRects: () => [1], focus() { focused = 'b'; } };
+  const hidden = { getClientRects: () => [], focus() { focused = 'hidden'; } };
+  const modal = { querySelectorAll: () => [a, hidden, b] };
+  const bg = { querySelector: sel => (sel === '.modal' ? modal : null) };
+  ctx.document.activeElement = b;
+  const e = fakeKey('Tab', b);
+  ctx.dialogKey(e, bg, () => {});
+  assert.equal(e.prevented, true);
+  assert.equal(focused, 'a', 'Tab on the last control wraps to the first');
+  ctx.document.activeElement = a;
+  ctx.dialogKey(fakeKey('Tab', a, { shiftKey: true }), bg, () => {});
+  assert.equal(focused, 'b', 'Shift+Tab on the first wraps to the last (hidden controls skipped)');
+  ctx.document.activeElement = { outside: true };
+  ctx.dialogKey(fakeKey('Tab', {}), bg, () => {});
+  assert.equal(focused, 'a', 'focus that escaped the dialog is pulled back in');
+});
+
+test('canvas states and transitions are keyboard targets with spoken names', () => {
+  const ctx = loadClient();
+  const nodes = { innerHTML: '' }, edges = { innerHTML: '' };
+  Object.assign(ctx.__elements, { nodes, edges, stageEmpty: { style: {} }, canvas: { querySelector: () => null } });
+  vm.runInContext('renderAiReviewPanel=()=>{};', ctx);
+  faModel(ctx, false, [{ id: 't', from: 's0', to: 's1', symbols: ['a', 'b'] }]);
+  ctx.renderGraph();
+  assert.match(nodes.innerHTML, /data-state-id="s0"[^>]*tabindex="0"[^>]*role="button"[^>]*aria-label="מצב q0, התחלתי"/);
+  assert.match(nodes.innerHTML, /aria-label="מצב q1, מקבל"/);
+  assert.match(edges.innerHTML, /data-trans-id="t"[^>]*tabindex="0"[^>]*aria-label="מעבר q0 → q1: a, b"/);
+});
+
+test('tabs: the name is a focusable button and ✕ says which model it deletes', () => {
+  const ctx = loadClient();
+  const tabs = { innerHTML: '' };
+  ctx.__elements.tabs = tabs;
+  vm.runInContext('DB', ctx).automata = [{ id: 'a', name: 'זוגי a-ים', type: 'dfa' }];
+  ctx.renderTabs();
+  assert.match(tabs.innerHTML, /<button type="button" class="tab-open"/);
+  assert.match(tabs.innerHTML, /class="tab-x"[^>]*aria-label="סגור ומחק את «זוגי a-ים»"/);
+});
+
+test('toasts are announced (live region) and decorative icons are hidden from screen readers', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'automata.html'), 'utf8');
+  assert.match(html, /<div class="toast" id="toast" role="status" aria-live="polite"/);
+  const ctx = loadClient();
+  assert.match(ctx.ico('trash'), /aria-hidden="true"/);
+});
+
+/* ניגודיות: צבע הטקסט מול הרקע שלו, מתוך ה-CSS עצמו (WCAG AA = 4.5:1).
+   כשסלקטור מופיע כמה פעמים — הכלל האחרון מנצח, כמו בדפדפן. */
+test('text colours meet WCAG AA contrast (toasts, verdicts, batch results, run button, tape cells)', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'automata.html'), 'utf8');
+  const css = html.slice(html.indexOf('<style>'), html.lastIndexOf('</style>'));
+  const vars = {};
+  for (const m of css.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-fA-F]{6})/g)) if (!(m[1] in vars)) vars[m[1]] = m[2];
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const prop = (selector, name) => {
+    let val = null;
+    for (const m of css.matchAll(new RegExp(`(?:^|[}\\s])${reEsc(selector)}\\s*\\{([^}]*)\\}`, 'g'))) {
+      const d = m[1].match(new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`));
+      if (d) val = d[1].trim();
+    }
+    if (!val) return null;
+    const v = val.match(/var\(--([\w-]+)\)/);
+    return v ? vars[v[1]] : (val.match(/#[0-9a-fA-F]{6}/) || [null])[0];
+  };
+  const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const checks = [
+    ['.toast.danger', '#ffffff', prop('.toast.danger', 'background')],
+    ['.toast.success', '#ffffff', prop('.toast.success', 'background')],
+    ['.btn-run', '#ffffff', prop('.btn-run', 'background')],
+    ['.verdict.ok', prop('.verdict.ok', 'color'), '#bbf7d0'],
+    ['.verdict.bad', prop('.verdict.bad', 'color'), '#fecaca'],
+    ['.bres.ok', prop('.bres.ok', 'color'), '#ffffff'],
+    ['.bres.bad', prop('.bres.bad', 'color'), '#ffffff'],
+    ['.cell.read', prop('.cell.read', 'color'), vars['green-soft']],
+    ['.cell.stuck', prop('.cell.stuck', 'color'), vars['red-soft']],
+    ['.pda-hint', prop('.pda-hint', 'color'), '#f3f4f6'],
+  ];
+  for (const [name, fg, bg] of checks) {
+    assert.ok(fg && bg, `${name}: colours found (${fg} on ${bg})`);
+    assert.ok(ratio(fg, bg) >= 4.5, `${name}: ${fg} on ${bg} = ${ratio(fg, bg).toFixed(2)} < 4.5`);
+  }
+});
