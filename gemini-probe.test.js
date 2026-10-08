@@ -103,3 +103,43 @@ test('Gemini probe records the selected priced model and refuses unknown tariffs
   assert.equal(result.model, 'gemini-3.6-flash'); assert.equal(result.thinking_level, 'minimal');
   await assert.rejects(run({ ...prepared, request: { model: 'unpriced-model' } }), /Unpriced/);
 });
+
+test('writer references retain target identities, source evidence and bounded offline behavior', async () => {
+  const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+  const {prepareWriterReferences}=require('./scripts/writer-reference-profile.cjs');
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'writer-reference-test-'));
+  try {
+    const target=path.join(directory,'target.png'),reference=path.join(directory,'reference.png');
+    const signature=Buffer.from('89504e470d0a1a0a','hex');
+    fs.writeFileSync(target,Buffer.concat([signature,Buffer.from([1])]));
+    fs.writeFileSync(reference,Buffer.concat([signature,Buffer.from([2])]));
+    const example={file:reference,source_id:'different-photo',review_note:'test only',
+      rows:[{input:'a',stack_top:'S',action_text:'דחוף',action_symbol:'A'}]};
+    const result=prepareWriterReferences([target],[2],[example]);
+    const {prepareGuidedBlocks}=require('./scripts/probe-gemini-ocr.cjs');
+    const high=prepareGuidedBlocks([target],[2],{highResolution:true});
+    assert.equal(high.request.input.find(item=>item.type==='image').resolution,'high');
+    assert.deepEqual((await run(high)).image_resolutions,['high']);
+    for(const reasoning of [false,true]){
+      const guided=prepareGuidedBlocks([target],[2],{reasoning});
+      assert.match(guided.request.input[0].text,/TWO RIGHTMOST glyphs/);
+      assert.equal(guided.request.input.filter(item=>item.type==='image').length,1);
+      assert.equal(guided.writer_references,undefined);
+      assert.deepEqual(guided.row_counts,[2]);
+      assert.equal(guided.request.generation_config.max_output_tokens,reasoning?4096:1600);
+      assert.equal((await run(guided,{fetchImpl:()=>assert.fail('no network')})).network_calls,0);
+    }
+    assert.equal(result.images.length,1,'references do not create target identities');
+    assert.deepEqual(result.row_counts,[2]);
+    assert.equal(result.request.input.filter(item=>item.type==='image').length,2);
+    assert.equal(result.writer_references[0].source_id,'different-photo');
+    assert.deepEqual(result.writer_references[0].rows,example.rows);
+    assert.notEqual(result.writer_references[0].sha256,result.images[0].sha256);
+    assert.equal(result.request.generation_config.max_output_tokens,1600);
+    const dry=await run(result,{fetchImpl:()=>assert.fail('no network')});
+    assert.equal(dry.network_calls,0);
+    assert.deepEqual(dry.writer_references,result.writer_references);
+    assert.throws(()=>prepareWriterReferences([target],[1],[{...example,file:target}]),/own reference/);
+    assert.throws(()=>prepareWriterReferences([target],[1],[{...example,review_note:''}]),/provenance/);
+  } finally { fs.rmSync(directory,{recursive:true,force:true}); }
+});

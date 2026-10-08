@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { prepareBlocks, run, loadKey } = require('./probe-gemini-ocr.cjs');
+const { prepareBlocks, prepareGuidedBlocks, run, loadKey } = require('./probe-gemini-ocr.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const DIRECTORY = path.join(ROOT, 'test-evidence/scan-guard-contract');
 const BUDGET_USD = 0.10;
@@ -27,12 +27,24 @@ function plan(directory = DIRECTORY) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length > 1 || (args.length && !['--live', '--dry-run'].includes(args[0]))) throw new Error('Use --live or --dry-run');
+  if (args.some(a=>!['--live','--dry-run','--paired-minimal','--guided-high-resolution'].includes(a)) || new Set(args).size!==args.length ||
+      (args.includes('--live')&&args.includes('--dry-run')) ||
+      (args.includes('--paired-minimal')&&args.includes('--guided-high-resolution')))
+    throw new Error('Use --live or --dry-run, optionally one experimental image profile');
   const batches = plan();
+  if(args.includes('--paired-minimal')){
+    const {createRequire}=require('node:module');
+    const dep=process.env.SCAN_NODE_MODULES?createRequire(path.join(process.env.SCAN_NODE_MODULES,'__paired__.cjs')):require;
+    const {PNG}=dep('pngjs');
+    const {preparePairedBlocks}=require('./paired-gemini-profile.cjs');
+    for(const batch of batches)batch.prepared=preparePairedBlocks(batch.targets.map(t=>t.file),batch.targets.map(t=>t.row_count),PNG);
+  }
+  if(args.includes('--guided-high-resolution'))for(const batch of batches)
+    batch.prepared=prepareGuidedBlocks(batch.targets.map(t=>t.file),batch.targets.map(t=>t.row_count),{highResolution:true});
   if (!args.includes('--live')) {
     console.log(JSON.stringify({ status: 'DRY_RUN', network_calls: 0, planned_calls: batches.length,
       blocks: batches.map(b => b.targets), total_rows: batches.flatMap(b => b.targets).reduce((n, t) => n + t.row_count, 0),
-      estimated_budget_usd: BUDGET_USD, reserve_per_call_usd: RESERVE_USD }, null, 2));
+      profile:batches[0]?.prepared.profile||'original-only',estimated_budget_usd: BUDGET_USD, reserve_per_call_usd: RESERVE_USD }, null, 2));
     return;
   }
   const key = loadKey();
