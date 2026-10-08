@@ -263,6 +263,44 @@ test('JSON import errors are in Hebrew and say where the problem is', () => {
   assert.match(ctx.jsonErrorText('{"a":"line\nbreak"}'), /ירידת שורה/);
 });
 
+/* ── שתי לשוניות דפדפן ──────────────────────────────────────────────── */
+
+test('two browser tabs: a save in the other tab is loaded here, so this tab no longer overwrites it with a stale copy', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; stopPlay=()=>{};', ctx);
+  const toasts = [];
+  ctx.toast = (m, k) => toasts.push({ m, k });
+  let stored = null;
+  ctx.localStorage.setItem = (k, v) => { if (k === 'automata_data_v1') stored = v; };
+  const mine = { id: 'm1', name: 'שלי', type: 'dfa', tests: [], states: [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }], transitions: [] };
+  const db = vm.runInContext('DB', ctx);
+  db.automata = [mine];
+  ctx.__setCurrent(mine);
+  vm.runInContext("UNDO={restore(){}, seq:0}; sel={type:'state',id:'a'};", ctx);
+
+  // הלשונית השנייה שמרה: המודל שלי עם מצב נוסף, ומודל חדש
+  const other = { automata: [
+    { id: 'm1', name: 'שלי', type: 'dfa', tests: [], states: [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }, { id: 'b', label: 'q1', x: 9, y: 9 }], transitions: [] },
+    { id: 'm2', name: 'מהלשונית השנייה', type: 'dfa', tests: [], states: [], transitions: [] }], settings: { lastId: 'm2' } };
+  assert.equal(ctx.onStorageSync({ key: 'automata_data_v1', newValue: JSON.stringify(other) }), true);
+  assert.deepEqual(Array.from(db.automata, a => a.id), ['m1', 'm2'], 'the other tab\'s model is here');
+  assert.equal(ctx.__getCurrent().id, 'm1', 'this tab keeps showing its own model');
+  assert.equal(ctx.__getCurrent().states.length, 2, 'with the other tab\'s change');
+  assert.equal(vm.runInContext('UNDO', ctx), null, 'an undo snapshot from before the sync could roll back the other tab, so it is dropped');
+  assert.equal(vm.runInContext('sel.id', ctx), 'a', 'a selection that still exists is kept');
+
+  ctx.save();
+  assert.deepEqual(JSON.parse(stored).automata.map(a => a.id), ['m1', 'm2'], 'the next save here keeps the other tab\'s work');
+
+  assert.equal(ctx.onStorageSync({ key: 'automata_cp_collapsed', newValue: '1' }), false, 'other keys are ignored');
+  assert.equal(ctx.onStorageSync({ key: 'automata_data_v1', newValue: '{broken' }), false, 'unreadable data is ignored');
+
+  // המודל הפתוח נמחק בלשונית השנייה
+  ctx.onStorageSync({ key: 'automata_data_v1', newValue: JSON.stringify({ automata: [other.automata[1]] }) });
+  assert.equal(ctx.__getCurrent().id, 'm2');
+  assert.match(toasts.at(-1).m, /נמחק בלשונית אחרת/);
+});
+
 /* ── קלטים קיצוניים ─────────────────────────────────────────────────── */
 
 test('a long state name shrinks, then is cut with "…" inside the circle; the full name stays in the tooltip and spoken label', () => {

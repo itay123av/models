@@ -829,6 +829,24 @@ function load(){ let raw=null; try{ raw=localStorage.getItem(STORE); if(raw){ co
   LOAD_REPAIRED=DB.automata.reduce((n,a)=>n+sanitizeModel(a),0);
   DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e);
   if(raw){ LOAD_BACKUP_KEY=STORE+'_unreadable_'+Date.now(); try{ localStorage.setItem(LOAD_BACKUP_KEY,raw); }catch(_){ LOAD_BACKUP_KEY=''; } } } }
+/* האפליקציה פתוחה בשתי לשוניות דפדפן: כל לשונית שמרה את כל הרשימה מהעותק
+   שבזיכרון שלה, וכך מחקה בשקט מודלים ושינויים שנשמרו בלשונית השנייה.
+   כשלשונית אחרת שומרת (אירוע storage) — טוענים מחדש מהאחסון. המודל הפתוח
+   נשאר פתוח; צילום "בטל" ישן נזרק, כי הוא היה מחזיר אחורה גם את השינוי שם. */
+function onStorageSync(e){
+  if(!e||e.key!==STORE||e.newValue==null)return false;
+  let d; try{ d=JSON.parse(e.newValue); }catch(_){ return false; }
+  const keep=current&&current.id;
+  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object');
+  DB.automata.forEach(sanitizeModel);
+  current=DB.automata.find(a=>a.id===keep)||DB.automata[0]||null;
+  DB.settings.lastId=current?current.id:null;
+  UNDO=null; stopPlay(); SIM=null; armed=null;
+  if(sel.id&&!(current&&(stById(sel.id)||trById(sel.id))))sel={type:null,id:null};
+  renderAll();
+  if(keep&&(!current||current.id!==keep))toast('המודל שהיה פתוח כאן נמחק בלשונית אחרת');
+  return true;
+}
 /* Vision scans carry many JPEG crops as data: URLs.  Keeping those pixels in
    the in-memory evidence is useful during the current review session, but
    persisting every duplicate crop in localStorage quickly exceeds the
@@ -4622,6 +4640,7 @@ function init(){
     else if(e.key==='n'||e.key==='N'){ addStateCentered(); }
   });
   window.addEventListener('resize', ()=>{ if(!SIM) applyView(); });
+  window.addEventListener('storage', onStorageSync);
   applyView();
   openAutomaton(DB.settings.lastId || (DB.automata[0]&&DB.automata[0].id));
 }
