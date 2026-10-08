@@ -1612,6 +1612,7 @@ function aiRuleFromPayload(it){
     zones:{left_text:String(z.left_text??''),middle_text:String(z.middle_text??''),right_text:String(z.right_text??'')},
     line_bbox:{x:Number.isFinite(Number(b.x))?Number(b.x):-1,y:Number.isFinite(Number(b.y))?Number(b.y):-1,w:Number.isFinite(Number(b.w))?Number(b.w):-1,h:Number.isFinite(Number(b.h))?Number(b.h):-1},
     cropped_image_segment_url:String(it.cropped_image_segment_url||''),
+    ocr_alternatives:cloneScanValue(it.ocr_alternatives||null),
     field_notes:scanUniqueIssues(serverNotes),
     raw_field_notes:cloneScanValue(serverNotes),
     raw_audit_issues:cloneScanValue(it.raw_audit_issues||null),

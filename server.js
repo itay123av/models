@@ -4278,6 +4278,7 @@ function normalizeLabelsStageResult(value, topologyEnvelope, crops, modelType, s
         pop_symbol: observedPop,
         ...(row.stack_top ? { stack_top: cloneJson(row.stack_top, {}) } : {}),
       },
+      ocr_alternatives: cloneJson(row.ocr_alternatives, null),
       confidence: Number.isFinite(overallConfidence) ? overallConfidence : 0,
       issues: [...new Set(issues)],
       field_notes: [...new Set(issues)],
@@ -4337,6 +4338,7 @@ function normalizeLabelsStageResult(value, topologyEnvelope, crops, modelType, s
       observation_id: observationId,
       visible_label: visibleLabel,
       confidence,
+      ocr_alternatives: cloneJson(row.ocr_alternatives, null),
       issues: [...new Set(issues)],
       scan_incomplete: issues.length > 0,
       review_only: issues.length > 0,
@@ -5453,6 +5455,34 @@ function labelCandidateConfidence(row, isState) {
 function mergeLabelBatchCandidates(primary, escalation, batch, modelType) {
   if (!primary) return { parsed: escalation, selectedModels: [LABEL_ESCALATION_MODEL] };
   if (!escalation) return { parsed: primary, selectedModels: [LABEL_MODEL] };
+  // Never let Map's last-write-wins behavior erase duplicate observations.
+  // Such a response has ambiguous physical identity, regardless of confidence.
+  const identityProblems = [];
+  const checkIdentities = (result, source, field, kind, keys) => {
+    const identity = row => keys.map(key => String(row?.[key] || '').trim()).join('\u0000');
+    const expected = new Set(batch.rows.filter(row => row.kind === kind).map(identity));
+    const seen = new Set();
+    for (const row of Array.isArray(result[field]) ? result[field] : []) {
+      const key = identity(row);
+      if (!row || !expected.has(key)) identityProblems.push(`${source}: foreign ${field} identity`);
+      if (seen.has(key)) identityProblems.push(`${source}: duplicate ${field} identity`);
+      seen.add(key);
+    }
+  };
+  for (const [source, result] of [['primary', primary], ['retry', escalation]]) {
+    checkIdentities(result, source, 'label_reads', 'line', ['crop_id', 'transition_id', 'line_id']);
+    checkIdentities(result, source, 'state_label_reads', 'state_label', ['crop_id', 'observation_id']);
+  }
+  if (identityProblems.length) {
+    const issues = [...new Set([...stringIssues(primary.issues), ...stringIssues(escalation.issues), ...identityProblems])];
+    const mark = row => ({ ...cloneJson(row), issues: [...stringIssues(row?.issues), ...identityProblems],
+      scan_incomplete: true, review_only: true,
+      ocr_alternatives: { primary: cloneJson(primary), retry: cloneJson(escalation), conflicts: identityProblems } });
+    return { parsed: { ...cloneJson(primary),
+      label_reads: (primary.label_reads || []).filter(Boolean).map(mark),
+      state_label_reads: (primary.state_label_reads || []).filter(Boolean).map(mark),
+      issues, review_only: true }, selectedModels: [LABEL_MODEL] };
+  }
   const mode = String(modelType || 'pda').trim().toLowerCase();
   const primaryLines = new Map((Array.isArray(primary.label_reads) ? primary.label_reads : [])
     .filter(Boolean).map(row => [`${String(row.crop_id || '')}\u0000${String(row.transition_id || '')}\u0000${String(row.line_id || '')}`, row]));
@@ -5479,6 +5509,29 @@ function mergeLabelBatchCandidates(primary, escalation, batch, modelType) {
       selectedModel = LABEL_MODEL;
     }
     selectedModels.add(selectedModel);
+    // A higher self-reported confidence does not resolve two different visible
+    // readings. Keep the selected observation intact, but retain both sources
+    // and fail closed on concrete disagreements (not unknown -> readable).
+    const literal = field => field && typeof field === 'object' ? field.value : field;
+    const fields = isState ? [['visible_label',left.visible_label,right.visible_label]] : [
+      ['INPUT',literal(left.read_input),literal(right.read_input)],
+      ...(mode === 'tm' || mode === 'dfa' || mode === 'nfa' ? [] : [
+        ['STACK_TOP',literal(left.stack_top ?? left.pop_value),literal(right.stack_top ?? right.pop_value)],
+        ['ACTION',left.stack_action?.type,right.stack_action?.type],
+        ...(left.stack_action?.type === right.stack_action?.type && ['PUSH','POP'].includes(left.stack_action?.type)
+          ? [['ACTION_SYMBOL',literal(left.stack_action.type === 'PUSH' ? left.push_value : left.pop_symbol),
+            literal(right.stack_action.type === 'PUSH' ? right.push_value : right.pop_symbol)]] : []),
+      ]),
+    ];
+    const conflicts = fields.filter(([,a,b]) => !unreadableLabelValue(a) && !unreadableLabelValue(b) &&
+      String(a).trim() !== 'UNKNOWN' && String(b).trim() !== 'UNKNOWN' && String(a).trim() !== String(b).trim())
+      .map(([field,a,b]) => `OCR alternatives disagree on ${field}: "${String(a).trim()}" versus "${String(b).trim()}"; confidence cannot resolve this`);
+    if (conflicts.length) return {
+      ...cloneJson(selected),
+      issues: [...new Set([...stringIssues(selected.issues),...conflicts])],
+      scan_incomplete: true, review_only: true,
+      ocr_alternatives: { primary: cloneJson(left), retry: cloneJson(right), conflicts },
+    };
     return selected;
   };
   const labelReads = batch.rows.filter(row => row.kind === 'line').map(row => {

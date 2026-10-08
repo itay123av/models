@@ -3158,6 +3158,56 @@ test('label escalation selects Luna or Terra independently for each immutable ph
   assert.deepEqual(new Set(merged.selectedModels), new Set(['gpt-5.6-luna', 'gpt-5.6-terra']));
 });
 
+test('conflicting OCR attempts retain both readings instead of declaring the more confident guess correct', () => {
+  const crop=mockedCrop('crop_1','line_1'),batch={batch_id:'conflict',rows:[crop]};
+  const first=mockedLabelRead('crop_1','line_1','A','B');
+  first.read_input.value='a';first.zones.left_text='a';
+  const second=structuredClone(first);
+  second.read_input={value:'ε',confidence:.99};second.zones.left_text='ε';
+  const wrap=row=>({label_reads:[row],state_label_reads:[],issues:[]});
+  const merged=server.mergeLabelBatchCandidates(wrap(first),wrap(second),batch,'pda').parsed;
+  const row=merged.label_reads[0];
+  assert.match(row.issues.join(' '),/alternatives disagree on INPUT/);
+  assert.equal(row.scan_incomplete,true);
+  assert.equal(row.ocr_alternatives.primary.read_input.value,'a');
+  assert.equal(row.ocr_alternatives.retry.read_input.value,'ε');
+  assert.equal(first.issues.length,0,'inputs stay immutable');
+  const normalized=server.normalizeLabelsStageResult(merged,
+    server.normalizeTopologyStageResult(mockedTopologyRaw(1),'conflict'),[crop],'pda','conflict').label_reads[0];
+  assert.deepEqual(normalized.ocr_alternatives,row.ocr_alternatives);
+  assert.equal(normalized.scan_incomplete,true);
+  const pop=structuredClone(first);
+  pop.stack_action.type='POP';pop.pop_symbol.value='A';pop.push_value.value='ε';pop.zones.right_text='שלוף A';
+  const action=server.mergeLabelBatchCandidates(wrap(first),wrap(pop),batch,'pda').parsed.label_reads[0];
+  assert.match(action.issues.join(' '),/alternatives disagree on ACTION/);
+  const unknown=structuredClone(first);unknown.read_input.value='?';
+  const resolved=server.mergeLabelBatchCandidates(wrap(unknown),wrap(first),batch,'pda').parsed.label_reads[0];
+  assert.equal(resolved.ocr_alternatives,undefined,'unknown-to-readable is not a contradictory reading');
+});
+
+test('OCR retry merge cannot hide duplicate or foreign physical observations', () => {
+  const crop=mockedCrop('crop_1','line_1'),batch={batch_id:'duplicate',rows:[crop]};
+  const first=mockedLabelRead('crop_1','line_1','A','B');
+  const wrap=rows=>({label_reads:rows,state_label_reads:[],issues:[]});
+  for (const duplicateInPrimary of [true,false]) {
+    const other=structuredClone(first);other.read_input.value='ε';
+    const primary=wrap(duplicateInPrimary?[first,other]:[first]);
+    const retry=wrap(duplicateInPrimary?[first]:[first,other]);
+    const before=JSON.stringify([primary,retry]);
+    const merged=server.mergeLabelBatchCandidates(primary,retry,batch,'pda').parsed;
+    assert.match(merged.issues.join(' '),/duplicate label_reads identity/);
+    assert.equal(merged.review_only,true);
+    assert.equal(merged.label_reads.length,primary.label_reads.length);
+    assert.equal(merged.label_reads[0].scan_incomplete,true);
+    assert.deepEqual(merged.label_reads[0].ocr_alternatives.retry,retry);
+    assert.equal(JSON.stringify([primary,retry]),before);
+  }
+  const foreign={...structuredClone(first),line_id:'other_line'};
+  const merged=server.mergeLabelBatchCandidates(wrap([first]),wrap([first,foreign]),batch,'pda').parsed;
+  assert.match(merged.issues.join(' '),/foreign label_reads identity/);
+  assert.equal(merged.label_reads[0].ocr_alternatives.retry.label_reads.length,2);
+});
+
 test('OpenAI scan cost telemetry accounts for cached input separately', () => {
   const cost = server.estimateOpenAICost('gpt-5.4-mini', {
     input_tokens: 1000,
