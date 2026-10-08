@@ -1085,6 +1085,47 @@ test('two-stage merge preserves two parallel physical arrows with the same endpo
   assert.equal(model.transitions[0].to, model.transitions[1].to);
 });
 
+test('narrow label blocks keep a bounded action-word margin without widening primary baselines', () => {
+  const ctx=loadClient(),session='narrow-context';
+  const connector=topologyConnector('t','c','s0','s1',['l'],{
+    label_block_bbox:{x:.4,y:.2,w:.1,h:.06},line_hints:[{line_id:'l',bbox:{x:.4,y:.2,w:.1,h:.025}}]});
+  const passA=topologyPass(session,[topologyState('s0','q0'),topologyState('s1','q1')],[connector]);
+  const specs=ctx.buildTwoStageCropSpecs(passA,session).specs;
+  const context=specs.find(c=>c.kind==='label_block'),line=specs.find(c=>c.kind==='line');
+  assert.equal(context.padding.x,.04);
+  const box=ctx.paddedScanBBox(context.source_bbox,context.padding).bbox;
+  assert.ok(box.x+box.w>=.539,'right context retains a word beyond the Latin-prefix bbox');
+  assert.equal(line.padding.x,.04,'the target zoom must retain the same complete action word as context');
+  assert.ok(line.padding.y<=.015,'primary precision remains vertically bounded');
+  assert.ok(context.padding.x<=.06,'never revert to a broad 10%-page margin');
+});
+
+test('context-read pixel provenance survives merge and rule import without moving the physical row', () => {
+  const ctx=loadClient(),session='context-read';
+  const states=[topologyState('s0','q0',{is_start:true}),topologyState('s1','q1',{is_accepting:true})];
+  const passA=topologyPass(session,states,[topologyConnector('t1','c1','s0','s1',['line-1'])]);
+  const crops=materializedCropManifest(ctx,passA,session),block=crops.find(c=>c.kind==='label_block'),line=crops.find(c=>c.kind==='line');
+  const passB=labelsPass(session,passA.topology,crops);
+  passB.label_reads[0].evidence_crop_id=block.crop_id;
+  const merged=ctx.mergeTwoStageScan(passA,passB,crops,session),read=merged.transitions[0].rules[0];
+  assert.equal(read.crop_id,line.crop_id);assert.equal(read.ai_line_id,'line-1');
+  assert.equal(read.cropped_image_segment_url,block.image_url);
+  assert.equal(read.pixel_provenance.row_image_url,line.image_url);
+  assert.equal(read.pixel_provenance.evidence_valid,true);
+  assert.equal(read.scan_incomplete,true,'context recovery remains reviewable, never silently approved');
+  const rule=ctx.aiRuleFromPayload(read);
+  assert.equal(rule.scanEvidence.pixel_provenance.evidence_crop_id,block.crop_id);
+  passB.label_reads[0].bbox={x:-.1,y:.2,w:.4,h:.3};
+  const malformed=ctx.mergeTwoStageScan(passA,passB,crops,session).transitions[0].rules[0];
+  assert.equal(malformed.pixel_provenance.evidence_valid,false,'display-oriented bbox clamping must not validate OCR coordinates');
+  assert.equal(malformed.pixel_provenance.original_bbox,null);
+  passB.label_reads[0].evidence_crop_id=crops.find(c=>c.kind==='state_label').crop_id;
+  const invalid=ctx.mergeTwoStageScan(passA,passB,crops,session).transitions[0].rules[0];
+  assert.equal(invalid.pixel_provenance.evidence_valid,false);
+  assert.equal(invalid.cropped_image_segment_url,line.image_url,'foreign image never presented as supporting this rule');
+  assert.equal(invalid.scan_incomplete,true);
+});
+
 test('one physical arrow keeps three independently keyed rows, including identical visible rules', () => {
   const ctx = loadClient();
   const session = 'two-stage-three-lines';
@@ -1373,7 +1414,7 @@ test('line crops use anisotropic baseline-safe padding and keep wider block cont
   const specs = Array.from(ctx.buildTwoStageCropSpecs(passA, session).specs);
   const line = specs.find(c => c.kind === 'line');
   const context = specs.find(c => c.kind === 'label_block');
-  assert.ok(line.padding.x >= 0.012 && line.padding.x <= 0.035);
+  assert.ok(line.padding.x >= 0.04 && line.padding.x <= 0.06);
   assert.ok(line.padding.y >= 0 && line.padding.y <= 0.015);
   const padded = ctx.paddedScanBBox(line.source_bbox, line.padding).bbox;
   assert.ok(padded.w > line.source_bbox.w);
@@ -1414,6 +1455,31 @@ test('document framing detects a bright notebook band but safely keeps an alread
   const alreadyTight = ctx.detectDocumentCropFromPixels(image(w, h, 245), w, h);
   assert.equal(alreadyTight.applied, false);
   assert.deepEqual(JSON.parse(JSON.stringify(alreadyTight.bbox)), { x: 0, y: 0, w: 1, h: 1 });
+});
+
+test('self-loop context retains the owning circle and displaced label without changing primary rows', () => {
+  const ctx=loadClient(),session='loop-label-context';
+  const state=topologyState('loop-state','',{bbox:{x:.76,y:.32,w:.08,h:.05}});
+  const loop=topologyConnector('loop','loop-connector','loop-state','loop-state',['row'],{
+    connector_bbox:{x:.80,y:.37,w:.08,h:.10},
+    label_block_bbox:{x:.82,y:.43,w:.08,h:.047},
+    line_hints:[{line_id:'row',bbox:{x:.82,y:.43,w:.08,h:.047}}],
+  });
+  const before=JSON.stringify(loop);
+  const plan=ctx.buildTwoStageCropSpecs(topologyPass(session,[state],[loop]),session);
+  const context=plan.specs.find(s=>s.kind==='label_block'),line=plan.specs.find(s=>s.kind==='line');
+  assert.ok(context.source_bbox.y<=.32);
+  assert.ok(context.source_bbox.y+context.source_bbox.h>=.477-1e-9);
+  assert.match(context.crop_notes.join(' '),/LOCAL_LOOP_CONTEXT/);
+  const near=(a,b)=>{for(const k of ['x','y','w','h'])assert.ok(Math.abs(a[k]-b[k])<1e-9,`bbox.${k}`);};
+  near(context.label_block_bbox,loop.label_block_bbox);
+  near(line.line_bbox,loop.line_hints[0].bbox);
+  assert.equal(plan.specs.filter(s=>s.kind==='line').length,1,'context does not invent rules');
+  assert.equal(JSON.stringify(loop),before,'source topology is immutable');
+  const expected=ctx.scanBBoxRelativeToCrop(loop.line_hints[0].bbox,ctx.paddedScanBBox(context.source_bbox,context.padding).bbox);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.target_line_bboxes_in_context[0].bbox)),JSON.parse(JSON.stringify(expected)));
+  const ordinary=Object.assign({},loop,{target_observation_id:'other'});
+  near(ctx.scanLabelContextSource(ordinary,[state]).bbox,loop.label_block_bbox);
 });
 
 test('shaded page margins cannot be cropped automatically; framing requires explicit opt-in', async () => {
