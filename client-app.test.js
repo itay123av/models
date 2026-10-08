@@ -196,6 +196,73 @@ test('tab badges distinguish NFA and NPDA from their deterministic versions', ()
   assert.deepEqual(badges, ['DFA', 'NFA', 'PDA', 'NPDA', 'TM']);
 });
 
+/* ── ייבוא ונתונים שמורים ───────────────────────────────────────────── */
+
+test('import: a transition to a missing state is dropped with a message instead of breaking the app on every load', () => {
+  const ctx = loadClient();
+  const toasts = quietUi(ctx);
+  vm.runInContext('openAutomaton=id=>{ current=DB.automata.find(a=>a.id===id); };', ctx);
+  ctx.importData({ name: 'שבור', states: [{ id: 'a', label: 'q0', x: 100, y: 100, isStart: true }, { label: 'q1' }],
+    transitions: [{ id: 't', from: 'a', to: 'zzz', symbols: ['a'] }, { from: 'a', to: 'a' }] });
+  const m = ctx.__getCurrent();
+  assert.equal(m.transitions.length, 1, 'the dangling transition is gone');
+  assert.deepEqual(Array.from(m.transitions[0].symbols), [], 'missing symbols become an empty list, not undefined');
+  assert.ok(m.states.every(s => typeof s.id === 'string' && s.id && Number.isFinite(s.x) && Number.isFinite(s.y)), 'every state has an id and a position');
+  assert.equal(new Set(m.states.map(s => s.id)).size, 2);
+  assert.ok(toasts.some(t => /מעבר אחד הושמט/.test(t.message)), 'the user is told what was dropped');
+  assert.equal(ctx.edgeGeom(m.transitions[0]) != null, true, 'drawing no longer throws');
+});
+
+test('import: model types from other spellings and rule arrays are normalised', () => {
+  const ctx = loadClient();
+  quietUi(ctx);
+  vm.runInContext('openAutomaton=id=>{ current=DB.automata.find(a=>a.id===id); };', ctx);
+  ctx.importData({ automata: [
+    { name: 'n', type: 'nfa', states: [{ id: 's', label: 'q0' }], transitions: [{ from: 's', to: 's', symbols: 'ab' }] },
+    { name: 'p', type: 'pda', states: [{ id: 's', label: 'q0' }], transitions: [{ from: 's', to: 's' }] },
+    null, 'x',
+  ] });
+  const db = vm.runInContext('DB', ctx);
+  const [n, p] = db.automata.slice(-2);
+  assert.equal(n.type, 'dfa'); assert.equal(n.ndet, true);
+  assert.deepEqual(Array.from(n.transitions[0].symbols), ['a', 'b']);
+  assert.deepEqual(Array.from(p.transitions[0].rules), []);
+});
+
+test('load: stored data with a dangling transition or a null model is repaired, not fatal', () => {
+  const ctx = loadClient();
+  const toasts = quietUi(ctx);
+  const stored = JSON.stringify({ automata: [null,
+    { id: 'm', name: 'ישן', type: 'dfa', states: [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }],
+      transitions: [{ id: 't', from: 'a', to: 'gone', symbols: ['a'] }] }], settings: { lastId: 'm' } });
+  ctx.localStorage.getItem = () => stored;
+  ctx.load();
+  const db = vm.runInContext('DB', ctx);
+  assert.equal(db.automata.length, 1, 'the null entry is dropped');
+  assert.equal(db.automata[0].transitions.length, 0);
+  assert.equal(vm.runInContext('LOAD_REPAIRED', ctx), 1, 'the repair is counted so init can tell the user');
+});
+
+test('JSON import errors are in Hebrew and say where the problem is', () => {
+  const ctx = loadClient();
+  assert.equal(ctx.jsonSyntaxErrorAt('{"a":1}'), -1);
+  assert.equal(ctx.jsonSyntaxErrorAt('{"a":1,}'), 7);
+  assert.equal(ctx.jsonSyntaxErrorAt('[1,2'), 4);
+  assert.equal(ctx.jsonSyntaxErrorAt('{"a":"x\\q"}'), 8);
+  assert.equal(ctx.jsonSyntaxErrorAt('{"a": tru}'), 9, 'points at the first wrong character');
+  assert.equal(ctx.jsonSyntaxErrorAt('{"a":1} x'), 8);
+  assert.equal(ctx.jsonSyntaxErrorAt('-'), 0);
+  let msg = ctx.jsonErrorText('{\n  "name": "x",\n  "states": [1,,2]\n}');
+  assert.match(msg, /שורה 3/);
+  assert.match(msg, /עמודה 16/, 'the second comma of [1,,2]');
+  assert.match(msg, /«\u2066,\u2069»/, 'the character is LTR-isolated so } is not shown mirrored as { in Hebrew text');
+  assert.doesNotMatch(msg.replace(/JSON/g, ''), /[A-Za-z]{3,}/, 'no English browser text');
+  msg = ctx.jsonErrorText('{"a": [1, 2');
+  assert.match(msg, /נגמר באמצע/);
+  assert.match(ctx.jsonErrorText('   '), /ריק/);
+  assert.match(ctx.jsonErrorText('{"a":"line\nbreak"}'), /ירידת שורה/);
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
