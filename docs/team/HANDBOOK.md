@@ -55,7 +55,7 @@ Codex (כלי אחר שהמשתמש מריץ) עבד עד עכשיו על **חי
 | `automata.html` (~4,400 שורות) | כל האפליקציה בצד הלקוח: עורך, סימולטור, ספרייה, סריקה, לוח הבדיקה. **הערות בעברית.** ב-working tree שורות CRLF. **שני בלוקי `<style>`** — CSS שצריך לגבור יושב בסוף האחרון. |
 | `pda-core.js` | סמנטיקת אוטומט מחסנית המשותפת ללקוח, לשרת ולבדיקות (⊥ בתחתית, PUSH/POP/NONE, חסימת כללים לא חוקיים). |
 | `server.js` (~6,400 שורות) | שרת סטטי + `/api/health` + `/api/parse-diagram` (שלבים: `topology` → `topology-audit` → `labels`). **הערות באנגלית.** |
-| `pda-action-word-guide.cjs` | מדריך צורות האותיות בכתב יד עברי לפעולות דחוף/שלוף/ללא שינוי (נטען ע"י `server.js`). **כרגע untracked** — חייב להיכנס לגיט יחד עם `server.js`. |
+| `pda-action-word-guide.cjs` | מדריך צורות האותיות בכתב יד עברי לפעולות דחוף/שלוף/ללא שינוי (נטען ע"י `server.js`, ומשותף גם לסקריפטי ה-probe של Gemini). בגיט מאז `9fbaa25`. |
 | `scripts/` | `scan-image-diagnostic.cjs` (סריקה מלאה דרך הלקוח האמיתי, offline כברירת מחדל, `--live` = בתשלום), `replay-label-stage.cjs` (שלב התוויות בלבד על ראיות שמורות, `--live`), `probe-action-words.cjs`, `recheck-local-crops.cjs` (Codex), `fuzz-engines.cjs` (השוואת מנועים, חינם), `replay-ui-server.cjs` (הצגת תוצאת סריקה שמורה בתוך האפליקציה, חינם). |
 
 **אזורים ב-`automata.html`** (חפשו לפי שם):
