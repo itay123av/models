@@ -10,6 +10,8 @@
 | 3 | **סריקה: קריאת תוויות ותיקון אחרי סריקה** | הפרומפט לקריאת התוויות, ייבוא הכללים, לוח "בדיקת סריקה", תיקון בצעד אחד | `modeles-scan` | `claude/scan-labels` | [prompt-3-scan-labels.md](prompt-3-scan-labels.md) |
 | 4 | *(אופציונלי)* **סריקה: טופולוגיה וחיתוכים** | זיהוי מצבים וחצים וגאומטריית ה-crops — **רק אם Codex מפסיק לעבוד על זה** | `modeles-topology` | `claude/scan-topology` | [prompt-4-scan-topology.md](prompt-4-scan-topology.md) |
 
+**Codex** ממשיך בטופולוגיה ובחיתוכים, אבל מעכשיו בתיקייה משלו, `modeles-codex`, בענף `codex/scan-topology`. ההוראות שלו: [prompt-codex.md](prompt-codex.md).
+
 הידע המשותף לכולם נמצא ב-[HANDBOOK.md](HANDBOOK.md): מבנה הקוד, כללי Git, מלכודות, ומדיניות סריקות בתשלום.
 
 ## למה ככה
@@ -19,10 +21,11 @@
 
 ## סדר הפתיחה
 1. **פתחו קודם את צ'אט 1** בתיקייה `C:\Users\its\Documents\modeles`, והדביקו את התוכן של `prompt-1-integration.md` (מה שמתחת לקו).
-   - הוא ישאל אם Codex סיים, יסגור את העבודה הפתוחה שלו, ויצור את התיקיות לשאר הצ'אטים.
+   - הוא ישאל אם Codex עדיין רץ (אם כן — לעצור אותו לרגע), יכניס את העבודה הפתוחה שלו לקומיט, ויצור את התיקיות לשאר הצ'אטים.
 2. כשצ'אט 1 אומר שהתיקיות מוכנות:
    - **צ'אט 2** — בתיקייה `C:\Users\its\Documents\modeles-app`, עם `prompt-2-app.md`.
    - **צ'אט 3** — בתיקייה `C:\Users\its\Documents\modeles-scan`, עם `prompt-3-scan-labels.md`.
+   - **Codex** — בתיקייה `C:\Users\its\Documents\modeles-codex`, עם `prompt-codex.md`.
 3. **צ'אט 4** — רק אם החלטתם להחליף את Codex בתחום החיתוכים.
 
 ## איך הצ'אטים מתקשרים

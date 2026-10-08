@@ -21,6 +21,7 @@
    - `test-evidence/E2E-TEST-REPORT.md`
 3. הסקריפט `scripts/recheck-local-crops.cjs`: בונה crops מחדש מגאומטריה שמורה. offline כברירת מחדל; `--live` ו-`--gemini` עולים כסף.
 4. `npm test`. ודא שיש `.secrets\openai.env` בתיקייה שלך.
+5. אם Codex עבד לפניך בענף `codex/scan-topology` והעבודה שלו עוד לא מוזגה לבסיס: `git merge codex/scan-topology`. מה שהוא תיעד נמצא ב-`docs/team/status-scan-topology.md`.
 
 ## האזור שלך
 - **השרת**: שלבי `topology` ו-`topology-audit` — `parseTopologyStage`, `parseTopologyAuditStage`, מלאי ראשי החץ, `targeted trace`, `line geometry`, ה-reconciliation.
