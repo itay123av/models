@@ -2221,6 +2221,29 @@ test('review summary deduplicates repeated display warnings but preserves distin
   assert.equal(model.unresolvedLabelReads.length, 3, 'ה-unresolved evidence נשמר במלואו');
 });
 
+test('real two-stage import resolves missing rows by their session-qualified identity', () => {
+  const ctx=loadClient();silenceClientUi(ctx);pdaModel(ctx,[],[]);
+  const session='scan-import-identity';
+  const passA=topologyPass(session,[topologyState('s0','q0',{is_start:true}),topologyState('s1','q1')],
+    [topologyConnector('transition-1','connector-1','s0','s1',['line-1'])]);
+  const crops=materializedCropManifest(ctx,passA,session),passB=labelsPass(session,passA.topology,crops);
+  passB.label_reads=[];
+  const merged=ctx.mergeTwoStageScan(passA,passB,crops,session);
+  ctx.applyAiTransitionsToCanvas(merged,{atomic:true,scanSessionId:session});
+  const model=ctx.__getCurrent(),unread=model.unresolvedLabelReads.find(x=>x.kind==='label_line');
+  assert.ok(unread);
+  const rule=model.transitions[0].rules[0];
+  assert.equal(rule.aiLineId,`${session}:line-1`,'exercise the actual imported namespace');
+  assert.equal(ctx.unresolvedLabelReadTarget(unread).ruleIndex,0);
+  assert.equal(ctx.unresolvedLabelReadSettled(unread),false);
+  rule.manuallyReviewed=true;
+  assert.equal(ctx.unresolvedLabelReadSettled(unread),true,'reviewing the real placeholder settles its duplicate warning');
+  const foreign={...unread,scan_session_id:'other-scan'};
+  assert.equal(ctx.unresolvedLabelReadSettled(foreign),false,'another scan cannot settle this observation');
+  model.transitions[0].rules.push({...rule});
+  assert.equal(ctx.unresolvedLabelReadTarget(unread).ruleIndex,-1,'duplicate identities remain ambiguous');
+});
+
 test('an unread label line is settled by reviewing its "?" placeholder rule, not by a dead-end blocker', () => {
   const ctx = loadClient();
   silenceClientUi(ctx);

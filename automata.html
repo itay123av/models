@@ -2104,9 +2104,19 @@ function unresolvedLabelReadKey(u){
 function unresolvedLabelReadTarget(u){
   if(!u||!current)return null;
   if(u.kind==='label_line'&&u.transition_id){
-    const t=current.transitions.find(x=>x.aiTransitionId===u.transition_id);
-    if(!t)return null;
-    return {type:'rule',transition:t,ruleIndex:(t.rules||[]).findIndex(r=>r.aiLineId&&r.aiLineId===u.line_id)};
+    const session=String(u.scan_session_id||current.activeAiScanSessionId||'');
+    const candidates=current.transitions.filter(x=>x.aiTransitionId===u.transition_id&&
+      (!session||!x.aiScanSession||x.aiScanSession===session));
+    if(candidates.length!==1)return null;
+    const t=candidates[0],indices=[];
+    (t.rules||[]).forEach((r,i)=>{
+      if(session&&r.aiScanSession&&r.aiScanSession!==session)return;
+      const ruleSession=String(r.aiScanSession||session),lineId=String(u.line_id||'');
+      // Imported row identities are session-qualified. Match that exact
+      // namespace, never an arbitrary suffix shared by another scan's row.
+      if(lineId&&r.aiLineId&&(r.aiLineId===lineId||ruleSession&&r.aiLineId===`${ruleSession}:${lineId}`))indices.push(i);
+    });
+    return {type:'rule',transition:t,ruleIndex:indices.length===1?indices[0]:-1};
   }
   if(u.kind==='state_label'&&u.observation_id){
     const s=current.states.find(x=>(x.aiObservationIds||[]).includes(u.observation_id));
