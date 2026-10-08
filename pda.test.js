@@ -2361,6 +2361,17 @@ test('12zfla. one tiny action symbol wrapped below its word remains part of the 
     ['complete_rule_without_final_symbol', 'wrapped_action_symbol']);
 });
 
+test('wrapped glyph grouping requires a complete left-anchored row, not another action fragment', () => {
+  const original=[
+    physicalLineFragment('short_action_fragment',0.4,0.12,0.12,0.04),
+    physicalLineFragment('tiny_lower_fragment',0.48,0.17,0.025,0.03),
+  ];
+  const grouped=server.groupTopologyLineFragments(unitBox(0.1,0.1,0.5,0.3),original);
+  assert.equal(grouped.logical_visible_line_count,2);
+  assert.equal(grouped.grouping_changed,false);
+  assert.deepEqual(grouped.physical_fragments,original);
+});
+
 test('12zfm. two full seeds stay separate while one narrow fragment joins only its unique nearest seed', () => {
   const grouped = server.groupTopologyLineFragments(unitBox(0.1, 0.1, 0.5, 0.3), [
     physicalLineFragment('upper_seed', 0.1, 0.12, 0.42, 0.05),

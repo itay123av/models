@@ -3377,7 +3377,9 @@ function groupTopologyLineFragments(labelBlockBbox, lineHints) {
     const wrappedBelow = fragmentCenterY > anchorCenterY &&
       metric.vertical_gap <= Math.max(block.h * 0.09, anchor.bbox.h * 0.65);
     const overlapsAnchorHorizontally = metric.horizontal_overlap_ratio > 0;
-    const wrappedSuffix = veryNarrow && inActionZone && wrappedBelow &&
+    const dominantRow = anchor.bbox.w >= block.w * 0.64 &&
+      Math.abs(anchor.bbox.x - block.x) <= block.w * 0.18;
+    const wrappedSuffix = dominantRow && veryNarrow && inActionZone && wrappedBelow &&
       overlapsAnchorHorizontally && materiallyShorter;
     return inlineSuffix || wrappedSuffix;
   };
