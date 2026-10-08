@@ -261,6 +261,7 @@ body{
 .cell.stuck{background:var(--red-soft); border-color:var(--red); color:var(--red-ink)}
 .cell.blank{color:var(--muted)}
 .cell.marker{background:#475569; color:#fff; border-color:#475569; font-weight:900}
+.cell.more{min-width:auto; white-space:nowrap; background:transparent; border-style:dashed; color:var(--muted); font-family:'Heebo',sans-serif; font-size:12px; font-weight:700}
 .cell .hmark{position:absolute; top:-13px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:9px solid var(--indigo)}
 .cell.empty{font-family:'Heebo',sans-serif; font-weight:600; font-size:14px; color:var(--muted); font-style:italic; border-style:dashed; min-width:150px}
 
@@ -4165,46 +4166,56 @@ function paintSim(){
   const node=$('canvas').querySelector(`[data-state-id="${SIM.stateId}"]`);
   if(node){ node.classList.add('active'); if(SIM.status==='accepted')node.classList.add('ok'); if(SIM.status==='rejected')node.classList.add('bad'); }
 }
+/* מילה ארוכה מאוד: מציירים רק חלון של תאים סביב הראש. 1000 תאים עלו כ-100ms
+   של פריסת עמוד בכל צעד. בקצוות תא «…N» אומר כמה תווים לא מוצגים. */
+const TAPE_WINDOW=120;
+function tapeSpan(lo,hi,a,b){   /* [lo,hi] = כל הסרט; [a,b] = מה שחייב להיראות (הראש או הראשים) */
+  if(hi-lo+1<=TAPE_WINDOW)return [lo,hi];
+  let from=Math.max(lo,a-40), to=Math.min(hi,Math.max(b+40,from+TAPE_WINDOW-1));
+  if(to-from+1<TAPE_WINDOW)from=Math.max(lo,to-TAPE_WINDOW+1);
+  return [from,to]; }
+function tapeMore(k,before){ return k>0?`<span class="cell more" title="עוד ${k} תווים ${before?'לפני':'אחרי'} החלק המוצג" aria-label="עוד ${k} תווים ${before?'לפני':'אחרי'}">…${k}</span>`:''; }
 function tapeHTML(chars, pos, status){
-  const cells = chars.length ? chars.map((c,i)=>{
+  if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
+  const [from,to]=tapeSpan(0,chars.length-1,pos,pos);
+  let cells=tapeMore(from,true);
+  for(let i=from;i<=to;i++){
     let cls='cell'; const head=i===pos&&(status==='running'||status==='preview'); const stuck=status==='rejected'&&i===pos;
     if(status!=='preview'&&i<pos)cls+=' read'; if(head)cls+=' head'; if(stuck)cls+=' stuck';
-    return `<span class="${cls}">${esc(c)}${head?'<span class="hmark"></span>':''}</span>`;
-  }).join('') : '<span class="cell empty">ε — מילה ריקה</span>';
-  return `<div class="tape-cells">${cells}</div>`;
+    cells+=`<span class="${cls}">${esc(chars[i])}${head?'<span class="hmark"></span>':''}</span>`; }
+  return `<div class="tape-cells">${cells}${tapeMore(chars.length-1-to,false)}</div>`;
 }
+function tmCellHTML(v,head){ return `<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`; }
 function tmTapeHTML(s){
   const used=Object.keys(s.tape).map(Number);
   const lo=Math.min(s.head, used.length?Math.min(...used):s.head);
   const hi=Math.max(s.head, used.length?Math.max(...used):s.head);
-  let cells='';
-  for(let p=lo;p<=hi;p++){ const v=(p in s.tape)?s.tape[p]:BLANK; const head=p===s.head;
-    cells+=`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`; }
-  return `<div class="tape-cells">${cells}</div>`;
+  const [from,to]=tapeSpan(lo,hi,s.head,s.head);
+  let cells=tapeMore(from-lo,true);
+  for(let p=from;p<=to;p++) cells+=tmCellHTML((p in s.tape)?s.tape[p]:BLANK, p===s.head);
+  return `<div class="tape-cells">${cells}${tapeMore(hi-to,false)}</div>`;
 }
 function tmPreviewHTML(word){ const chars=[...String(word)];
-  const cell=(v,head)=>`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`;
-  let html = cell('&')+cell('&');                  /* שני סימני התחלה */
-  chars.forEach((c,i)=> html+=cell(c, i===0));     /* קלט, ראש על הראשון */
-  html += cell('&', chars.length===0);              /* סימן סוף (אם הקלט ריק — הראש עליו) */
-  return `<div class="tape-cells">${html}</div>`;
+  /* שני סימני התחלה, הקלט וסימן סוף. הראש על התו הראשון (קלט ריק — על סימן הסוף) */
+  const all=['&','&',...chars,'&'], head=chars.length?2:all.length-1;
+  const [from,to]=tapeSpan(0,all.length-1,head,head);
+  let html=tapeMore(from,true);
+  for(let i=from;i<=to;i++) html+=tmCellHTML(all[i],i===head);
+  return `<div class="tape-cells">${html}${tapeMore(all.length-1-to,false)}</div>`;
 }
 function pdaInputHTML(s){
-  if(s.npda){
-    const heads=new Set(s.configs.map(c=>c.pos)), minPos=s.configs.length?Math.min(...s.configs.map(c=>c.pos)):0;
-    const cs=[...s.input].map((c,i)=>{ let cls='cell'; if(i<minPos)cls+=' read'; if(heads.has(i))cls+=' head'; return `<span class="${cls}">${esc(c)}${heads.has(i)?'<span class="hmark"></span>':''}</span>`; }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
-    return `<div class="tape-cells">${cs}</div>`;
-  }
-  const cells = [...s.input].map((c,i)=>{
-    let cls='cell'; if(i<s.pos)cls+=' read'; if(i===s.pos)cls+=' head';
-    return `<span class="${cls}">${esc(c)}${i===s.pos?'<span class="hmark"></span>':''}</span>`;
-  }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
-  return `<div class="tape-cells">${cells}</div>`;
+  const chars=[...s.input]; if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
+  /* דטרמיניסטי: ראש אחד. לא-דטרמיניסטי: ראש לכל מסלול; "נקרא" = לפני הראש השמאלי */
+  const heads=s.npda?new Set(s.configs.map(c=>c.pos)):new Set([s.pos]);
+  const minPos=s.npda?(s.configs.length?Math.min(...s.configs.map(c=>c.pos)):0):s.pos;
+  const maxPos=heads.size?Math.max(...heads):minPos;
+  const [from,to]=tapeSpan(0,chars.length-1,minPos,maxPos);
+  let cells=tapeMore(from,true);
+  for(let i=from;i<=to;i++){ let cls='cell'; if(i<minPos)cls+=' read'; if(heads.has(i))cls+=' head';
+    cells+=`<span class="${cls}">${esc(chars[i])}${heads.has(i)?'<span class="hmark"></span>':''}</span>`; }
+  return `<div class="tape-cells">${cells}${tapeMore(chars.length-1-to,false)}</div>`;
 }
-function pdaInputPreview(word){ const chars=[...String(word)];
-  if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
-  return `<div class="tape-cells">${chars.map((c,i)=>`<span class="cell ${i===0?'head':''}">${esc(c)}${i===0?'<span class="hmark"></span>':''}</span>`).join('')}</div>`;
-}
+function pdaInputPreview(word){ return tapeHTML([...String(word)],0,'preview'); }
 function nfaControlsHTML(s){
   const ctrls=`<div class="simctrls" style="margin-top:11px">
       <button class="btn btn-sm" onclick="simBackR()" ${s.history.length?'':'disabled'}>${ico('back')} אחורה</button>

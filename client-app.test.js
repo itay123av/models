@@ -326,6 +326,38 @@ test('a long state name shrinks, then is cut with "…" inside the circle; the f
   assert.doesNotMatch(nodes.innerHTML, /<text class="nlabel"[^>]*font-size[^>]*>q1</, 'short names keep the normal size');
 });
 
+test('a very long word: the tape draws a window around the head, not every cell (each step re-laid-out 1000 cells)', () => {
+  const ctx = loadClient();
+  const word = [...'ab'.repeat(500)];
+  word[500] = 'X';
+  const count = html => (html.match(/<span class="cell(?! more)[^"]*">/g) || []).length;
+  const hidden = html => [...html.matchAll(/class="cell more"[^>]*>…(\d+)</g)].reduce((s, m) => s + Number(m[1]), 0);
+
+  let html = ctx.tapeHTML(word, 500, 'running');
+  assert.ok(count(html) <= 130, `drawn cells: ${count(html)}`);
+  assert.match(html, /<span class="cell head">X<span class="hmark">/, 'the head cell is drawn');
+  assert.equal(count(html) + hidden(html), 1000, 'the "…N" markers account for every hidden cell');
+
+  html = ctx.tapeHTML(word, 1000, 'accepted');
+  assert.ok(count(html) <= 130 && hidden(html) + count(html) === 1000, 'end of the word');
+  html = ctx.tapeHTML(word, 0, 'preview');
+  assert.ok(count(html) <= 130 && hidden(html) + count(html) === 1000, 'preview starts at the beginning');
+  assert.equal(count(ctx.tapeHTML([...'abc'], 1, 'running')), 3, 'short words are drawn whole, without markers');
+  assert.doesNotMatch(ctx.tapeHTML([...'abc'], 1, 'running'), /cell more/);
+
+  html = ctx.pdaInputHTML({ input: word.join(''), pos: 500, stack: ['⊥'] });
+  assert.ok(count(html) <= 130 && hidden(html) + count(html) === 1000, 'PDA input');
+  html = ctx.pdaInputHTML({ npda: true, input: word.join(''), configs: [{ pos: 400 }, { pos: 420 }] });
+  assert.ok(count(html) <= 160 && hidden(html) + count(html) === 1000, 'NPDA input with several heads');
+  assert.ok(count(ctx.pdaInputPreview(word.join(''))) <= 130, 'PDA preview');
+  assert.ok(count(ctx.tmPreviewHTML(word.join(''))) <= 130, 'TM preview');
+  const tape = { '-2': '&', '-1': '&', 1000: '&' };
+  word.forEach((c, i) => { tape[i] = c; });
+  html = ctx.tmTapeHTML({ tape, head: 500 });
+  assert.ok(count(html) <= 130, `TM tape cells: ${count(html)}`);
+  assert.match(html, /cell head[^"]*">X/);
+});
+
 /* ── Ctrl+Z ─────────────────────────────────────────────────────────── */
 
 test('Ctrl+Z undoes the last deletion (same window as the «בטל» button), also on a Hebrew keyboard layout', () => {
