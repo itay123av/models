@@ -1100,6 +1100,88 @@ test('narrow label blocks keep a bounded action-word margin without widening pri
   assert.ok(context.padding.x<=.06,'never revert to a broad 10%-page margin');
 });
 
+test('crop context stops between adjacent arrows and a lateral loop does not absorb its outgoing label', () => {
+  const ctx=loadClient(),session='bounded-neighbours';
+  const state=topologyState('circle','',{bbox:{x:.65,y:.3,w:.08,h:.06}});
+  const arrows=[
+    topologyConnector('upper','upper-ink','s0','circle',['u'],{
+      label_block_bbox:{x:.45,y:.25,w:.12,h:.04},line_hints:[{line_id:'u',bbox:{x:.45,y:.25,w:.12,h:.04}}]}),
+    topologyConnector('diagonal','diagonal-ink','circle','s1',['d'],{
+      label_block_bbox:{x:.49,y:.305,w:.10,h:.03},line_hints:[{line_id:'d',bbox:{x:.49,y:.305,w:.10,h:.03}}]}),
+    topologyConnector('loop','loop-ink','circle','circle',['a','b'],{
+      connector_bbox:{x:.67,y:.28,w:.06,h:.05},label_block_bbox:{x:.731,y:.28,w:.09,h:.05},
+      line_hints:[{line_id:'a',bbox:{x:.731,y:.28,w:.09,h:.02}}, {line_id:'b',bbox:{x:.731,y:.31,w:.09,h:.02}}]}),
+    topologyConnector('out','out-ink','circle','s1',['o'],{
+      label_block_bbox:{x:.74,y:.36,w:.09,h:.035},line_hints:[{line_id:'o',bbox:{x:.74,y:.36,w:.09,h:.035}}]}),
+  ];
+  const specs=ctx.buildTwoStageCropSpecs(topologyPass(session,[state],arrows),session).specs;
+  const upper=specs.find(s=>s.kind==='label_block'&&s.transition_id==='upper');
+  const loop=specs.find(s=>s.kind==='label_block'&&s.transition_id==='loop');
+  const bound=s=>ctx.paddedScanBBox(s.source_bbox,s.padding).bbox;
+  assert.ok(bound(upper).y+bound(upper).h<.305,'neighbour action starts outside context');
+  assert.ok(bound(upper).x<=.41&&bound(upper).x+bound(upper).w>=.61,'retain the full horizontal word margin');
+  assert.ok(bound(loop).y+bound(loop).h<.36,'outgoing rule stays outside the loop block');
+  assert.ok(loop.source_bbox.x>=.731,'lateral label does not union with the entire circle');
+});
+
+test('crop context includes a second declared row even when the topology block enclosed only the first', () => {
+  const ctx=loadClient(),session='incomplete-block';
+  const connector=topologyConnector('arrow','ink','s0','s1',['first','second'],{
+    label_block_bbox:{x:.4,y:.25,w:.12,h:.025},line_hints:[
+      {line_id:'first',bbox:{x:.4,y:.25,w:.12,h:.025}},
+      {line_id:'second',bbox:{x:.4,y:.295,w:.12,h:.025}},
+    ]});
+  const plan=ctx.buildTwoStageCropSpecs(topologyPass(session,[],[connector]),session);
+  const block=plan.specs.find(s=>s.kind==='label_block');
+  assert.ok(block.source_bbox.y+block.source_bbox.h>=.32-1e-9);
+  assert.ok(block.target_line_bboxes_in_context.every(t=>t.bbox.y>=0&&t.bbox.y+t.bbox.h<=1));
+});
+
+function shiftedPrefixFixture(ctx,extra=false){
+  const width=1000,height=1000,pixels=new Uint8ClampedArray(width*height*4);pixels.fill(240);
+  const stroke=(top,bottom)=>{for(let y=top;y<bottom;y++)for(let x=403;x<443;x+=8){
+    for(let dx=0;dx<3;dx++)pixels.set([80,80,80,255],(y*width+x+dx)*4);
+  }};
+  stroke(293,307);stroke(326,340);if(extra)stroke(360,369);
+  const connector=topologyConnector('arrow','ink','s0','s1',['first','second'],{
+    label_block_bbox:{x:.4,y:.3,w:.12,h:.058},line_hints:[
+      {line_id:'first',confidence:.6,bbox:{x:.4,y:.3,w:.12,h:.025}},
+      {line_id:'second',confidence:.6,bbox:{x:.4,y:.333,w:.12,h:.025}},
+    ]});
+  return {width,height,pixels,plan:ctx.buildTwoStageCropSpecs(topologyPass('prefix',[],[connector]),'prefix')};
+}
+
+test('crop row alignment follows two ink bands without changing row IDs, pixels or topology hints', async () => {
+  const ctx=loadClient(),f=shiftedPrefixFixture(ctx),before=JSON.stringify(f.plan),pixelsBefore=f.pixels.slice();
+  const refined=ctx.refineScanCropPlanFromPixels(f.plan,f.pixels,f.width,f.height);
+  const rows=refined.specs.filter(s=>s.kind==='line');
+  assert.deepEqual(Array.from(rows,s=>s.line_id),['first','second']);
+  for(const [i,top] of [293,326].entries()){
+    const b=ctx.paddedScanBBox(rows[i].source_bbox,rows[i].padding).bbox;
+    assert.ok(b.y<=top/f.height&&b.y+b.h>=(top+14)/f.height,'all of the owning prefix is inside its crop');
+    assert.ok(rows[i].line_bbox.y<f.plan.specs.find(s=>s.line_id===rows[i].line_id).line_bbox.y);
+    assert.match(rows[i].crop_geometry_issues.join(' '),/דורש ביקורת/);
+  }
+  assert.ok(rows[0].source_bbox.y+rows[0].source_bbox.h<=rows[1].source_bbox.y);
+  assert.equal(JSON.stringify(f.plan),before);
+  assert.deepEqual(f.pixels,pixelsBefore,'alignment never edits source pixels');
+  ctx.Image=class{constructor(){this.width=f.width;this.height=f.height;}set src(_url){if(this.onload)this.onload();}decode(){return Promise.resolve();}};
+  ctx.document.createElement=()=>({getContext:()=>({drawImage(){},getImageData:()=>({data:f.pixels})}),toDataURL:()=> 'data:image/png;base64,AA=='});
+  const materialized=await ctx.materializeTwoStageCrops('source',f.plan);
+  assert.ok(materialized.filter(s=>s.kind==='line').every(s=>s.geometry_refinement&&s.crop_bbox.y<.333));
+});
+
+test('crop row alignment refuses extra bands, blank pixels and a shift beyond one row height', () => {
+  const ctx=loadClient();
+  for(const mode of ['extra','blank','far']){
+    const f=shiftedPrefixFixture(ctx,mode==='extra');
+    if(mode==='blank')f.pixels.fill(240);
+    if(mode==='far')for(const s of f.plan.specs.filter(s=>s.kind==='line'))s.line_bbox.y+=.04;
+    const refined=ctx.refineScanCropPlanFromPixels(f.plan,f.pixels,f.width,f.height);
+    assert.ok(refined.specs.filter(s=>s.kind==='line').every(s=>!s.geometry_refinement),mode);
+  }
+});
+
 test('context-read pixel provenance survives merge and rule import without moving the physical row', () => {
   const ctx=loadClient(),session='context-read';
   const states=[topologyState('s0','q0',{is_start:true}),topologyState('s1','q1',{is_accepting:true})];
