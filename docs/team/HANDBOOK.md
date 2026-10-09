@@ -11,7 +11,7 @@
 
 - **עורך גרפי וסימולטור** לחמישה סוגי מודלים: אוטומט סופי דטרמיניסטי (DFA, גם "לא מלא"), אוטומט סופי לא-דטרמיניסטי (NFA עם ε), אוטומט מחסנית דטרמיניסטי (DPDA), אוטומט מחסנית לא-דטרמיניסטי (NPDA), מכונת טיורינג (TM).
 - **סריקת שרטוט בכתב יד (AI)**: מצלמים דף מחברת עם אוטומט מחסנית, השרת שולח ל-OpenAI (מודל `gpt-5.6-luna`) בכמה שלבים, והתוצאה מצוירת על הלוח. **עיקרון ברזל: fail-closed** — כל מה שהגיע מסריקה נעול ולא רץ עד שאדם מאשר אותו בלוח "בדיקת סריקה".
-- המשתמש: איתי (strive.itay@gmail.com). כותב בעברית, מעדיף תשובות קצרות וברורות בעברית.
+- המשתמש: איתי. כותב בעברית, מעדיף תשובות קצרות וברורות בעברית.
 
 ## 2. איפה הכל
 
@@ -62,12 +62,13 @@ Codex (כלי אחר שהמשתמש מריץ) עבד עד עכשיו על **חי
 
 - **עורך**: `addStateCentered`/`freeStateSpot`, `deleteState`, `renameState`, `toggleStart`/`toggleAccept`, `onDown`/`onStateClick` (קליק-קליק = מעבר, לחיצה כפולה = לולאה), `promptTransition` (DFA/NFA), `promptTransitionPDA`, `promptTransitionTM`, `renderInspector`, `setTransitionEndpoint`, `deleteTransition`, `deletePdaRule`/`deleteTmRule`.
 - **מנועים**: `simInit`, `simStepObj`, `nfaClosure`/`nfaStep`, `pdaStep`/`pdaAccepts` (דטרמיניסטי, כולל זיהוי לולאות ε: `pdaEpsilonLoopLimit`, `pdaStepEpsilonLoop`), `npdaStep`/`npdaAccepts` (`npdaSeenKeys`), `tmStep`, `runQuick`, `simReady` (חסימות הרצה עם הודעה מדויקת), `computeValidation`.
-- **ממשק**: `renderAll`, `renderGraph`, `fitView`/`canvasFreeRect`, `renderStack` (מוסיף `body.has-stack`), `toggleControlPanel`, `renderGuide` (**טקסט המדריך קיים פעמיים**: ב-HTML הסטטי וב-`renderGuide` — לערוך את שניהם), `toast`/`toastAction`/`offerUndo`/`undoLast` (ביטול מחיקה), ספרייה `openLibrary`, `importData`/`exportCurrent`, `load`/`save` (`SAVE_SEQ`, גיבוי נתונים לא קריאים).
+- **ממשק**: `renderAll`, `renderGraph`, `fitView`/`canvasFreeRect`, `renderStack` (מוסיף `body.has-stack`), `toggleControlPanel`, `renderGuide` (טקסט המדריך נמצא **רק** כאן; העותק הסטטי ב-HTML הוסר ב-`claude/app`), `sanitizeModel`/`jsonErrorText` (ייבוא וטעינה בטוחים), `toast`/`toastAction`/`offerUndo`/`undoLast` (ביטול מחיקה), ספרייה `openLibrary`, `importData`/`exportCurrent`, `load`/`save` (`SAVE_SEQ`, גיבוי נתונים לא קריאים).
 - **סריקה (לקוח)**: `openAiScan` (חלון הסריקה), `downscaleImage`, `runTwoStageDiagramScan`, `buildTwoStageCropSpecs`, `mergeTwoStageScan`, `applyAiTransitionsToCanvas`, `applyAiStates`, `aiRuleFromPayload`, `layoutAiTopologyStates`, לוח הבדיקה: `collectAiReviewItems`, `renderAiReviewPanel`, `aiStateConcerns`, `unresolvedLabelReadTarget`, `acknowledgeUnresolvedLabelRead`, `editPdaTransition`. דוגמה מובנית: `AI_SAMPLE`, `AI_TM_SAMPLE`.
 
 ## 5. בדיקות
 
 - `npm test` — כ-260 בדיקות offline (חינם, כ-15 שניות). חייב להיות 0 כשלונות לפני כל קומיט.
+  - **בדיקות העורך, הסימולטור והמעטפת → `client-app.test.js`** (צ'אט 2). **בדיקות הסריקה → `client-pda.test.js`** (צ'אטים 3/4 ו-Codex). ככה שני ענפים לא מוסיפים בסוף אותו קובץ ולא מתנגשים.
   - `client-pda.test.js` טוען את הסקריפט האמיתי מתוך `automata.html` לתוך VM (`loadClient`). `silenceClientUi(ctx)` מחליף גם את `save` בפונקציה ריקה — כשבודקים משהו שתלוי ב-`save` (כמו `SAVE_SEQ`), החליפו רק את פונקציות הציור. `DB` מוגדר ב-`let`: גישה דרך `vm.runInContext('DB', ctx)`. מערכים שנוצרו בתוך ה-VM לא שווים ב-`deepStrictEqual` למערכים מבחוץ — עטפו ב-`Array.from`.
   - `pda.test.js` — שרת ו-pda-core; `server.test.js` — אבטחה; ועוד.
 - **בדיקת רגרסיה אמיתית נכשלת על הקוד הישן.** הוכיחו זאת: `git show HEAD:automata.html > <tmp>/automata.html`, העתיקו לשם את `pda-core.js` ואת קובץ הבדיקות, והריצו את הבדיקה החדשה שם.
@@ -93,6 +94,9 @@ Codex (כלי אחר שהמשתמש מריץ) עבד עד עכשיו על **חי
 - העדפות המשתמש: **בלי חלונות אישור** למחיקות (יש "בטל" בהודעה במקום); פאנלים צפים; אייקוני SVG (לא אימוג'י בממשק); פונט Heebo; סגנון "לוח לבן" בהיר.
 - מוסכמות: מחסנית מתחילה ב-`⊥` מוגן; קבלה באוטומט מחסנית = כל הקלט נקרא + מצב מקבל + המחסנית חזרה ל-`[⊥]`. **לא לשנות סמנטיקה בלי החלטה מפורשת של המשתמש.**
 - הדפדפן מפריד אחסון לפי כתובת (ראו סעיף 3).
+- `sed -i` ב-Git Bash הופך את `automata.html` ל-LF. כלי ה-Edit עלול להפוך תו בידי כמו `⁦` (U+2066) לתו בלתי נראה. עריכה בסקריפט — רק מסקריפט node בקובץ.
+- `_buildDialog` (מאז `claude/app`): Enter על כפתור מפעיל את הכפתור, ועל `.chip`/`.pda-mode` הוא בוחר ומאשר. רק החלון העליון מגיב למקלדת, ו-Tab נשאר בתוך החלון. חלון סריקה שצריך התנהגות אחרת — לתאם עם צ'אט 2.
+- כדי לא לתפוס את 8790 של המשתמש, אפשר להוסיף ל-`.claude/launch.json` **מקומית** (בלי קומיט) תצורה על פורט אחר. צ'אט 2 משתמש ב-8792.
 
 ## 8. מדיניות סריקות בתשלום (OpenAI)
 
