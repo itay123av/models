@@ -3994,21 +3994,53 @@ function geomEdge(c1,c2,bend){
   const off = bend===0 ? -22 : (bend>0 ? 16 : -16);
   return { d:`M ${sx.toFixed(1)} ${sy.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, lx:qx+px*off, ly:qy+py*off };
 }
-function geomLoop(c,index,total){
-  index=index||0;total=total||1;
+/* לולאה עצמית: הצורה של "לולאה למעלה", מסובבת לזווית ang (ברירת מחדל: למעלה —
+   בדיוק הציור הקודם). u = החוצה מהמצב, p = לרוחב. בלולאה לצד, התווית (שהיא
+   אופקית) מורחקת בחצי רוחבה כדי לא לשבת על הקשת. */
+function geomLoop(c,index,total,ang,labelHalf){
+  index=index||0;total=total||1; if(ang==null)ang=-Math.PI/2;
   const lift=62+index*28,spread=60+index*12,shift=(index-(total-1)/2)*10;
-  return { d:`M ${c.x-20} ${c.y-R+8} C ${c.x-spread+shift} ${c.y-R-lift}, ${c.x+spread+shift} ${c.y-R-lift}, ${c.x+20} ${c.y-R+8}`, lx:c.x+shift, ly:c.y-R-lift-2 };
+  const ux=Math.cos(ang), uy=Math.sin(ang), px=-uy, py=ux, P=(a,b)=>[c.x+a*px+b*ux, c.y+a*py+b*uy], n=v=>+v.toFixed(1);
+  const [sx,sy]=P(-20,R-8), [ax,ay]=P(-spread+shift,R+lift), [bx,by]=P(spread+shift,R+lift), [ex,ey]=P(20,R-8);
+  const [lx,ly]=P(shift,R+lift+2+(Math.abs(ux)>0.6?(labelHalf||0):0));
+  return { d:`M ${n(sx)} ${n(sy)} C ${n(ax)} ${n(ay)}, ${n(bx)} ${n(by)}, ${n(ex)} ${n(ey)}`, lx, ly, cx:c.x, cy:c.y,
+    ldir:uy<-0.5?'up':(uy>0.5?'down':'side') };
 }
+/* כיפוף חץ רגיל (חצים מקבילים וחצים הפוכים מתעקמים אחרת) ונקודת הבקרה שלו */
+function edgeBend(t){
+  const parallels=current.transitions.filter(o=>o.from===t.from&&o.to===t.to&&isSelfLoopTransition(o)===isSelfLoopTransition(t));
+  const index=Math.max(0,parallels.findIndex(o=>o.id===t.id));
+  const rev=current.transitions.some(o=>o.from===t.to&&o.to===t.from&&o.id!==t.id);
+  return (rev?54:20)+(index-(parallels.length-1)/2)*42; }
+function edgeControl(t){ const a=stById(t.from), b=stById(t.to); if(!a||!b)return null;
+  const bend=edgeBend(t), dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
+  return {x:(a.x+b.x)/2-dy/len*bend, y:(a.y+b.y)/2+dx/len*bend}; }
+/* לאן הלולאה של מצב פונה: למעלה כשפנוי (כמו תמיד), אחרת הכיוון הראשון
+   שרחוק 60° לפחות מכל חץ שנוגע במצב ומחץ ההתחלה; ואם אין כזה — הרחוק ביותר.
+   קודם הלולאה תמיד הייתה למעלה, גם כשחץ נכנס בדיוק משם (q6 בסריקה). */
+const LOOP_DIRS=[-90,90,-135,-45,180,0,135,45].map(d=>d*Math.PI/180);
+function loopAngle(stateId){
+  const c=stById(stateId); if(!c)return LOOP_DIRS[0];
+  const blocked=[];
+  for(const t of current.transitions){ if(isSelfLoopTransition(t)||(t.from!==stateId&&t.to!==stateId))continue;
+    const k=edgeControl(t); if(k)blocked.push(Math.atan2(k.y-c.y,k.x-c.x)); }
+  if(c.isStart)blocked.push(Math.PI);
+  if(!blocked.length)return LOOP_DIRS[0];
+  const gap=a=>Math.min(...blocked.map(b=>Math.abs(((a-b)*180/Math.PI%360+540)%360-180)));
+  return LOOP_DIRS.find(a=>gap(a)>=60)??LOOP_DIRS.reduce((best,a)=>gap(a)>gap(best)?a:best,LOOP_DIRS[0]); }
+/* גובה התווית רב-השורות: מעל לולאה למעלה, מתחת ללולאה למטה, ובמרכז לצד */
+function edgeLabelY(t,g,n){ if(!isSelfLoopTransition(t))return g.ly-(n-1)*9;
+  return g.ldir==='down'?g.ly+(n-1)*19:(g.ldir==='side'?g.ly:g.ly-(n-1)*19); }
 function isSelfLoopTransition(t){
   return Boolean(t && t.from!=null && t.from===t.to);
 }
 function edgeGeom(t){ const a=stById(t.from), b=stById(t.to);
-  const parallels=current.transitions.filter(o=>o.from===t.from&&o.to===t.to&&isSelfLoopTransition(o)===isSelfLoopTransition(t));
-  const index=Math.max(0,parallels.findIndex(o=>o.id===t.id));
-  if(isSelfLoopTransition(t)) return geomLoop(a||b,index,parallels.length);
-  const rev=current.transitions.some(o=>o.from===t.to&&o.to===t.from&&o.id!==t.id);
-  const bend=(rev?54:20)+(index-(parallels.length-1)/2)*42;
-  return geomEdge(a,b,bend); }   /* חצים מקבילים מקבלים עקמומיות שונה ואינם מסתירים זה את זה */
+  if(isSelfLoopTransition(t)){
+    const parallels=current.transitions.filter(o=>o.from===t.from&&o.to===t.to&&isSelfLoopTransition(o));
+    const index=Math.max(0,parallels.findIndex(o=>o.id===t.id)), c=a||b;
+    const half=Math.max(0,...transLabelLines(t).map(l=>[...String(l)].length))*5;
+    return geomLoop(c,index,parallels.length,loopAngle(c.id),half); }
+  return geomEdge(a,b,edgeBend(t)); }   /* חצים מקבילים מקבלים עקמומיות שונה ואינם מסתירים זה את זה */
 
 /* ─── render: graph ─── */
 function applyView(){ $('canvas').setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); }
@@ -4056,7 +4088,9 @@ function fitView(){
   if(!current || !current.states.length){ view={x:0,y:0,w:cw,h:ch}; applyView(); return; }
   const xs=current.states.map(s=>s.x), ys=current.states.map(s=>s.y);
   const hasLoops=current.transitions.some(isSelfLoopTransition);
-  const minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
+  let minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
+  current.transitions.filter(isSelfLoopTransition).forEach(t=>{ if(!stById(t.from))return; const g=edgeGeom(t);
+    minx=Math.min(minx,g.lx-80); maxx=Math.max(maxx,g.lx+80); miny=Math.min(miny,g.ly-50); maxy=Math.max(maxy,g.ly+50); });
   /* s = יחידות עולם לפיקסל; הגרף ממורכז במלבן הפנוי ולא במרכז הקנבס */
   const free=cw<=PHONE_MAX?canvasFreeRect(wrap,cw,ch):canvasFreeRect(wrap,cw,ch,0.25,{w:maxx-minx,h:maxy-miny}), s=Math.max((maxx-minx)/free.w,(maxy-miny)/free.h);
   view={x:(minx+maxx)/2-(free.x+free.w/2)*s, y:(miny+maxy)/2-(free.y+free.h/2)*s, w:cw*s, h:ch*s}; applyView();
@@ -4106,7 +4140,7 @@ function renderGraph(){
     const g=edgeGeom(t), cls='edge'+(sel.type==='transition'&&sel.id===t.id?' sel':'')+(t.aiLow?' ai-low':'');
     const lines=transLabelLines(t).filter(Boolean); if(!lines.length) lines.push('');
     const lx=g.lx.toFixed(1);
-    const ly=(t.from===t.to ? g.ly-(lines.length-1)*19 : g.ly-(lines.length-1)*9).toFixed(1);   /* רב-שורתי: מרימים את הבסיס כדי לא לדרוס את הקשת */
+    const ly=edgeLabelY(t,g,lines.length).toFixed(1);   /* רב-שורתי: מרימים את הבסיס כדי לא לדרוס את הקשת */
     const tspans=lines.map((ln,k)=>`<tspan x="${lx}" dy="${k===0?((-(lines.length-1)*0.6).toFixed(2)+'em'):'1.2em'}">${esc(ln)}</tspan>`).join('');
     return `<g class="${cls}" data-trans-id="${t.id}" data-from="${t.from}" data-to="${t.to}" tabindex="0" role="button" aria-label="${esc(`מעבר ${(stById(t.from)||{label:'?'}).label} → ${(stById(t.to)||{label:'?'}).label}: ${lines.join(' · ')}`)}">
       <path class="ehit" d="${g.d}"></path>
@@ -4121,7 +4155,7 @@ function renderGraph(){
 function refreshEdgeEl(el){ const t=trById(el.dataset.transId); if(!t)return; const g=edgeGeom(t);
   el.querySelector('.ehit').setAttribute('d',g.d); el.querySelector('.eline').setAttribute('d',g.d);
   const lab=el.querySelector('.elabel'); const spans=lab.querySelectorAll('tspan'); const n=spans.length||1;
-  const ly=(t.from===t.to ? g.ly-(n-1)*19 : g.ly-(n-1)*9);
+  const ly=edgeLabelY(t,g,n);
   lab.setAttribute('x',g.lx.toFixed(1)); lab.setAttribute('y',ly.toFixed(1));
   spans.forEach(ts=>ts.setAttribute('x',g.lx.toFixed(1))); }
 
@@ -4262,6 +4296,7 @@ function onMove(e){
   const p=toSvg(e), s=stById(drag.id); if(!s)return; s.x=p.x-drag.ox; s.y=p.y-drag.oy; drag.moved=true;
   const g=$('canvas').querySelector(`[data-state-id="${drag.id}"]`); if(g) g.setAttribute('transform',`translate(${s.x},${s.y})`);
   $('canvas').querySelectorAll(`.edge[data-from="${drag.id}"],.edge[data-to="${drag.id}"]`).forEach(refreshEdgeEl);
+  $('canvas').querySelectorAll('.edge').forEach(el=>{ if(el.dataset.from===el.dataset.to&&el.dataset.from!==drag.id)refreshEdgeEl(el); });   /* כיוון הלולאות של השכנים */
 }
 function onUp(){
   window.removeEventListener('pointermove',onMove); window.removeEventListener('pointerup',onUp);

@@ -759,6 +759,33 @@ test('a panel that opens or grows over states refits the view, unless the user m
   assert.equal(JSON.stringify(vm.runInContext('view', ctx)), before, 'a hand-set view is left alone');
 });
 
+/* כיוון לולאה: למעלה כשפנוי; אחרת — הכיוון הרחוק ביותר מהחצים שנוגעים במצב */
+test('a self-loop is drawn away from the arrows that touch its state (it sat on the incoming arrow of q6)', () => {
+  const ctx = loadClient();
+  const dir = g => Math.atan2(g.ly - g.cy, g.lx - g.cx) * 180 / Math.PI;     // כיוון התווית מהמרכז
+  const angDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+  const model = { type: 'pda', ndet: true, tests: [],
+    states: [{ id: 'q0', label: 'q0', x: 400, y: 100, isStart: true }, { id: 'q6', label: 'q6', x: 400, y: 400, isAccept: true }],
+    transitions: [
+      { id: 'in', from: 'q0', to: 'q6', rules: [{ read: 'c', top: '⊥', op: 'none', push: [] }] },      // נכנס ל-q6 מלמעלה
+      { id: 'loop', from: 'q6', to: 'q6', rules: [{ read: 'c', top: 'A', op: 'pop', push: [], popSym: 'A' }] },
+    ] };
+  ctx.__setCurrent(model);
+  let g = ctx.edgeGeom(model.transitions[1]);
+  const incoming = Math.atan2(100 - 400, 400 - 400) * 180 / Math.PI;       // -90: מלמעלה
+  assert.ok(angDiff(dir(g), incoming) >= 60, `loop direction ${dir(g).toFixed(0)}° is away from the incoming arrow (${incoming}°)`);
+
+  // בלי חצים אחרים — הלולאה נשארת למעלה, כמו קודם
+  model.transitions = [model.transitions[1]];
+  g = ctx.edgeGeom(model.transitions[0]);
+  assert.ok(angDiff(dir(g), -90) < 1, 'a free top keeps the loop on top');
+
+  // מצב התחלתי: החץ הנכנס משמאל אינו מפריע ללולאה למעלה
+  model.states[1].isStart = true;
+  g = ctx.edgeGeom(model.transitions[0]);
+  assert.ok(angDiff(dir(g), -90) < 1);
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
