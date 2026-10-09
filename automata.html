@@ -64,6 +64,12 @@ body{
 .panel-float .float-body{overflow-y:auto; padding:10px 12px}
 .cp-model{display:flex; align-items:center; gap:8px}
 .cp-model .mtype{font-size:10px; font-weight:800; color:#fff; background:var(--indigo); padding:3px 8px; border-radius:999px; letter-spacing:.5px}
+/* מתג דטרמיניסטי / לא-דטרמיניסטי (אוטומט סופי ומחסנית) */
+.cp-det{display:flex; gap:3px; margin-top:9px; background:#f3f4f6; border-radius:10px; padding:3px}
+.cp-det:empty{display:none}
+.det-opt{flex:1; border:0; background:transparent; padding:6px 8px; border-radius:8px; font:inherit; font-size:12.5px; font-weight:700; color:#4b5563; cursor:pointer}
+.det-opt:hover{color:var(--ink-strong)}
+.det-opt.on{background:#fff; color:var(--indigo); box-shadow:var(--shadow-sm)}
 .cp-model .mname{font-weight:800; color:var(--ink-strong); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .cp-iconbtn{width:28px;height:28px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:7px;display:grid;place-items:center}
 .cp-iconbtn:hover{background:var(--indigo-soft); color:var(--indigo)}
@@ -508,6 +514,7 @@ details.legend[open]>summary{margin-bottom:10px}
         <span class="mname" id="modelName">—</span>
         <button class="cp-iconbtn" id="renameBtn" title="שנה שם" aria-label="שנה את שם המודל" onclick="renameModel()"></button>
       </div>
+      <div class="cp-det" id="detToggle" role="group" aria-label="דטרמיניסטי או לא-דטרמיניסטי"></div>
       <div class="cp-sec">
         <div class="cp-h">קובץ</div>
         <div class="cp-row">
@@ -604,14 +611,15 @@ function modelGen(id){ return MODEL_GEN[id]||0; }
 function bumpModel(id){ if(id!=null)MODEL_GEN[id]=modelGen(id)+1; }
 /* הודעה עם כפתור פעולה. הספירה נעצרת כל עוד העכבר מעליה, ו-onExpire נקרא
    כשהיא נעלמת מעצמה — כך שה"בטל" תקף בדיוק כל זמן שאפשר ללחוץ עליו. */
-function toastAction(msg,actionText,onAction,duration=10000,onExpire){ const t=$('toast'); if(!t)return;
-  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} replaceToast(); toastReplaced=onExpire||null;
+function toastAction(msg,actionText,onAction,duration=10000,onExpire,type){
+  toast(msg,type||'',duration);   /* הטקסט, הסגנון והאזור החי — כמו כל הודעה; כאן נוסף הכפתור */
+  const t=$('toast'); if(!t)return;
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} toastReplaced=onExpire||null;
   const hide=()=>{ toastReplaced=null; hideToast(t); if(onExpire)onExpire(); };
-  t.textContent=''; const text=document.createElement('span'); text.textContent=msg;
   const b=document.createElement('button'); b.type='button'; b.className='toast-action'; b.textContent=actionText;
   if(actionText==='בטל'){ b.title='בטל (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts','Control+Z'); }
   b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} toastReplaced=null; hideToast(t); onAction(); };
-  t.append(text,b); t.className='toast show';
+  t.append(b);
   /* העכבר או הפוקוס (Tab) על ההודעה עוצרים את הספירה */
   t.onmouseenter=t.onfocusin=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} };
   t.onmouseleave=t.onfocusout=()=>{ if(!toastTimer)toastTimer=setTimeout(hide,4000); };
@@ -4088,7 +4096,26 @@ function refreshEdgeEl(el){ const t=trById(el.dataset.transId); if(!t)return; co
 
 /* ─── render: chrome ─── */
 function modelBadge(a){ return a.ndet?(a.type==='pda'?'NPDA':'NFA'):String(a.type||'dfa').toUpperCase(); }
-function renderTopbar(){ $('modelName').textContent = current?current.name:'—'; $('modelType').textContent = current?modelBadge(current):'—'; }
+function renderTopbar(){ $('modelName').textContent = current?current.name:'—'; $('modelType').textContent = current?modelBadge(current):'—'; renderDetToggle(); }
+/* דטרמיניסטי ↔ לא-דטרמיניסטי במודל קיים. קודם הסוג נקבע רק ביצירה: שרטוט
+   שנסרק לתוך מודל דטרמיניסטי ונמצא לא-דטרמיניסטי לא היה אפשר להריץ בכלל. */
+function canSwitchDeterminism(m){ return Boolean(m)&&(m.type==='dfa'||m.type==='pda'); }
+function modelKindName(m){ return (m.type==='pda'?'אוטומט מחסנית':'אוטומט סופי')+(m.ndet?' לא-דטרמיניסטי':' דטרמיניסטי'); }
+function renderDetToggle(){ const el=$('detToggle'); if(!el)return;
+  if(!canSwitchDeterminism(current)){ el.innerHTML=''; return; }
+  const nd=Boolean(current.ndet), opt=(v,text)=>`<button type="button" class="det-opt${nd===v?' on':''}" aria-pressed="${nd===v}" onclick="setDeterminism(${v})">${text}</button>`;
+  el.innerHTML=opt(false,'דטרמיניסטי')+opt(true,'לא-דטרמיניסטי'); }
+function setDeterminism(ndet){ ndet=Boolean(ndet);
+  if(!canSwitchDeterminism(current)||Boolean(current.ndet)===ndet)return false;
+  /* באוטומט סופי דטרמיניסטי אין ε: המעבר נחסם, ונאמר איפה ה-ε (אחרת המודל לא
+     היה רץ, וגם העורך כבר לא מקבל ε). במחסנית דטרמיניסטית מעברי ε מותרים. */
+  if(!ndet&&current.type==='dfa'){ const et=current.transitions.find(t=>(t.symbols||[]).includes('ε'));
+    if(et){ const lb=id=>(stById(id)||{label:'?'}).label;
+      toast(`אי אפשר לעבור לדטרמיניסטי: במעבר ${lb(et.from)} → ${lb(et.to)} יש ε, ובאוטומט סופי דטרמיניסטי אין מעברי ε. מחק קודם את מעברי ה-ε.`,'danger'); return false; } }
+  const undo=modelUndoPoint(); current.ndet=ndet; save(); renderAll();
+  offerUndo(`עכשיו: ${modelKindName(current)}`,restoreModelPoint(undo)); return true; }
+/* הרצה שנחסמה בגלל אי-דטרמיניזם: ההודעה מציעה לעבור ללא-דטרמיניסטי בלחיצה */
+function blockRunNonDeterministic(msg){ toastAction(msg,'עבור ללא-דטרמיניסטי',()=>setDeterminism(true),12000,null,'danger'); return false; }
 function renderArmBanner(){ const b=$('armBanner');
   if(armed && stById(armed)){ b.innerHTML=`לחץ על מצב <b>יעד</b> כדי למתוח מעבר מ-<b>${esc(stById(armed).label)}</b> · Esc לביטול`; b.classList.add('show'); }
   else b.classList.remove('show'); $('canvasArea').dataset.arming = armed?'1':'0'; }
@@ -4259,13 +4286,13 @@ function simReady(){ const v=computeValidation();
   if(!v.starts.length){ toast('אין מצב התחלתי — בחר מצב ולחץ «מצב התחלתי» בלוח הבקרה','danger'); return false; }
   if(v.starts.length>1){ toast(`יש ${v.starts.length} מצבים התחלתיים (${v.starts.map(s=>s.label).join(', ')}) — צריך בדיוק אחד`,'danger'); return false; }
   if(current.type==='dfa'&&!current.ndet){ const et=current.transitions.find(t=>(t.symbols||[]).includes('ε'));
-    if(et){ const lb=id=>(stById(id)||{label:'?'}).label; toast(`במעבר ${lb(et.from)} → ${lb(et.to)} יש ε, ובאוטומט סופי דטרמיניסטי אין מעברי ε. מחק את ה-ε מהמעבר, או צור «אוטומט סופי לא-דטרמיניסטי».`,'danger'); return false; } }
+    if(et){ const lb=id=>(stById(id)||{label:'?'}).label; return blockRunNonDeterministic(`במעבר ${lb(et.from)} → ${lb(et.to)} יש ε, ובאוטומט סופי דטרמיניסטי אין מעברי ε. מחק את ה-ε מהמעבר, או עבור ללא-דטרמיניסטי.`); } }
   if(current.type==='pda'&&!current.ndet&&v.ambiguities&&v.ambiguities.length){ const a=v.ambiguities[0];
-    toast(`במצב ${a.state.label} כמה כללים עשויים להתאים יחד (${a.sym}). ערוך את הכללים, או בחר אוטומט מחסנית לא-דטרמיניסטי.`,'danger'); return false; }
+    return blockRunNonDeterministic(`במצב ${a.state.label} כמה כללים עשויים להתאים יחד (${a.sym}). ערוך את הכללים, או עבור ללא-דטרמיניסטי.`); }
   if(!current.ndet && !v.deterministic){ const d=(v.dupes||[])[0];
-    toast(!d?'האוטומט אינו דטרמיניסטי — תקן לפני הרצה':current.type==='tm'
-      ?`במצב ${d.state.label} יש יותר מכלל אחד עבור הקריאה '${d.sym}' — מכונת טיורינג צריכה כלל אחד לכל קריאה`
-      :`האוטומט אינו דטרמיניסטי: מ-${d.state.label} יוצא יותר ממעבר אחד על '${d.sym}'. תקן, או בחר אוטומט סופי לא-דטרמיניסטי.`,'danger'); return false; }
+    if(current.type==='tm'){ toast(!d?'המכונה אינה דטרמיניסטית — תקן לפני הרצה':`במצב ${d.state.label} יש יותר מכלל אחד עבור הקריאה '${d.sym}' — מכונת טיורינג צריכה כלל אחד לכל קריאה`,'danger'); return false; }
+    return blockRunNonDeterministic(!d?'האוטומט אינו דטרמיניסטי. תקן, או עבור ללא-דטרמיניסטי.'
+      :`האוטומט אינו דטרמיניסטי: מ-${d.state.label} יוצא יותר ממעבר אחד על '${d.sym}'. תקן, או עבור ללא-דטרמיניסטי.`); }
   return true; }
 function simInit(w){ const st=current.states.find(s=>s.isStart);
   if(current.type==='tm'){ const tape={}; const chars=[...String(w)];
@@ -4943,6 +4970,7 @@ function makeDraggable(el, handle){
 function toggleGuide(){ const b=$('guideBody'), c=$('guideChev'), btn=$('guideBtn'); const open=b.style.display!=='none';
   b.style.display=open?'none':'block'; if(c)c.textContent=open?'▴':'▾'; if(btn)btn.setAttribute('aria-expanded',String(!open)); }
 /* שורה משותפת לכל גרסאות המדריך */
+const GUIDE_DET_TIP='<li><b>דטרמיניסטי או לא-דטרמיניסטי:</b> אפשר להחליף בכל רגע — במתג שמתחת לשם המודל בלוח הבקרה.</li>';
 const GUIDE_UNDO_TIP='<li>מחקת בטעות? לחץ <b>«בטל»</b> בהודעה שמופיעה, או <b>Ctrl+Z</b>.</li>';
 function renderGuide(){ const el=$('guideBody'); if(!el) return;
   if(current && current.type==='pda'){ el.innerHTML=`<ul>
@@ -4959,6 +4987,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li>על חץ אחד יכולים לשבת <b>כמה כללים עצמאיים</b>. בכל צעד נבחר רק הכלל שמתאים גם לקלט וגם לראש המחסנית; ייתכן שאף כלל אינו מתאים.</li>
       <li><b>לחיצה כפולה</b> על מצב = כלל-עצמי.</li>
       <li><b>קבלה:</b> כל הקלט נקרא, נמצאים ב<b>מצב מקבל</b>, והמחסנית חזרה ל<b>תחתית (⊥)</b>.</li>
+      ${GUIDE_DET_TIP}
       ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   if(current && current.type==='dfa' && current.ndet){ el.innerHTML=`<ul>
@@ -4967,6 +4996,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>בניית מעבר:</b> לחץ מצב מקור ואז יעד, והקלד סימן. למעבר <b>ε</b> (בלי לקרוא אות) — לחץ על <b>הכפתור ε</b> שבחלון, או בעורך המעבר שבלוח הבקרה.</li>
       <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
       <li><b>קבלה:</b> המילה מתקבלת אם <b>קיים ולו מסלול אחד</b> שמסיים ב<b>מצב מקבל</b>.</li>
+      ${GUIDE_DET_TIP}
       ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   el.innerHTML = (current && current.type==='tm') ? `<ul>
@@ -4989,6 +5019,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>דטרמיניסטי:</b> מכל מצב — לכל היותר מעבר אחד על כל סימן. אם אין מעבר על הסימן הנוכחי, המילה נדחית (אוטומט לא מלא).</li>
       <li>מעברי <b>ε</b> (בלי לקרוא אות) קיימים רק ב<b>אוטומט סופי לא-דטרמיניסטי</b> — בוחרים אותו ב-+ (מודל חדש).</li>
       <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
+      ${GUIDE_DET_TIP}
       ${GUIDE_UNDO_TIP}
     </ul>`;
 }

@@ -565,6 +565,86 @@ test('a «בטל» offer ends when its message is replaced by another message', 
   assert.equal(vm.runInContext('UNDO', ctx), null, 'the offer is gone with its button, so Ctrl+Z no longer reaches it');
 });
 
+/* ── מעבר בין דטרמיניסטי ללא-דטרמיניסטי ─────────────────────────────── */
+
+function detHarness(model) {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; fitView=()=>{}; stopPlay=()=>{};', ctx);
+  const toasts = [], actions = [];
+  ctx.toast = (m, k) => toasts.push({ m, k: k || '' });
+  const realAction = ctx.toastAction;
+  ctx.toastAction = (...a) => { actions.push({ m: a[0], text: a[1], run: a[2], type: a[5] }); return realAction(...a); };
+  vm.runInContext('DB', ctx).automata = [model];
+  ctx.__setCurrent(model);
+  return { ctx, toasts, actions };
+}
+const st2 = () => [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }, { id: 'b', label: 'q1', x: 99, y: 0, isAccept: true }];
+
+test('an existing model can be switched to non-deterministic and back, with «בטל»', () => {
+  const m = { id: 'm', name: 'סרוק', type: 'pda', ndet: false, tests: [], states: st2(),
+    transitions: [{ id: 't', from: 'a', to: 'b', rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }, { read: '', top: '⊥', op: 'none', push: [] }] }] };
+  const { ctx } = detHarness(m);
+  assert.equal(ctx.setDeterminism(true), true);
+  assert.equal(ctx.__getCurrent().ndet, true);
+  assert.equal(ctx.undoLast(), true, 'the switch can be undone');
+  assert.equal(ctx.__getCurrent().ndet, false);
+  ctx.setDeterminism(true);
+  assert.equal(ctx.setDeterminism(false), true, 'a PDA may go back to deterministic even with ε moves');
+  assert.equal(ctx.__getCurrent().ndet, false);
+});
+
+test('switching a finite automaton to deterministic is refused while it has ε transitions, and says where', () => {
+  const m = { id: 'm', name: 'n', type: 'dfa', ndet: true, tests: [], states: st2(), transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a', 'ε'] }] };
+  const { ctx, toasts } = detHarness(m);
+  assert.equal(ctx.setDeterminism(false), false);
+  assert.equal(ctx.__getCurrent().ndet, true);
+  assert.equal(toasts.at(-1).k, 'danger');
+  assert.match(toasts.at(-1).m, /q0 → q1/);
+  m.transitions[0].symbols = ['a'];
+  assert.equal(ctx.setDeterminism(false), true);
+  assert.equal(ctx.__getCurrent().ndet, false);
+});
+
+test('a Turing machine has no determinism switch', () => {
+  const { ctx } = detHarness({ id: 'm', name: 't', type: 'tm', tests: [], states: st2(), transitions: [] });
+  assert.equal(ctx.setDeterminism(true), false);
+  assert.ok(!ctx.__getCurrent().ndet);
+  const box = { innerHTML: 'x' };
+  ctx.__elements.detToggle = box;
+  ctx.renderDetToggle();
+  assert.equal(box.innerHTML, '', 'no switch is drawn');
+});
+
+test('the control panel shows the switch with the current choice pressed', () => {
+  const { ctx } = detHarness({ id: 'm', name: 'p', type: 'pda', ndet: true, tests: [], states: st2(), transitions: [] });
+  const box = { innerHTML: '' };
+  ctx.__elements.detToggle = box;
+  ctx.renderDetToggle();
+  assert.match(box.innerHTML, /aria-pressed="false"[^>]*>דטרמיניסטי</);
+  assert.match(box.innerHTML, /aria-pressed="true"[^>]*>לא-דטרמיניסטי</);
+});
+
+test('a run blocked for non-determinism offers a button that switches the model', () => {
+  for (const m of [
+    { id: 'm', name: 'p', type: 'pda', ndet: false, tests: [], states: st2(),
+      transitions: [{ id: 't', from: 'a', to: 'b', rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }] }, { id: 'u', from: 'a', to: 'a', rules: [{ read: '', top: '⊥', op: 'push', push: ['A'] }] }] },
+    { id: 'm', name: 'f', type: 'dfa', ndet: false, tests: [], states: st2(),
+      transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }, { id: 'u', from: 'a', to: 'a', symbols: ['a'] }] },
+    { id: 'm', name: 'e', type: 'dfa', ndet: false, tests: [], states: st2(), transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['ε'] }] },
+  ]) {
+    const { ctx, toasts, actions } = detHarness(m);
+    assert.equal(ctx.simReady(), false, m.name);
+    assert.ok(toasts.length, `${m.name}: the reason is still shown`);
+    const a = actions.at(-1);
+    assert.ok(a, `${m.name}: an action is offered`);
+    assert.equal(a.text, 'עבור ללא-דטרמיניסטי');
+    assert.equal(a.type, 'danger');
+    a.run();
+    assert.equal(ctx.__getCurrent().ndet, true, `${m.name}: the button switches`);
+    assert.equal(ctx.simReady(), true, `${m.name}: and now it runs`);
+  }
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
