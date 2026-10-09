@@ -696,6 +696,69 @@ test('the side panel hides scan IDs under a collapsed "פרטים טכניים"'
   assert.doesNotMatch(outsideDetails(inspector.innerHTML), /observation|circle-1/);
 });
 
+/* ── פריסה: הגרף לא מתחת לפאנלים ───────────────────────────────────── */
+
+/* מסך בינוני (1000×650) עם לוח בקרה, לוח בדיקת סריקה, כרטיס מחסנית, סרט ומדריך —
+   המצב שבו צ'אט 3 ראה את כרטיס המחסנית מכסה את q0-q1 ואת לוח הבקרה מכסה את q3-q4. */
+function layoutHarness(panels) {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{};', ctx);
+  const W = 1000, H = 650;
+  const box = (left, top, width, height) => ({ getBoundingClientRect: () => ({ left, top, width, height, right: left + width, bottom: top + height }) });
+  const rects = panels || {
+    tabBar: [0, 0, 1000, 48], controlPanel: [748, 58, 238, 560], aiReviewPanel: [368, 64, 340, 273],
+    stackFloat: [16, 74, 300, 170], tapeFloat: [300, 530, 400, 102], guideFloat: [16, 594, 104, 38],
+  };
+  Object.entries(rects).forEach(([id, r]) => { ctx.__elements[id] = box(...r); });
+  ctx.__elements.canvasArea = Object.assign(box(0, 0, W, H), { clientWidth: W, clientHeight: H });
+  ctx.__elements.canvas = { setAttribute() {}, clientWidth: W };
+  ctx.getComputedStyle = () => ({ display: 'block' });
+  const fake = ctx.document.getElementById('__none__');   // פאנל שלא נרשם = לא מוצג
+  const PANELS = ['tabBar', 'controlPanel', 'aiReviewPanel', 'stackFloat', 'tapeFloat', 'guideFloat'];
+  ctx.document.getElementById = id => ctx.__elements[id] || (PANELS.includes(id) ? null : fake);
+  const hidden = () => {
+    const view = vm.runInContext('view', ctx), k = view.w / W, R = 40;
+    return ctx.__getCurrent().states.filter(s => {
+      const x = (s.x - view.x) / k, y = (s.y - view.y) / k, r = R / k;
+      return Object.values(rects).some(([l, t, w, h]) => x + r > l && x - r < l + w && y + r > t && y - r < t + h);
+    }).map(s => s.label);
+  };
+  return { ctx, hidden, rects };
+}
+function rowModel(n) {
+  const states = Array.from({ length: n }, (_, i) => ({ id: 's' + i, label: 'q' + i, x: 150 + i * 220, y: 300, isStart: i === 0, isAccept: i === n - 1 }));
+  const transitions = states.slice(1).map((s, i) => ({ id: 't' + i, from: 's' + i, to: s.id, rules: [{ read: 'a', top: '', op: 'none', push: [] }] }));
+  return { id: 'm', name: 'שורה', type: 'pda', tests: [], states, transitions };
+}
+
+test('fit view keeps every state out from under the floating panels, even when they leave only a narrow strip', () => {
+  const { ctx, hidden } = layoutHarness();
+  for (const n of [3, 7]) {
+    ctx.__setCurrent(rowModel(n));
+    ctx.fitView();
+    assert.deepEqual(hidden(), [], `${n} states: none under a panel`);
+  }
+});
+
+test('a panel that opens or grows over states refits the view, unless the user moved the view by hand', () => {
+  const { ctx, hidden, rects } = layoutHarness({ tabBar: [0, 0, 1000, 48], controlPanel: [748, 58, 238, 300] });
+  ctx.__setCurrent(rowModel(4));
+  ctx.fitView();
+  assert.deepEqual(hidden(), []);
+  // לוח הבדיקה נפתח מעל המצבים
+  rects.aiReviewPanel = [200, 64, 500, 520];
+  ctx.__elements.aiReviewPanel = { getBoundingClientRect: () => ({ left: 200, top: 64, width: 500, height: 520 }) };
+  assert.ok(hidden().length, 'the new panel covers states');
+  ctx.maybeRefit();
+  assert.deepEqual(hidden(), [], 'refit moved them into view');
+
+  // אחרי זום ידני — לא מזיזים את התצוגה של המשתמש
+  ctx.zoom(0.6);
+  const before = JSON.stringify(vm.runInContext('view', ctx));
+  ctx.maybeRefit();
+  assert.equal(JSON.stringify(vm.runInContext('view', ctx)), before, 'a hand-set view is left alone');
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */

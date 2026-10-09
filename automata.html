@@ -4012,41 +4012,69 @@ function edgeGeom(t){ const a=stById(t.from), b=stById(t.to);
 
 /* ─── render: graph ─── */
 function applyView(){ $('canvas').setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); }
-/* הפאנלים הצפים מכסים חלקים מהקנבס. מחפשים את המלבן הפנוי הגדול: חותכים
-   את הקנבס מול כל פאנל (מהגדול לקטן) ובוחרים בכל פעם את הצד הגדול שנשאר.
-   אם נשאר פחות מ-40% בציר כלשהו (מסך צר) — חוזרים לקנבס המלא. */
-function canvasFreeRect(wrap,cw,ch,minRatio=0.4){
+/* הפאנלים הצפים מכסים חלקים מהקנבס. מלבני הפאנלים, ביחס לקנבס. */
+const VIEW_PANELS=['tabBar','controlPanel','aiReviewPanel','stackFloat','tapeFloat','guideFloat'];
+function panelRects(wrap){
+  const base=wrap.getBoundingClientRect();
+  if(!base||!(base.width>0)||typeof getComputedStyle!=='function')return null;
+  return VIEW_PANELS.map(id=>document.getElementById(id))
+    .filter(el=>el&&getComputedStyle(el).display!=='none')
+    .map(el=>{const r=el.getBoundingClientRect();return {x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height};})
+    .filter(o=>o.w>0&&o.h>0);
+}
+/* המלבן הפנוי הטוב ביותר בין הפאנלים. בודקים כל מלבן שצלעותיו על קצוות
+   הפאנלים, ובוחרים זה שבו הגרף (ביחס aspect) יוצג הכי גדול — או, בלי aspect,
+   הגדול בשטח. קודם: חיתוך חמדני, שכשנשארה רצועה צרה חזר לכל הקנבס — ואז
+   כרטיס המחסנית ולוח הבקרה כיסו מצבים. לכל הקנבס חוזרים רק כשהמקום הפנוי
+   קטן ממש (טלפון): קנה המידה בו קטן מ-minRatio מזה של הקנבס כולו. */
+function canvasFreeRect(wrap,cw,ch,minRatio=0.4,aspect){
   const full={x:0,y:0,w:cw,h:ch};
   try{
-    const base=wrap.getBoundingClientRect();
-    if(!base||!(base.width>0)||typeof getComputedStyle!=='function')return full;
-    const occluders=['tabBar','controlPanel','aiReviewPanel','stackFloat','tapeFloat','guideFloat'].map(id=>document.getElementById(id))
-      .filter(el=>el&&getComputedStyle(el).display!=='none')
-      .map(el=>{const r=el.getBoundingClientRect();return {x:r.left-base.left,y:r.top-base.top,w:r.width,h:r.height};})
-      .filter(o=>o.w>0&&o.h>0).sort((a,b)=>b.w*b.h-a.w*a.h);
-    let free=full;
-    for(const o of occluders){
-      const ox2=o.x+o.w,oy2=o.y+o.h,fx2=free.x+free.w,fy2=free.y+free.h;
-      if(ox2<=free.x||o.x>=fx2||oy2<=free.y||o.y>=fy2)continue;
-      const sides=[{x:free.x,y:free.y,w:o.x-free.x,h:free.h},{x:ox2,y:free.y,w:fx2-ox2,h:free.h},
-        {x:free.x,y:free.y,w:free.w,h:o.y-free.y},{x:free.x,y:oy2,w:free.w,h:fy2-oy2}].filter(r=>r.w>0&&r.h>0);
-      if(!sides.length)return full;
-      free=sides.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a);
-    }
-    return free.w>=cw*minRatio&&free.h>=ch*minRatio?free:full;
+    const occ=panelRects(wrap); if(!occ)return full; if(!occ.length)return full;
+    const cut=(vals,max)=>[...new Set([0,max,...vals].map(v=>Math.max(0,Math.min(max,v))))].sort((a,b)=>a-b);
+    const xs=cut(occ.flatMap(o=>[o.x,o.x+o.w]),cw), ys=cut(occ.flatMap(o=>[o.y,o.y+o.h]),ch);
+    const blocked=(x1,y1,x2,y2)=>occ.some(o=>o.x<x2&&o.x+o.w>x1&&o.y<y2&&o.y+o.h>y1);
+    const score=(w,h)=>aspect?Math.min(w/aspect.w,h/aspect.h):w*h;
+    let best=null, bestScore=-1;
+    for(let i=0;i<xs.length;i++)for(let j=i+1;j<xs.length;j++)for(let k=0;k<ys.length;k++)for(let l=k+1;l<ys.length;l++){
+      const w=xs[j]-xs[i], h=ys[l]-ys[k], sc=score(w,h);
+      if(sc<=bestScore||blocked(xs[i],ys[k],xs[j],ys[l]))continue;
+      best={x:xs[i],y:ys[k],w,h}; bestScore=sc; }
+    if(!best)return full;
+    const big=aspect?bestScore>=minRatio*score(cw,ch):(best.w>=cw*minRatio&&best.h>=ch*minRatio);
+    return big?best:full;
   }catch(e){ return full; }
 }
+/* viewAuto: התצוגה נקבעה ע"י fitView ולא הוזזה או הוגדלה ביד מאז */
+let viewAuto=false;
+/* מסך צר (טלפון, כמו ב-addStateCentered): לוח הבקרה ממוזער כדי לראות את הגרף, ולכן
+   לא מכווצים את הגרף לרצועה שבין הפאנלים — נשארים עם ההתאמה לכל הקנבס. */
+const PHONE_MAX=560;
 function fitView(){
   const wrap=$('canvasArea')||$('stage'); const cw=wrap.clientWidth||1000, ch=wrap.clientHeight||680;
+  viewAuto=true;
   if(!current || !current.states.length){ view={x:0,y:0,w:cw,h:ch}; applyView(); return; }
   const xs=current.states.map(s=>s.x), ys=current.states.map(s=>s.y);
   const hasLoops=current.transitions.some(isSelfLoopTransition);
   const minx=Math.min(...xs)-120, maxx=Math.max(...xs)+120, miny=Math.min(...ys)-(hasLoops?170:120), maxy=Math.max(...ys)+110;
   /* s = יחידות עולם לפיקסל; הגרף ממורכז במלבן הפנוי ולא במרכז הקנבס */
-  const free=canvasFreeRect(wrap,cw,ch), s=Math.max((maxx-minx)/free.w,(maxy-miny)/free.h);
+  const free=cw<=PHONE_MAX?canvasFreeRect(wrap,cw,ch):canvasFreeRect(wrap,cw,ch,0.25,{w:maxx-minx,h:maxy-miny}), s=Math.max((maxx-minx)/free.w,(maxy-miny)/free.h);
   view={x:(minx+maxx)/2-(free.x+free.w/2)*s, y:(miny+maxy)/2-(free.y+free.h/2)*s, w:cw*s, h:ch*s}; applyView();
 }
-function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/view.w;
+/* פאנל שנפתח או גדל (לוח בדיקת הסריקה, כרטיס המחסנית) עלול להסתיר מצבים.
+   אם התצוגה עדיין האוטומטית ומצב מוסתר — מתאימים מחדש. תצוגה שהמשתמש הזיז
+   או הגדיל לא נוגעים בה, וגם לא באמצע גרירה או בחירת יעד למעבר. */
+function statesHiddenByPanels(){
+  const wrap=$('canvasArea'); if(!wrap||!current)return false;
+  const cw=wrap.clientWidth||1000, occ=panelRects(wrap); if(!occ||!occ.length)return false;
+  const k=view.w/cw;
+  return current.states.some(st=>{ const x=(st.x-view.x)/k, y=(st.y-view.y)/k, r=R/k;
+    return occ.some(o=>x+r>o.x&&x-r<o.x+o.w&&y+r>o.y&&y-r<o.y+o.h); });
+}
+function maybeRefit(){ if(!viewAuto||drag||armed||!current||!current.states.length)return false;
+  const wrap=$('canvasArea'); if(wrap&&(wrap.clientWidth||1000)<=PHONE_MAX)return false;
+  if(!statesHiddenByPanels())return false; fitView(); return true; }
+function zoom(f){ viewAuto=false; const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/view.w;
   const cx=view.x+view.w/2, cy=view.y+view.h/2; view.w=w; view.h*=ratio; view.x=cx-view.w/2; view.y=cy-view.h/2; applyView(); }
 
 /* מצבים ומעברים הם יעדי Tab (Enter/רווח = לחיצה). הציור מחליף את ה-DOM,
@@ -4230,7 +4258,7 @@ function onDown(e){
 function onMove(e){
   if(!drag) return;
   if(drag.kind==='pan'){ const sc=view.w/$('canvas').clientWidth; view.x=drag.vx-(e.clientX-drag.sx)*sc; view.y=drag.vy-(e.clientY-drag.sy)*sc;
-    if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4) drag.moved=true; applyView(); return; }
+    if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4){ drag.moved=true; viewAuto=false; } applyView(); return; }
   const p=toSvg(e), s=stById(drag.id); if(!s)return; s.x=p.x-drag.ox; s.y=p.y-drag.oy; drag.moved=true;
   const g=$('canvas').querySelector(`[data-state-id="${drag.id}"]`); if(g) g.setAttribute('transform',`translate(${s.x},${s.y})`);
   $('canvas').querySelectorAll(`.edge[data-from="${drag.id}"],.edge[data-to="${drag.id}"]`).forEach(refreshEdgeEl);
@@ -5081,7 +5109,12 @@ function init(){
     else if(e.key==='Escape'){ armed=null; deselect(); }
     else if(e.key==='n'||e.key==='N'){ addStateCentered(); }
   });
-  window.addEventListener('resize', ()=>{ if(!SIM) applyView(); });
+  window.addEventListener('resize', ()=>{ if(!SIM) applyView(); maybeRefit(); });
+  /* פאנל שנפתח, נסגר או התמלא (מחלקה, style או תוכן) — בודקים אם הסתיר מצבים.
+     MutationObserver ולא ResizeObserver: הוא פועל גם כשהדף לא מצויר כרגע. */
+  if(typeof MutationObserver==='function'){ let queued=false;
+    const watch=new MutationObserver(()=>{ if(queued)return; queued=true; setTimeout(()=>{ queued=false; maybeRefit(); },60); });
+    VIEW_PANELS.forEach(id=>{ const el=$(id); if(el)watch.observe(el,{attributes:true,attributeFilter:['class','style'],childList:true,subtree:true}); }); }
   window.addEventListener('storage', onStorageSync);
   applyView();
   openAutomaton(DB.settings.lastId || (DB.automata[0]&&DB.automata[0].id));
