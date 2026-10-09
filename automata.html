@@ -73,6 +73,9 @@ body{
 .cp-model .mname{font-weight:800; color:var(--ink-strong); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .cp-iconbtn{width:28px;height:28px;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:7px;display:grid;place-items:center}
 .cp-iconbtn:hover{background:var(--indigo-soft); color:var(--indigo)}
+.tech-details{margin-top:12px; font-size:12px; color:#4b5563}
+.tech-details summary{cursor:pointer; font-weight:700}
+.tech-details .help-box{margin-top:6px; word-break:break-all}
 .cp-sel:not(:empty){margin-top:13px; padding-top:13px; border-top:1px solid var(--line)}
 .cp-sec{margin-top:9px}
 .cp-h{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:800; margin-bottom:7px; display:flex; align-items:center; gap:6px}
@@ -4125,7 +4128,6 @@ function renderInspector(){
   if(sel.type==='state'){ const s=stById(sel.id); if(!s){ el.innerHTML=inspEmpty(); return; }
     el.innerHTML=`
       <div class="insp-title">מצב ${esc(s.label)}</div>
-      ${(s.aiObservationIds&&s.aiObservationIds.length)?`<div class="help-box" dir="ltr">physical state observations: ${s.aiObservationIds.map(esc).join(', ')}</div>`:''}
       <label class="lbl" for="stName">שם המצב</label>
       <input id="stName" class="fld" value="${esc(s.label)}" onchange="renameState('${s.id}',this.value)">
       <div class="toggles" style="grid-template-columns:1fr 1fr">
@@ -4136,29 +4138,29 @@ function renderInspector(){
       <div class="help-box" style="margin:2px 0 6px">לולאה עצמית: <b>לחיצה כפולה</b> על המצב.</div>
       <div class="insp-actions">
         <button class="btn btn-delete" onclick="deleteState('${s.id}')">${ico('trash')} מחק מצב</button>
-      </div>`;
+      </div>
+      ${(s.aiObservationIds&&s.aiObservationIds.length)?techDetails(`physical state observations: ${s.aiObservationIds.map(esc).join(', ')}`):''}`;
   } else if(sel.type==='transition'){ const t=trById(sel.id); if(!t){ el.innerHTML=inspEmpty(); return; }
     const stateOptions=current.states.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');
     const endpointEditor=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px">
       <label><span class="lbl">מקור</span><select class="fld" onchange="setTransitionEndpoint('${t.id}','from',this.value)">${stateOptions.replace(`value="${t.from}"`,`value="${t.from}" selected`)}</select></label>
       <label><span class="lbl">יעד</span><select class="fld" onchange="setTransitionEndpoint('${t.id}','to',this.value)">${stateOptions.replace(`value="${t.to}"`,`value="${t.to}" selected`)}</select></label></div>`;
     const structureReview=t.transitionScanIncomplete?`<button class="btn btn-sm" style="margin-bottom:8px" onclick="markTransitionStructureReviewed('${t.id}')">בדקתי את מספר שורות התווית</button>`:'';
-    const physicalIdentity=(t.aiTransitionId||t.connectorObservationId)?`<div class="help-box" dir="ltr">transition_id: ${esc(t.aiTransitionId||'—')}<br>connector_observation_id: ${esc(t.connectorObservationId||'—')}<br>scan_session_id: ${esc(t.aiScanSession||'—')}</div>`:'';
+    const physicalIdentity=(t.aiTransitionId||t.connectorObservationId)?techDetails(`transition_id: ${esc(t.aiTransitionId||'—')}<br>connector_observation_id: ${esc(t.connectorObservationId||'—')}<br>scan_session_id: ${esc(t.aiScanSession||'—')}`):'';
     if(current.type==='tm'){
       el.innerHTML=`
         <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
-        ${physicalIdentity}
         ${endpointEditor}
         ${structureReview}
         <div class="help-box">${(t.rules||[]).map((r,i)=>`<div style="display:grid;grid-template-columns:1fr auto;gap:5px;align-items:start"><button class="rule-edit ${r.aiLow||r.scanIncomplete?'ai-low':''}" onclick="editTmRule('${t.id}',${i})">קריאה <b>${esc(r.read)}</b> → כתיבה <b>${esc(r.write)}</b>, ${r.move==='?'?'כיוון לא־קריא':tmMoveText(r.move)}${r.aiIssues&&r.aiIssues.length?`<div class="rule-sem">⚠ ${r.aiIssues.map(esc).join(' · ')}</div>`:''}</button><button class="btn btn-sm btn-delete" onclick="deleteTmRule('${t.id}',${i})" title="מחק רק את הכלל הזה">${ico('trash')}</button></div>`).join('')||'אין כללים'}</div>
         <div class="insp-actions" style="margin-top:12px">
           <button class="btn btn-sm" onclick="promptTransitionTM('${t.from}','${t.to}',{targetTransitionId:'${t.id}'})">${ico('plus')} הוסף כלל</button>
           <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
-        </div>`;
+        </div>
+        ${physicalIdentity}`;
     } else if(current.type==='pda'){
       el.innerHTML=`
         <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
-        ${physicalIdentity}
         ${endpointEditor}
         ${structureReview}
         <div class="help-box">${(t.rules||[]).map((r,i)=>{ const P=pdaRuleParts(r);
@@ -4170,11 +4172,11 @@ function renderInspector(){
         <div class="insp-actions" style="margin-top:12px">
           <button class="btn btn-sm" onclick="promptTransitionPDA('${t.from}','${t.to}')">${ico('plus')} הוסף כלל</button>
           <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
-        </div>`;
+        </div>
+        ${physicalIdentity}`;
     } else {
       el.innerHTML=`
         <div class="insp-title">מעבר ${esc(stById(t.from).label)} → ${esc(stById(t.to).label)}</div>
-        ${physicalIdentity}
         ${endpointEditor}
         ${structureReview}
         <label class="lbl" for="trSyms">סימנים (מופרדים בפסיק)</label>
@@ -4183,11 +4185,14 @@ function renderInspector(){
         :`<input id="trSyms" class="fld" value="${esc(t.symbols.join(', '))}" onchange="setTransSymbols('${t.id}',this.value)">`}
         <div class="insp-actions" style="margin-top:12px">
           <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
-        </div>`;
+        </div>
+        ${physicalIdentity}`;
     }
   } else el.innerHTML=inspEmpty();
 }
 function inspEmpty(){ return ''; }
+/* מזהים טכניים של הסריקה — לא לתלמיד: מקופלים בתחתית הלוח */
+function techDetails(html){ return `<details class="tech-details"><summary>פרטים טכניים</summary><div class="help-box" dir="ltr">${html}</div></details>`; }
 
 function badge(type,txt){ return `<div class="vbadge ${type}">${esc(txt)}</div>`; }
 function renderValidator(){

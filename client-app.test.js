@@ -677,6 +677,25 @@ test('non-deterministic PDA: the rejection says why — stuck, input ended in a 
   assert.match(s.reason, /q2 על 'b'/);
 });
 
+test('the side panel hides scan IDs under a collapsed "פרטים טכניים"', () => {
+  const ctx = loadClient();
+  const inspector = { innerHTML: '' };
+  ctx.__elements.inspector = inspector;
+  ctx.__setCurrent({ type: 'pda', ndet: false, tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true, aiObservationIds: ['circle-1'] }, { id: 'b', label: 'q1' }],
+    transitions: [{ id: 't', from: 'a', to: 'b', aiTransitionId: 'arrow-7', connectorObservationId: 'conn-3', aiScanSession: 'scan-xyz',
+      rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }] }] });
+  const outsideDetails = html => html.replace(/<details[\s\S]*?<\/details>/g, '');
+  vm.runInContext("sel={type:'transition',id:'t'}", ctx);
+  ctx.renderInspector();
+  assert.match(inspector.innerHTML, /<details class="tech-details"><summary>פרטים טכניים<\/summary>[\s\S]*arrow-7[\s\S]*<\/details>/);
+  assert.doesNotMatch(outsideDetails(inspector.innerHTML), /transition_id|connector_observation_id|scan_session_id|arrow-7/, 'nothing technical outside');
+  vm.runInContext("sel={type:'state',id:'a'}", ctx);
+  ctx.renderInspector();
+  assert.match(inspector.innerHTML, /<details class="tech-details">[\s\S]*circle-1/);
+  assert.doesNotMatch(outsideDetails(inspector.innerHTML), /observation|circle-1/);
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
