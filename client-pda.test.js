@@ -2481,15 +2481,10 @@ test('renaming a state to a name another state already has is refused', () => {
 test('a single Turing-machine rule can be deleted without deleting the whole arrow', async () => {
   const ctx = loadClient();
   silenceClientUi(ctx);
-  let answer = false;
-  vm.runInContext('confirmDialog=()=>Promise.resolve(globalThis.__answer)', ctx);
   const model = { type: 'tm', states: [{ id: 'q0', label: 'q0', isStart: true }, { id: 'q1', label: 'q1', isAccept: true }],
     transitions: [{ id: 't', from: 'q0', to: 'q0', rules: [{ read: '0', write: '1', move: 'R' }, { read: '1', write: '0', move: 'R' }] }], tests: [] };
   ctx.__setCurrent(model);
-  ctx.__answer = answer;
-  ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
-  assert.equal(model.transitions[0].rules.length, 2, 'cancelling keeps the rule');
-  ctx.__answer = true;
+  // מחיקה מיידית עם «בטל», בלי חלון אישור (החלטת המשתמש, 2026-10-09)
   ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));
   assert.deepEqual(model.transitions[0].rules.map(r => r.read), ['1'], 'only the chosen rule is removed');
   ctx.deleteTmRule('t', 0); await new Promise(r => setTimeout(r, 0));

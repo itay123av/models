@@ -583,8 +583,12 @@ let toastTimer=null;
    החוצה התוכן מתרוקן, כדי שכפתור «בטל» ישן לא יישאר יעד Tab בלתי נראה. */
 function hideToast(t){ t.className='toast'; toastTimer=null; t.onmouseenter=t.onmouseleave=t.onfocusin=t.onfocusout=null;
   setTimeout(()=>{ if(!t.classList.contains('show'))t.textContent=''; },350); }
+/* הודעה עם כפתור שמוחלפת בהודעה אחרת — הכפתור שלה נעלם, ולכן גם ההצעה
+   שמאחוריו (למשל «בטל») מסתיימת, ו-Ctrl+Z כבר לא מגיע אליה. */
+let toastReplaced=null;
+function replaceToast(){ const f=toastReplaced; toastReplaced=null; if(f)f(); }
 function toast(msg, type='',duration){ const t=$('toast');
-  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} replaceToast();
   t.onmouseenter=t.onmouseleave=t.onfocusin=t.onfocusout=null; t.textContent=msg; t.className='toast show '+type;
   const visibleFor=Number.isFinite(Number(duration))?Number(duration):(type==='danger'?10000:3200);
   toastTimer=setTimeout(()=>hideToast(t),visibleFor); }
@@ -593,29 +597,37 @@ function toast(msg, type='',duration){ const t=$('toast');
    נשמר צילום לפני המחיקה. אם מאז נשמר שינוי נוסף, הביטול נחסם — כדי
    שלא יחזיר אחורה בשקט גם את השינוי הנוסף. */
 let SAVE_SEQ=0, UNDO=null;
+/* גרסה לכל מודל: עולה כשהאובייקט של המודל מוחלף — שמירה בלשונית אחרת,
+   «בטל» או מחיקה. חלון שנפתח על גרסה קודמת מחזיק עותק ישן של המודל. */
+const MODEL_GEN={};
+function modelGen(id){ return MODEL_GEN[id]||0; }
+function bumpModel(id){ if(id!=null)MODEL_GEN[id]=modelGen(id)+1; }
 /* הודעה עם כפתור פעולה. הספירה נעצרת כל עוד העכבר מעליה, ו-onExpire נקרא
    כשהיא נעלמת מעצמה — כך שה"בטל" תקף בדיוק כל זמן שאפשר ללחוץ עליו. */
 function toastAction(msg,actionText,onAction,duration=10000,onExpire){ const t=$('toast'); if(!t)return;
-  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
-  const hide=()=>{ hideToast(t); if(onExpire)onExpire(); };
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} replaceToast(); toastReplaced=onExpire||null;
+  const hide=()=>{ toastReplaced=null; hideToast(t); if(onExpire)onExpire(); };
   t.textContent=''; const text=document.createElement('span'); text.textContent=msg;
   const b=document.createElement('button'); b.type='button'; b.className='toast-action'; b.textContent=actionText;
   if(actionText==='בטל'){ b.title='בטל (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts','Control+Z'); }
-  b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} hideToast(t); onAction(); };
+  b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} toastReplaced=null; hideToast(t); onAction(); };
   t.append(text,b); t.className='toast show';
   /* העכבר או הפוקוס (Tab) על ההודעה עוצרים את הספירה */
   t.onmouseenter=t.onfocusin=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} };
   t.onmouseleave=t.onfocusout=()=>{ if(!toastTimer)toastTimer=setTimeout(hide,4000); };
   toastTimer=setTimeout(hide,duration); }
 function undoLast(){ const token=UNDO; if(!token)return false; UNDO=null;
-  if(SAVE_SEQ!==token.seq){ toast('אי אפשר לבטל — בוצעו שינויים נוספים מאז','danger'); return false; }
+  if(!token.independent&&SAVE_SEQ!==token.seq){ toast('אי אפשר לבטל — בוצעו שינויים נוספים מאז','danger'); return false; }
   token.restore(); return true; }
-function offerUndo(message,restore){ if(!restore){ toast(message); return; }
-  const token={restore,seq:SAVE_SEQ}; UNDO=token;
+/* independent: הביטול לא תלוי בשינויים שנעשו אחריו (החזרת מודל שלם שנמחק) */
+function offerUndo(message,restore,opts){ if(!restore){ toast(message); return; }
+  const token={restore,seq:SAVE_SEQ,independent:Boolean(opts&&opts.independent)}; UNDO=token;
   toastAction(message,'בטל',undoLast,10000,()=>{ if(UNDO===token)UNDO=null; }); }
 /* Ctrl+Z (או Cmd+Z) = הכפתור «בטל» שבהודעה, באותו חלון זמן. לפי e.code,
    כדי שיעבוד גם בפריסת מקלדת עברית (שם e.key הוא «ז»). בשדה טקסט לא מגיעים
    לכאן — שם Ctrl+Z מבטל הקלדה כרגיל. */
+/* Ctrl+Z מאחורי חלון עריכה היה מחליף את המודל שהחלון עורך; מעל הספרייה — מותר */
+function undoShortcutAllowed(){ const top=topModal(); return !top||Boolean(top.dataset&&top.dataset.allowUndo==='1'); }
 function handleUndoShortcut(e){
   if(!(e.ctrlKey||e.metaKey)||e.shiftKey||e.altKey)return false;
   if(e.code!=='KeyZ'&&String(e.key).toLowerCase()!=='z')return false;
@@ -624,7 +636,7 @@ function handleUndoShortcut(e){
   const t=$('toast'); if(t&&t.querySelector&&t.querySelector('.toast-action'))hideToast(t);
   undoLast(); return true; }
 function modelUndoPoint(){ return current?{id:current.id,json:JSON.stringify(current)}:null; }
-function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return;
+function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return; bumpModel(m.id);
   const back=JSON.parse(point.json); Object.keys(m).forEach(k=>delete m[k]); Object.assign(m,back);
   current=m; DB.settings.lastId=m.id; sel={type:null,id:null}; armed=null; stopPlay(); SIM=null;
   save(); renderAll(); fitView(); toast('בוטל','success'); }); }
@@ -683,9 +695,13 @@ function dialogKey(e,bg,dismiss){
     e.preventDefault(); if(!b.classList.contains('on'))b.click(); }
   const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){ e.preventDefault(); p.click(); }
 }
-function _buildDialog({title, message, body, buttons, dismissValue=null}){
+const STALE_DIALOG_TEXT='המודל השתנה בזמן שהחלון היה פתוח (למשל בלשונית אחרת), ולכן השינוי מהחלון לא נשמר — פתח אותו שוב.';
+function _buildDialog({title, message, body, buttons, dismissValue=null, bound=true}){
   return new Promise(resolve=>{
     const opener=document.activeElement, did='dlg'+uid();
+    /* חלון שעורך את המודל הפתוח (bound) זוכר את גרסתו. אם המודל הוחלף עד
+       הלחיצה על אישור, העריכה הייתה נכתבת לעותק הישן והולכת לאיבוד בשקט. */
+    const guard=bound&&current?{id:current.id,gen:modelGen(current.id)}:null;
     const bg=document.createElement('div'); bg.className='modal-bg show';
     bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true"${title?` aria-labelledby="${did}-t"`:''}${message?` aria-describedby="${did}-m"`:''}>
       ${title?`<h2 id="${did}-t">${esc(title)}</h2>`:''}
@@ -697,7 +713,9 @@ function _buildDialog({title, message, body, buttons, dismissValue=null}){
        כך ש-closeTopModal לא יסגור אותו שוב במקום את הדיאלוג שמתחתיו.
        הפוקוס חוזר למה שפתח את החלון (אם הוא עדיין על המסך). */
     const close=val=>{ document.removeEventListener('keydown',escH); bg.classList.add('closing'); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150);
-      if(opener&&opener!==document.body&&opener.isConnected&&opener.focus)opener.focus(); resolve(val); };
+      if(opener&&opener!==document.body&&opener.isConnected&&opener.focus)opener.focus();
+      if(guard&&val!==dismissValue&&modelGen(guard.id)!==guard.gen){ val=dismissValue; toast(STALE_DIALOG_TEXT,'danger',12000); }
+      resolve(val); };
     (buttons||[]).forEach(btn=>{ const b=document.createElement('button');
       b.className='btn'+(btn.primary?' btn-primary':'')+(btn.danger?' btn-delete':''); b.textContent=btn.text;
       b.onclick=()=>close(btn.value); actions.appendChild(b); });
@@ -825,15 +843,15 @@ function jsonSyntaxErrorAt(text){
   try{ val(); ws(); if(i<n)fail(); return -1; }
   catch(e){ if(e&&typeof e.jsonAt==='number')return e.jsonAt; return -2; }   /* -2: קינון עמוק מדי לבדיקה */
 }
-function jsonErrorText(text){
-  const s=String(text==null?'':text);
-  if(!s.trim())return 'הקובץ ריק — אין בו JSON.';
+function jsonErrorText(text,opts){
+  const s=String(text==null?'':text), pasted=Boolean(opts&&opts.pasted), subject=pasted?'ה-JSON שהודבק':'קובץ JSON';
+  if(!s.trim())return pasted?'לא הודבק JSON.':'הקובץ ריק — אין בו JSON.';
   const at=jsonSyntaxErrorAt(s);
-  if(at<0)return 'קובץ JSON לא תקין.';
+  if(at<0)return `${subject} לא תקין.`;
   const before=s.slice(0,at), line=before.split('\n').length, col=at-before.lastIndexOf('\n'), c=s[at];
-  const what=at>=s.length?'הקובץ נגמר באמצע (חסר סוגר או מירכאה?)'
+  const what=at>=s.length?`${pasted?'הטקסט':'הקובץ'} נגמר באמצע (חסר סוגר או מירכאה?)`
     :(c<' '?'ירידת שורה או תו בקרה בתוך מחרוזת':`תו לא צפוי «\u2066${c}\u2069»`);   /* בידוד LTR: בטקסט עברי } מוצג הפוך כ-{ */
-  return `קובץ JSON לא תקין: ${what} — בשורה ${line}, עמודה ${col}.`;
+  return `${subject} לא תקין: ${what} — בשורה ${line}, עמודה ${col}.`;
 }
 /* אם הנתונים השמורים אינם קריאים, init ימלא דוגמאות ו-save ידרוס אותם.
    לפני כן נשמר עותק של הטקסט הגולמי תחת מפתח נפרד, והמשתמש מקבל הודעה. */
@@ -850,14 +868,19 @@ function load(){ let raw=null; try{ raw=localStorage.getItem(STORE); if(raw){ co
 function onStorageSync(e){
   if(!e||e.key!==STORE||e.newValue==null)return false;
   let d; try{ d=JSON.parse(e.newValue); }catch(_){ return false; }
-  const keep=current&&current.id;
-  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object');
-  DB.automata.forEach(sanitizeModel);
+  const keep=current&&current.id, before=new Map(DB.automata.map(a=>[a.id,a]));
+  /* מודל שלא השתנה שם נשאר כאן אותו אובייקט, כדי שחלון שפתוח עליו יישאר תקף.
+     מודל שהשתנה או נמחק מקבל גרסה חדשה. */
+  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object').map(a=>{
+    const old=before.get(a.id); before.delete(a.id);
+    if(old&&JSON.stringify(compactForLocalStorage(old))===JSON.stringify(a))return old;
+    sanitizeModel(a); bumpModel(a.id); return a; });
+  before.forEach((_,id)=>bumpModel(id));
   current=DB.automata.find(a=>a.id===keep)||DB.automata[0]||null;
   DB.settings.lastId=current?current.id:null;
-  UNDO=null; stopPlay(); SIM=null; armed=null;
+  if(UNDO&&!UNDO.independent)UNDO=null; stopPlay(); SIM=null; armed=null;
   if(sel.id&&!(current&&(stById(sel.id)||trById(sel.id))))sel={type:null,id:null};
-  renderAll();
+  renderAll(); refreshLibrary();
   if(keep&&(!current||current.id!==keep))toast('המודל שהיה פתוח כאן נמחק בלשונית אחרת');
   return true;
 }
@@ -1021,13 +1044,16 @@ function addRuleTransition(from,to,read,write,move,targetTransitionId){
 }
 /* מחיקת כלל בודד בחץ של מכונת טיורינג — כמו באוטומט מחסנית. קודם היה אפשר
    רק למחוק את כל המעבר, ואז להזין מחדש את שאר הכללים שעליו. */
+/* מחיקת כלל בודד — מיידית, עם «בטל» (כמו כל מחיקה). אם זה היה הכלל האחרון,
+   גם החץ נמחק; הצילום נלקח לפני המחיקה, כך שהביטול מחזיר את החץ עם הכלל. */
+function removeRuleWithUndo(t,index,afterRemove){ const undo=modelUndoPoint(); t.rules.splice(index,1);
+  if(!t.rules.length){ current.transitions=current.transitions.filter(x=>x.id!==t.id); if(sel.id===t.id)sel={type:null,id:null};
+    save(); renderAll(); offerUndo('הכלל נמחק — וגם המעבר, כי לא נשארו בו כללים',restoreModelPoint(undo)); return; }
+  afterRemove(t); save(); renderAll(); offerUndo('הכלל נמחק',restoreModelPoint(undo)); }
 function deleteTmRule(id,index){ const t=trById(id); if(!t||!Array.isArray(t.rules)||!t.rules[index])return;
-  confirmDialog('למחוק את הכלל?','רק שורת הכלל הזאת תימחק; שאר הכללים שעל החץ יישארו.',{danger:true,confirmText:'מחק כלל'}).then(ok=>{
-    if(!ok)return; t.rules.splice(index,1);
-    if(!t.rules.length){ deleteTransition(id); return; }
+  removeRuleWithUndo(t,index,t=>{
     t.scanIncomplete=Boolean(t.endpointReview&&(t.endpointReview.source||t.endpointReview.target)||t.rules.some(r=>r.scanIncomplete||r.aiLow));
-    t.aiIssues=t.rules.flatMap(r=>r.aiIssues||[]); t.aiLow=Boolean(t.scanIncomplete||t.aiIssues.length);
-    save(); renderAll(); toast('הכלל נמחק'); }); }
+    t.aiIssues=t.rules.flatMap(r=>r.aiIssues||[]); t.aiLow=Boolean(t.scanIncomplete||t.aiIssues.length); }); }
 function editTmRule(transitionId,index){
   const t=trById(transitionId),prev=t&&t.rules&&t.rules[index];if(!t||!prev)return;
   promptTransitionTM(t.from,t.to,{rule:prev,onSave:next=>{
@@ -3678,7 +3704,7 @@ function openAiScan(){
     else if(act==='back'){ cancelActiveDiagramScan(); imgData=null; previewData=null; busy=false; setState(serverOk?'source':'offline'); }
     else if(act==='go') runScan();
     else if(act==='jsonGo'){
-      let data; try{ data=JSON.parse(wrap.querySelector('#scanJson').value); }catch(err){ toast('JSON לא תקין: '+err.message,'danger'); return; }
+      const text=wrap.querySelector('#scanJson').value; let data; try{ data=JSON.parse(text); }catch(err){ toast(jsonErrorText(text,{pasted:true}),'danger',15000); return; }
       const list=aiPayloadList(data);
       if(!list.length){ toast('לא נמצאו מעברים בקלט','danger'); return; }
       close(); reviewAiList(data,0);
@@ -3769,11 +3795,7 @@ function markTransitionStructureReviewed(id){
   save();renderAll();
 }
 function deletePdaRule(id,index){ const t=trById(id); if(!t||!Array.isArray(t.rules)||!t.rules[index])return;
-  confirmDialog('למחוק את הכלל?','רק שורת הכלל הזאת תימחק; שאר הכללים שעל החץ יישארו.',{danger:true,confirmText:'מחק כלל'}).then(ok=>{
-    if(!ok)return; t.rules.splice(index,1);
-    if(!t.rules.length){ deleteTransition(id); return; }
-    recomputeAiTransition(t); save(); renderAll(); toast('הכלל נמחק');
-  }); }
+  removeRuleWithUndo(t,index,recomputeAiTransition); }
 function clearGraphData(){
   if(!current)return;
   current.states=[];current.transitions=[];
@@ -4612,9 +4634,8 @@ function runBatch(){ if(!simReady())return; let pass=0;
 }
 
 /* ─── library ─── */
-function openLibrary(){
-  const wrap=document.createElement('div');
-  wrap.innerHTML = (DB.automata.map(a=>`
+function libraryListHTML(){
+  return (DB.automata.map(a=>`
     <div class="lib-item ${current&&a.id===current.id?'cur':''}">
       <button type="button" class="li-main" data-open="${a.id}"${current&&a.id===current.id?' aria-current="true"':''}>
         <div class="li-name">${esc(a.name)}</div>
@@ -4629,17 +4650,33 @@ function openLibrary(){
         <button class="btn btn-sm" onclick="exportAll()">${ico('download')} ייצוא הכל</button>
         <button class="btn btn-sm" onclick="fileInput.click()">${ico('upload')} ייבוא</button>
       </div>`;
-  const dlg=_buildDialog({ title:'המודלים שלי', body:wrap,
+}
+/* מעדכן את רשימת הספרייה הפתוחה במקום (בלי לסגור ולפתוח את החלון).
+   focusRow: מיקום השורה שהפוקוס יחזור אליה אחרי מחיקה. */
+function refreshLibrary(focusRow){ const w=$('libWrap'); if(!w||!w.isConnected)return;
+  w.innerHTML=libraryListHTML();
+  if(Number.isInteger(focusRow)){ const rows=w.querySelectorAll('.li-main');
+    const el=rows.length?rows[Math.min(focusRow,rows.length-1)]:(w.closest('.modal')||w).querySelector('.btn-primary'); if(el)el.focus(); } }
+/* פעולה בספרייה: {open|dup|ren|exp|del: id}. מחיקה מיידית עם «בטל» — בלי חלון אישור. */
+function libraryAction(act){
+  if(act.open){ openAutomaton(act.open); closeTopModal(); }
+  else if(act.dup){ dupAutomaton(act.dup); refreshLibrary(); }
+  else if(act.ren){ const a=DB.automata.find(x=>x.id===act.ren); if(!a)return;
+    promptDialog('שם חדש',{value:a.name}).then(v=>{ const m=DB.automata.find(x=>x.id===act.ren);   /* לפי מזהה: ייתכן שהמודל נטען מחדש בינתיים */
+      if(v&&m){ m.name=v; save(); renderTopbar(); renderTabs(); refreshLibrary(); } }); }
+  else if(act.exp){ const a=DB.automata.find(x=>x.id===act.exp); if(a)download(safeName(a.name)+'.json', JSON.stringify(a,null,2)); }
+  else if(act.del){ const row=DB.automata.findIndex(x=>x.id===act.del); delAutomaton(act.del); refreshLibrary(row); }
+}
+function openLibrary(){
+  const wrap=document.createElement('div'); wrap.id='libWrap';
+  wrap.innerHTML=libraryListHTML();
+  const dlg=_buildDialog({ title:'המודלים שלי', body:wrap, bound:false,
     buttons:[{text:'מודל חדש', value:'new'}, {text:'סגור', value:null, primary:true}], dismissValue:null });
-  wrap.addEventListener('click', e=>{ const t=e.target;
-    const open=t.closest('[data-open]'), dup=t.closest('[data-dup]'), ren=t.closest('[data-ren]'), del=t.closest('[data-del]'), exp=t.closest('[data-exp]');
-    if(open){ openAutomaton(open.dataset.open); closeTopModal(); }
-    else if(dup){ dupAutomaton(dup.dataset.dup); closeTopModal(); openLibrary(); }
-    else if(ren){ const a=DB.automata.find(x=>x.id===ren.dataset.ren);
-      promptDialog('שם חדש',{value:a.name}).then(v=>{ if(v){ a.name=v; save(); renderTopbar(); renderTabs(); closeTopModal(); openLibrary(); } }); }
-    else if(exp){ const a=DB.automata.find(x=>x.id===exp.dataset.exp); download(safeName(a.name)+'.json', JSON.stringify(a,null,2)); }
-    else if(del){ const a=DB.automata.find(x=>x.id===del.dataset.del);
-      confirmDialog('למחוק מודל?',`"${a.name}" יימחק לצמיתות.`,{danger:true,confirmText:'מחק'}).then(ok=>{ if(ok){ delAutomaton(del.dataset.del); closeTopModal(); openLibrary(); } }); }
+  /* Ctrl+Z מבטל מחיקה גם כשהספרייה פתוחה */
+  const bgEl=wrap.closest&&wrap.closest('.modal-bg'); if(bgEl&&bgEl.dataset)bgEl.dataset.allowUndo='1';
+  wrap.addEventListener('click', e=>{ const t=e.target, pick=k=>{ const el=t.closest('[data-'+k+']'); return el&&el.dataset[k]; };
+    const open=pick('open'), dup=pick('dup'), ren=pick('ren'), exp=pick('exp'), del=pick('del');
+    if(open||dup||ren||exp||del) libraryAction({open,dup,ren,exp,del});
   });
   dlg.then(v=>{ if(v==='new') newModel(); });
 }
@@ -4662,7 +4699,7 @@ function newModel(){
   wrap.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ tp=c.dataset.tp; wrap.querySelectorAll('.chip').forEach(x=>{ x.classList.toggle('on',x===c); x.setAttribute('aria-pressed',String(x===c)); }); });
   const nm={dfa:'מודל חדש', nfa:'אוטומט סופי לא-דטרמיניסטי', pda:'אוטומט מחסנית', npda:'אוטומט מחסנית לא-דטרמיניסטי', tm:'מכונת טיורינג'};
   const SUBMIT=Symbol();
-  _buildDialog({title:'מודל חדש', body:wrap, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
+  _buildDialog({title:'מודל חדש', body:wrap, bound:false, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
   .then(v=>{ if(v!==SUBMIT)return; const name=(wrap.querySelector('#nmName').value||'').trim()||nm[tp]||'מודל חדש';
     const a=newAutomaton(name, (tp==='npda'?'pda':tp==='nfa'?'dfa':tp)); if(tp==='npda'||tp==='nfa') a.ndet=true; DB.automata.push(a); openAutomaton(a.id); });
 }
@@ -4672,12 +4709,12 @@ function dupAutomaton(id){ const a=DB.automata.find(x=>x.id===id); const c=JSON.
   c.states.forEach(s=>{ const n=uid(); map[s.id]=n; s.id=n; });
   c.transitions.forEach(t=>{ t.id=uid(); t.from=map[t.from]; t.to=map[t.to]; });
   c.updated=Date.now(); DB.automata.push(c); save(); toast(`נוצר עותק: «${c.name}»`,'success'); }
-function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone=DB.automata[index]; if(!gone)return;
+function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone=DB.automata[index]; if(!gone)return; bumpModel(id);
   const json=JSON.stringify(gone); DB.automata=DB.automata.filter(a=>a.id!==id);
   if(current&&current.id===id){ current=DB.automata[0]||null; if(current)DB.settings.lastId=current.id; renderAll(); fitView(); } save(); renderTabs();
   offerUndo(`המודל «${gone.name}» נמחק`,()=>{ if(DB.automata.some(a=>a.id===id))return; const back=JSON.parse(json);
     DB.automata.splice(Math.min(index,DB.automata.length),0,back); current=back; DB.settings.lastId=id; sel={type:null,id:null}; armed=null; stopPlay(); SIM=null;
-    save(); renderAll(); fitView(); toast('המודל שוחזר','success'); }); }
+    save(); renderAll(); fitView(); refreshLibrary(); toast('המודל שוחזר','success'); },{independent:true}); }
 
 /* ─── import / export ─── */
 function exportAll(){ download('automata-backup.json', JSON.stringify({automata:DB.automata}, null, 2)); toast('כל המודלים נשמרו לקובץ automata-backup.json','success'); }
@@ -4883,8 +4920,8 @@ function init(){
   $('canvas').addEventListener('wheel', e=>{ e.preventDefault(); zoom(e.deltaY>0?1.1:0.9); }, {passive:false});
   document.addEventListener('keydown', e=>{
     if(e.target.matches('input,textarea,select')) return;
+    if(undoShortcutAllowed()&&handleUndoShortcut(e)) return;
     if(topModal()) return;   /* חלון פתוח: Backspace/Escape לא מוחקים או מבטלים בחירה מאחוריו */
-    if(handleUndoShortcut(e)) return;
     const g=(e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('[data-state-id],[data-trans-id]');
     if(g){ e.preventDefault(); if(g.dataset.stateId)onStateClick(g.dataset.stateId); else { armed=null; selectTransition(g.dataset.transId); } return; }
     if(e.key==='Delete'||e.key==='Backspace'){ if(sel.type==='state') deleteState(sel.id); else if(sel.type==='transition') deleteTransition(sel.id); }
