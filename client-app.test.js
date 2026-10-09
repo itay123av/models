@@ -484,6 +484,87 @@ test('pasting invalid JSON in the scan dialog shows the Hebrew message with posi
   assert.match(ctx.jsonErrorText('{,}', { pasted: true }), /^ה-JSON שהודבק לא תקין/, 'pasted text is not called a file');
 });
 
+/* ── מחיקות מיידיות עם «בטל» ───────────────────────────────────────── */
+
+function undoHarness() {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; renderTopbar=()=>{}; fitView=()=>{}; stopPlay=()=>{};', ctx);
+  const toasts = [], actions = [];
+  vm.runInContext('globalThis.TOAST = toast;', ctx);  // שמירת המקורית לבדיקה שצריכה אותה
+  ctx.toast = (m, k) => toasts.push({ m, k: k || '' });
+  const realAction = ctx.toastAction;                  // הודעת «בטל» נרשמת, והמקורית ממשיכה לרוץ
+  ctx.toastAction = (...a) => { toasts.push({ m: a[0], k: 'action' }); return realAction(...a); };
+  ctx.confirmDialog = () => { throw new Error('no confirmation dialog for deletions'); };
+  const db = vm.runInContext('DB', ctx);
+  db.automata = pdaTabModels();
+  db.automata[0].transitions[0].rules.push({ read: 'b', top: 'A', op: 'pop', push: [], popSym: 'A' });
+  db.automata.push({ id: 'm3', name: 'טיורינג', type: 'tm', tests: [], states: [{ id: 'x', label: 'q0', x: 0, y: 0, isStart: true }],
+    transitions: [{ id: 'tt', from: 'x', to: 'x', rules: [{ read: '0', write: '1', move: 'R' }, { read: '1', write: '0', move: 'R' }] }] });
+  ctx.__setCurrent(db.automata[0]);
+  const ctrlZ = () => ctx.handleUndoShortcut({ key: 'z', code: 'KeyZ', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, preventDefault() {} });
+  return { ctx, db, toasts, actions, ctrlZ };
+}
+
+test('deleting a PDA rule is immediate and can be undone (button and Ctrl+Z); the last rule takes the arrow with it', () => {
+  const { ctx, db, toasts, ctrlZ } = undoHarness();
+  ctx.deletePdaRule('t', 0);
+  let t = db.automata[0].transitions[0];
+  assert.equal(t.rules.length, 1, 'deleted at once, no dialog');
+  assert.equal(ctrlZ(), true);
+  assert.equal(db.automata[0].transitions[0].rules.length, 2, 'Ctrl+Z brings it back');
+
+  ctx.deletePdaRule('t', 0); ctx.deletePdaRule('t', 0);
+  assert.equal(db.automata[0].transitions.length, 0, 'no rules left → the arrow is gone too');
+  assert.match(toasts.at(-1).m, /המעבר/, 'the message says the arrow went too');
+  assert.equal(ctx.undoLast(), true);
+  t = db.automata[0].transitions[0];
+  assert.ok(t && t.rules.length === 1, 'undo brings back the arrow with its rule (not an empty arrow)');
+});
+
+test('deleting a Turing-machine rule is immediate and can be undone', () => {
+  const { ctx, db } = undoHarness();
+  ctx.__setCurrent(db.automata[2]);
+  ctx.deleteTmRule('tt', 1);
+  assert.equal(db.automata[2].transitions[0].rules.length, 1);
+  assert.equal(ctx.undoLast(), true);
+  assert.deepEqual(Array.from(db.automata[2].transitions[0].rules, r => r.read), ['0', '1']);
+});
+
+test('deleting a whole model can be undone even after other changes; Ctrl+Z works over the library', () => {
+  const { ctx, db, ctrlZ } = undoHarness();
+  ctx.delAutomaton('m2');
+  ctx.__getCurrent().name = 'שינוי אחר'; ctx.save();       // שינוי אחר אחרי המחיקה
+  assert.equal(ctrlZ(), true);
+  assert.deepEqual(Array.from(db.automata, a => a.id), ['m1', 'm2', 'm3'], 'the model is back in its place');
+  assert.equal(db.automata[0].name, 'שינוי אחר', 'the other change is kept');
+
+  // מעל הספרייה Ctrl+Z מותר; מעל חלון עריכה — לא
+  ctx.document.querySelectorAll = () => [{ dataset: { allowUndo: '1' }, classList: { contains: () => false } }];
+  assert.equal(ctx.undoShortcutAllowed(), true, 'library on top');
+  ctx.document.querySelectorAll = () => [{ dataset: {}, classList: { contains: () => false } }];
+  assert.equal(ctx.undoShortcutAllowed(), false, 'an edit dialog on top');
+  ctx.document.querySelectorAll = () => [];
+  assert.equal(ctx.undoShortcutAllowed(), true, 'no dialog');
+});
+
+test('the library deletes a model without a confirmation dialog', () => {
+  const { ctx, db } = undoHarness();
+  assert.equal(typeof ctx.libraryAction, 'function', 'library clicks go through libraryAction');
+  ctx.libraryAction({ del: 'm2' });
+  assert.deepEqual(Array.from(db.automata, a => a.id), ['m1', 'm3'], 'deleted at once');
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(db.automata.length, 3);
+});
+
+test('a «בטל» offer ends when its message is replaced by another message', () => {
+  const { ctx } = undoHarness();
+  vm.runInContext('toast=TOAST', ctx);                 // ההודעה האמיתית (ה-harness החליף אותה)
+  ctx.deletePdaRule('t', 0);
+  assert.notEqual(vm.runInContext('UNDO', ctx), null, 'offered');
+  ctx.toast('הודעה אחרת');
+  assert.equal(vm.runInContext('UNDO', ctx), null, 'the offer is gone with its button, so Ctrl+Z no longer reaches it');
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
