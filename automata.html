@@ -1081,7 +1081,8 @@ let _pdaFocus=null;
    pdaApplicableRules ו-pdaActionText מגיעים כולם מ-pda-core.js. */
 function pdaFocusOn(el){ _pdaFocus=el; }
 function pdaInsert(sym){ const f=_pdaFocus||document.getElementById('pdaOp'); if(!f)return;
-  if(sym==='ε'){ f.value='ε'; } else { if(f.value==='ε') f.value=''; f.value+=pdaNormSym(sym); }
+  /* "?" מסריקה הוא סימן לא־קריא, לא תוכן: כפתור סימן מחליף אותו ולא נצמד אליו ("?⊥") */
+  if(sym==='ε'){ f.value='ε'; } else { if(f.value==='ε'||f.value.trim()==='?') f.value=''; f.value+=pdaNormSym(sym); }
   f.focus(); }
 function pdaNormalizeStackField(el){
   if(!el) return;
@@ -2478,7 +2479,7 @@ function applyInputGlyphReview(groupIndex,value,selected){
   });
   touched.forEach(t=>recomputeAiTransition(t));
   save(); renderAll();
-  const changed=symbol===g.symbol?`אושר «${symbol}»`:`«${g.symbol}» → «${symbol}»`;
+  const changed=symbol===g.symbol?`אושר «${symbol}»`:`«${g.symbol}» תוקן ל-«${symbol}»`;
   offerUndo(`קלט ${scanRuleCountText(chosen.length)}: ${changed}. מילת הפעולה והמחסנית עדיין לאישור.`,restoreModelPoint(point));
   return true;
 }
@@ -2674,7 +2675,7 @@ function openScanShot(kind,groupIndex,memberIndex){
 function scanShotsHtml(kind,g,gi){
   return g.members.map((_,mi)=>{
     const m=scanShotMember(kind,gi,mi); if(!m)return '';
-    return `<div class="glyph-shot${m.url?'':' noimg'}"><label class="glyph-shot-head"><input type="checkbox" checked data-shot-kind="${kind}" data-shot-group="${gi}" data-shot-member="${mi}"><b dir="ltr">${esc(m.where)}</b></label>`+
+    return `<div class="glyph-shot${m.url?'':' noimg'}"><label class="glyph-shot-head"><input type="checkbox" checked aria-label="כלול את ${esc(m.where)}" data-shot-kind="${kind}" data-shot-group="${gi}" data-shot-member="${mi}"><b dir="ltr">${esc(m.where)}</b></label>`+
       (m.url?`<button type="button" class="glyph-shot-img" onclick="openScanShot('${kind}',${gi},${mi})" title="הגדל"><img src="${esc(m.url)}" alt="תמונת השורה"></button>`:'')+
       `<span class="glyph-shot-raw" dir="auto">${m.url?'נקרא: ':'אין תמונה שמורה · נקרא: '}${esc(m.raw||'—')}</span></div>`;
   }).join('');
@@ -2698,6 +2699,72 @@ function actionWordCardHtml(g,gi){
     <div class="glyph-shots">${scanShotsHtml('action',g,gi)}</div>
     <div class="ai-review-chips"><button class="chip" onclick="applyActionWordReview(${gi},'none')">לל״ש — ללא שינוי</button>${field('push','דחוף')}${field('pop','שלוף')}</div>
     <div class="ai-review-sub">מתקן רק את מילת הפעולה והסימן שלה. הקלט וראש המחסנית נשארים לאישור בכל כלל.</div></div>`;
+}
+/* כלל סרוק שעוד מחכה לאישור אדם */
+function scanRulePending(r){ return Boolean(r&&!r.manuallyReviewed&&(r.aiLow||r.scanIncomplete||pdaRuleBlocked(r))); }
+function scanRuleProgress(){
+  const rules=(current&&current.type==='pda'&&current.transitions||[]).flatMap(t=>t.rules||[]).filter(r=>r&&r.scanEvidence);
+  return {total:rules.length,approved:rules.filter(r=>!scanRulePending(r)).length};
+}
+/* אישור מפורש של מצב שהחץ כבר מחובר אליו. עד עכשיו היה צריך לבחור מצב אחר
+   ולחזור — בחירה מחדש של אותו ערך לא מפעילה כלום. כלל שאדם כבר בדק את
+   תוכנו בדיאלוג, ורק החיבור חסם אותו, נחשב מאושר מרגע זה. */
+function settleContentReviewedRules(t){
+  (t.rules||[]).forEach(r=>{ if(r.contentReviewed&&!r.aiLow&&!r.scanIncomplete&&!pdaRuleBlocked(r))r.manuallyReviewed=true; });
+  if(current.type==='pda')recomputeAiTransition(t);
+  save(); renderAll(); scanImagesPrune();
+}
+function confirmTransitionEndpoint(id,field){
+  const t=trById(id); if(!t||!['from','to'].includes(field))return;
+  setTransitionEndpoint(id,field,t[field]);
+  settleContentReviewedRules(t);
+}
+/* בחירת מצב אחר לקצה החץ, ישר מהכרטיס. לחיצה על החץ פותחת את עורך הכלל מעל
+   לוח הצד, ולכן בחירת המקור/היעד שם הייתה מוסתרת מאחורי החלון. */
+function chooseTransitionEndpoint(id,field){
+  const t=trById(id); if(!t||!['from','to'].includes(field))return;
+  const wrap=document.createElement('div');
+  const options=current.states.map(st=>`<option value="${esc(st.id)}"${st.id===t[field]?' selected':''}>${esc(st.label)}</option>`).join('');
+  wrap.innerHTML=`<label class="lbl" for="scanEndpointPick">${field==='from'?'מאיזה מצב החץ יוצא בציור?':'לאיזה מצב החץ נכנס בציור?'}</label><select id="scanEndpointPick" class="fld">${options}</select>`;
+  const OK=Symbol();
+  return _buildDialog({title:field==='from'?'המקור של החץ':'היעד של החץ',body:wrap,buttons:[{text:'ביטול',value:null},{text:'שמור',value:OK,primary:true}],dismissValue:null}).then(v=>{
+    if(v!==OK)return false;
+    const pick=wrap.querySelector('#scanEndpointPick'),stateId=pick&&pick.value;
+    if(!trById(id)||!stById(stateId))return false;
+    setTransitionEndpoint(id,field,stateId);
+    settleContentReviewedRules(t);
+    return true;
+  });
+}
+/* בציור יש על החץ שורה שהסריקה לא קראה: מוסיפים אותה ידנית; שאלת מספר השורות נשארת עד "✓ כן" */
+function addMissingScanRow(id){ const t=trById(id); if(t)promptTransitionPDA(t.from,t.to); }
+/* כרטיס קצר בעברית לחץ סרוק. ההערות הטכניות (באנגלית) נשארות ב-title ובדיאלוג. */
+function aiTransitionCardHtml(it){
+  const t=trById(it.id); if(!t)return '';
+  const from=stById(t.from),to=stById(t.to),ep=it.endpointPending||{},lines=[],chips=[];
+  if(it.pendingRules)lines.push(it.pendingRules===1
+    ?(it.ruleCount===1?'הכלל מחכה לאישור — לחץ על החץ כדי לפתוח אותו.':`כלל אחד מתוך ${it.ruleCount} מחכה לאישור — לחץ על החץ כדי לפתוח אותו.`)
+    :`${it.pendingRules} מתוך ${it.ruleCount} כללים מחכים לאישור — לחץ על החץ כדי לפתוח את הראשון.`);
+  if(it.semantic&&it.semantic.length)lines.push('בעיה בכלל: '+it.semantic.join(', '));
+  if(ep.source||ep.target){
+    lines.push('לא ודאי שהחץ מחבר את המצבים הנכונים. השווה לציור: אשר, או בחר מצב אחר.');
+    if(ep.source)chips.push(`<button class="chip ai-review-ok" onclick="confirmTransitionEndpoint('${t.id}','from')">✓ המקור ${esc(from?from.label:'?')} נכון</button>`,
+      `<button class="chip" onclick="chooseTransitionEndpoint('${t.id}','from')">מקור אחר…</button>`);
+    if(ep.target)chips.push(`<button class="chip ai-review-ok" onclick="confirmTransitionEndpoint('${t.id}','to')">✓ היעד ${esc(to?to.label:'?')} נכון</button>`,
+      `<button class="chip" onclick="chooseTransitionEndpoint('${t.id}','to')">יעד אחר…</button>`);
+  }
+  if(it.rowsPending&&!it.pendingRules&&!ep.source&&!ep.target){
+    if(!it.ruleCount){ lines.push('על החץ לא נקרא אף כלל. הוסף את הכללים שכתובים עליו בציור.');
+      chips.push(`<button class="chip" onclick="addMissingScanRow('${t.id}')">הוסף כלל</button>`); }
+    else{ lines.push(`${it.ruleCount===1?'הכלל אושר':'כל הכללים אושרו'}. על החץ בציור יש בדיוק ${it.ruleCount===1?'שורה אחת':it.ruleCount+' שורות'}?`);
+      chips.push(`<button class="chip ai-review-ok" onclick="markTransitionStructureReviewed('${t.id}')">✓ כן, זה הכל</button>`,
+        `<button class="chip" onclick="addMissingScanRow('${t.id}')">יש עוד שורה</button>`); }
+  }
+  if(!lines.length)lines.push('המעבר מחכה לאישור — לחץ עליו כדי לבדוק.');
+  return `<div class="ai-review-item ai-review-card" title="${esc(it.sub)}">
+    <button class="ai-review-link" onclick="focusAiIssue('${t.id}','transition')"><span class="ai-review-main">${esc(it.title)}</span></button>
+    ${lines.map(l=>`<div class="ai-review-sub">${esc(l)}</div>`).join('')}
+    ${chips.length?`<div class="ai-review-chips">${chips.join('')}</div>`:''}</div>`;
 }
 function collectAiReviewItems(){
   if(!current)return [];
@@ -2735,8 +2802,12 @@ function collectAiReviewItems(){
     if(inputChecked.length)parts.push(`קלט אושר בידי אדם (${inputChecked.join(', ')}) — עוד צריך לאשר את הכלל`);
     const actionChecked=(t.rules||[]).filter(r=>r.actionReview&&!r.manuallyReviewed).map(r=>r.actionReview.value);
     if(actionChecked.length)parts.push(`מילת הפעולה אושרה בידי אדם (${actionChecked.join(', ')}) — עוד צריך לאשר את הכלל`);
+    const rules=t.rules||[],ep={source:Boolean(t.endpointReview&&t.endpointReview.source),target:Boolean(t.endpointReview&&t.endpointReview.target)};
+    rules.forEach(r=>{ if(r.endpointReview&&r.endpointReview.source)ep.source=true; if(r.endpointReview&&r.endpointReview.target)ep.target=true; });
     add(`transition:${t.id}`,{kind:'transition',id:t.id,title:`${from?from.label:'?'} ${self?'↺':'→'} ${to?to.label:'?'}`,
-      sub:parts.join(' · ')||'המעבר חסום לביקורת'});
+      sub:parts.join(' · ')||'המעבר חסום לביקורת',
+      pendingRules:rules.filter(scanRulePending).length,ruleCount:rules.length,endpointPending:ep,
+      rowsPending:Boolean(t.transitionScanIncomplete),semantic:semantic});
   });
   return items;
 }
@@ -2785,7 +2856,7 @@ function editPdaTransition(id,ruleIndex){
       const endpointReview=Object.assign({},prev.endpointReview||{}), endpointPending=Boolean(endpointReview.source||endpointReview.target),lineCountReview=Boolean(prev.lineCountReview);
       rules[idx]=Object.assign(rule,{aiLow:incomplete||endpointPending,aiIssues:incomplete?['נשאר שדה חסר או לא־קריא ונדרש אישור נוסף']:[],
         aiConfidence:incomplete?0.5:1,semanticBlocked:pdaRuleBlocked(rule),scanIncomplete:incomplete||endpointPending||lineCountReview,
-        scanIncompleteBase:incomplete||lineCountReview,scanIncompleteCore:incomplete,lineCountReview,endpointReview,manuallyReviewed:!incomplete&&!endpointPending&&!lineCountReview});
+        scanIncompleteBase:incomplete||lineCountReview,scanIncompleteCore:incomplete,lineCountReview,endpointReview,manuallyReviewed:!incomplete&&!endpointPending&&!lineCountReview,contentReviewed:!incomplete});
       if(endpointReview.source)rules[idx].aiIssues.push('מצב מקור');
       if(endpointReview.target)rules[idx].aiIssues.push('מצב יעד');
       if(lineCountReview)rules[idx].aiIssues.push('מספר שורות התווית דורש אישור');
@@ -2849,7 +2920,11 @@ function focusAiIssue(id,kind){
   if(kind==='unresolved'){ resolveUnresolvedTransition(Number(id)); return; }
   if(kind==='state-observation'){ resolveUnresolvedStateObservation(Number(id)); return; }
   if(kind==='state'){ sel={type:'state',id}; renderGraph(); renderInspector(); renderArmBanner(); return; }
-  if(current && current.type==='pda'){ editPdaTransition(id); return; }
+  if(current && current.type==='pda'){
+    const t=trById(id);
+    /* אין כלל שמחכה — לא פותחים שוב כלל שכבר אושר; בוחרים את החץ (לוח הצד) */
+    if(t&&!(t.rules||[]).some(scanRulePending)){ selectTransition(id,false); return; }
+    editPdaTransition(id); return; }
   selectTransition(id);   /* אוטומט סופי: הבחירה פותחת את עורך הסימנים בלוח הצד */
 }
 /* מזעור בלבד: כל עוד יש פריטים שחוסמים הרצה, הרשימה נשארת זמינה בכפתור קטן */
@@ -2886,14 +2961,14 @@ function renderAiReviewPanel(){
     <div class="ai-review-chips">${it.canFocus?`<button class="chip" onclick="focusUnresolvedLabelRead(${Number(it.id)})">פתח</button>`:''}
       <button class="chip ai-review-ok" onclick="acknowledgeUnresolvedLabelRead(${Number(it.id)})">✓ בדקתי</button></div></div>`;
   const starts=actions.filter(x=>x.kind==='start'),states=actions.filter(x=>x.kind==='state'),rest=actions.filter(x=>x.kind!=='start'&&x.kind!=='state');
-  const glyphs=inputGlyphGroups(),actionWords=actionWordGroups();
+  const glyphs=inputGlyphGroups(),actionWords=actionWordGroups(),progress=scanRuleProgress();
   p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="מזער — הרשימה נשארת זמינה">–</button></div>
-    <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.</div>`+
+    <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.${progress.total?` אושרו ${progress.approved} מתוך ${progress.total} כללים.`:''}</div>`+
     starts.map(startRow).join('')+
     (glyphs.length?`<div class="ai-review-section">אות קלט שחוזרת · ${glyphs.length}</div>`+glyphs.map(inputGlyphCardHtml).join(''):'')+
     (actionWords.length?`<div class="ai-review-section">מילת פעולה בלי סימן · ${actionWords.length}</div>`+actionWords.map(actionWordCardHtml).join(''):'')+
     (states.length?`<div class="ai-review-section">מצבים · ${states.length}</div>`+states.map(stateRow).join(''):'')+
-    (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(it=>it.kind==='label-read'?labelReadRow(it):itemBtn(it)).join(''):'')+
+    (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(it=>it.kind==='label-read'?labelReadRow(it):(it.kind==='transition'&&current.type==='pda'?aiTransitionCardHtml(it):itemBtn(it))).join(''):'')+
     (diag.length?`<details class="ai-review-diag"><summary>פרטים טכניים מהסריקה · ${diag.length}</summary>${diag.map(it=>`<div dir="auto">${esc(it.sub)}</div>`).join('')}</details>`:'');
 }
 function reviewAiList(list,i){ applyAiTransitionsToCanvas(list); }   /* תאימות ישנה: אין יותר אשף רציף */
