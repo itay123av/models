@@ -2596,7 +2596,7 @@ test('a repeated doubtful input glyph is asked once, and one answer fixes only t
 
   const html = ctx.inputGlyphCardHtml(groups[0], 0);
   assert.match(html, /הקלט נקרא «<span dir="ltr">ε<\/span>» ב-3 כללים/);
-  assert.equal((html.match(/data-glyph-member=/g) || []).length, 3, 'one checkable image per rule');
+  assert.equal((html.match(/data-shot-kind="glyph"[^>]*data-shot-member=/g) || []).length, 3, 'one checkable image per rule');
 
   // The q0→q1 glyph is really ε in this test: the human unchecks it and answers "a" for the other two.
   const pick = groups[0].members.map(m => model.transitions.find(x => x.id === m.transitionId).rules[m.ruleIndex] !== ruleOf(model, 'q0', 'q1', 0));
@@ -2706,4 +2706,133 @@ test('a scanned push/pop word without any symbol after it asks the human to look
   assert.equal(ctx.pdaMissingOperandHint({ stack_action: { type: 'PUSH' }, push_value: { value: '?' } }), '', 'only scanned rules, not hand-made ones');
   assert.equal(rules[0].op, 'push', 'the hint changes nothing in the rule');
   assert.equal(rules[0].scanIncomplete, true);
+});
+
+/* תיקון בצעד אחד של מילת פעולה: דחוף/שלוף שנקראו בלי סימן נשאלים פעם אחת. */
+function actionScan(ctx, read = 'c') {
+  const row = (top, action, push, pop) => scannedRule({
+    raw_label_text: `${read},${top} / ${action === 'PUSH' ? 'דחוף' : action === 'POP' ? 'שלוף' : 'לל״ש'}`,
+    zones: { left_text: read, middle_text: top, right_text: action === 'PUSH' ? 'דחוף' : action === 'POP' ? 'שלוף' : 'לל״ש' },
+    read_input: { value: read, confidence: read === 'ε' ? 0.7 : 0.9 },
+    pop_value: { value: top, confidence: 0.9 },
+    stack_action: { type: action, confidence: 0.64 },
+    push_value: { value: push, confidence: 0.3 },
+    pop_symbol: { value: pop, confidence: 0.3 },
+    scan_incomplete: true,
+  });
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q0', is_start: true, confidence: 0.95 }, { id: 'q1', confidence: 0.95 }, { id: 'q2', confidence: 0.95 }], transitions: [
+    scannedTransition('t01', 'q0', 'q1', [row('A', 'PUSH', '?', 'ε')]),
+    scannedTransition('t11', 'q1', 'q1', [row('S', 'POP', 'ε', '?'), row('A', 'PUSH', '?', 'ε')]),
+    scannedTransition('t12', 'q1', 'q2', [row('A', 'PUSH', 'A', 'ε'), row('S', 'NONE', 'ε', 'ε')]),
+  ] }, { atomic: true, scanSessionId: 'scan-action' });
+  return model;
+}
+
+test('push/pop words read without a symbol are asked once, and "no change" fixes only the rows the human left checked', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = actionScan(ctx);
+  const groups = Array.from(ctx.actionWordGroups());
+  assert.equal(groups.length, 1);
+  assert.deepEqual(Array.from(groups[0].members, m => m.read), ['push', 'pop', 'push'], 'only push/pop rows that lack a symbol; push A and no-change are left out');
+
+  const html = ctx.actionWordCardHtml(groups[0], 0);
+  assert.match(html, /נקרא «דחוף או שלוף» בלי סימן אחריו ב-3 כללים/);
+  assert.equal((html.match(/data-shot-kind="action"[^>]*data-shot-member=/g) || []).length, 3, 'one checkable image per rule');
+  assert.match(html, /לל״ש — ללא שינוי/);
+  assert.match(html, /id="actionWordPush0"/);
+  assert.match(html, /id="actionWordPop0"/);
+  assert.doesNotMatch(html, /class="chip on"/, 'no answer is chosen in advance');
+
+  const loop = model.transitions.find(t => t.from === t.to);
+  const forward = model.transitions.find(t => t.from !== t.to && t.rules.length === 1);
+  assert.equal(ctx.applyActionWordReview(0, 'none', undefined, [true, true, false]), true);
+
+  for (const r of [forward.rules[0], loop.rules[0]]) {
+    assert.equal(r.op, 'none');
+    assert.deepEqual(Array.from(r.push), []);
+    assert.equal(r.popSym, undefined);
+    assert.equal(r.read, 'c', 'the input is untouched');
+    assert.equal(r.actionReview.value, 'ללא שינוי');
+    assert.equal(r.actionReview.original.operand, '?');
+    assert.equal(r.scanIncomplete, true, 'input and stack top were not checked, so the rule stays locked');
+    assert.equal(r.manuallyReviewed, undefined);
+    assert.equal(r.aiIssues.some(x => /חסר סימן (דחיפה|שליפה) מפורש/.test(x)), false, 'the missing-symbol doubt itself is closed');
+    const ai = ctx.pdaRuleToAi(r);
+    assert.equal(ai.stack_action.type, 'NONE');
+    assert.equal(ai.stack_action.confidence, null, 'the editor no longer flags the human-checked action');
+    assert.equal(ctx.pdaMissingOperandHint(ai), '', 'and no longer asks to look again');
+  }
+  assert.equal(forward.rules[0].actionReview.original.op, 'push');
+  assert.equal(loop.rules[0].actionReview.original.op, 'pop');
+  assert.equal(forward.rules[0].scanEvidence.structured.action, 'PUSH', 'the original evidence is kept as read');
+  assert.equal(forward.rules[0].scanEvidence.structured.push_symbol, '?');
+  assert.equal(loop.rules[1].op, 'push', 'the unchecked image keeps what was read');
+  assert.deepEqual(Array.from(loop.rules[1].push), ['?']);
+  assert.equal(Array.from(ctx.actionWordGroups()).length, 0, 'a single remaining row is fixed in the editor, not here');
+  assert.equal(ctx.hasPendingAiExecutionReview(), true);
+  const item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition' && x.title === 'q0 → q1');
+  assert.match(item.sub, /מילת הפעולה אושרה בידי אדם \(ללא שינוי\)/);
+});
+
+test('the action question takes push/pop only with one readable stack symbol and never guesses one', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = actionScan(ctx);
+  const all = [true, true, true];
+  const before = JSON.stringify(model.transitions);
+  for (const [op, symbol] of [['push', ''], ['push', '?'], ['push', 'AB'], ['push', '⊥'], ['pop', 'Z0'], ['pop', ' '], ['maybe', 'A']])
+    assert.equal(ctx.applyActionWordReview(0, op, symbol, all), false, `${op} «${symbol}» is refused`);
+  assert.equal(ctx.applyActionWordReview(0, 'none', undefined, [false, false, false]), false, 'nothing checked → nothing changes');
+  assert.equal(ctx.applyActionWordReview(0, 'none'), false, 'without a readable selection nothing changes');
+  assert.equal(JSON.stringify(model.transitions), before);
+
+  assert.equal(ctx.applyActionWordReview(0, 'pop', 'S', [false, true, false]), true);
+  const loop = model.transitions.find(t => t.from === t.to);
+  assert.equal(loop.rules[0].op, 'pop');
+  assert.equal(loop.rules[0].popSym, 'S');
+  assert.equal(loop.rules[0].actionReview.value, 'שלוף S');
+  assert.equal(Array.from(ctx.actionWordGroups())[0].members.length, 2, 'the other two are still asked together');
+  assert.equal(ctx.applyActionWordReview(0, 'push', 'A', [true, true]), true);
+  const pushed = model.transitions.flatMap(t => t.rules).filter(r => r.actionReview && r.actionReview.op === 'push');
+  assert.equal(pushed.length, 2);
+  assert.ok(pushed.every(r => r.op === 'push' && r.push.length === 1 && r.push[0] === 'A' && r.popSym === undefined && r.scanIncomplete));
+});
+
+test('an action answer can be undone, works beside the input-letter answer, and stays on record after final confirmation', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; toast=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  const model = actionScan(ctx, 'ε');
+  model.id = 'm-action';
+  vm.runInContext('DB', ctx).automata = [model];
+  const loopRule = () => ctx.__getCurrent().transitions.find(t => t.from === t.to).rules[0];
+
+  assert.equal(ctx.applyActionWordReview(0, 'none', undefined, [true, true, true]), true);
+  assert.equal(loopRule().op, 'none');
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(loopRule().op, 'pop', 'undo restores what the scan read');
+  assert.equal(loopRule().actionReview, undefined);
+
+  // The same rows also form an ε input-letter group; both answers are recorded and the rule stays locked.
+  assert.equal(ctx.applyActionWordReview(0, 'none', undefined, [true, true, true]), true);
+  const glyphIndex = Array.from(ctx.inputGlyphGroups()).findIndex(g => g.symbol === 'ε');
+  const glyph = Array.from(ctx.inputGlyphGroups())[glyphIndex];
+  assert.ok(glyph);
+  assert.equal(ctx.applyInputGlyphReview(glyphIndex, 'c', glyph.members.map(() => true)), true);
+  assert.equal(loopRule().read, 'c');
+  assert.equal(loopRule().actionReview.value, 'ללא שינוי');
+  assert.equal(loopRule().scanIncomplete, true);
+
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__actionAi=ai; globalThis.__actionOpts=opts; }', ctx);
+  const loop = ctx.__getCurrent().transitions.find(t => t.from === t.to);
+  ctx.editPdaTransition(loop.id, 0);
+  assert.equal(ctx.__actionAi.stack_action.type, 'NONE');
+  assert.equal(ctx.__actionAi.actionReview.value, 'ללא שינוי');
+  ctx.__actionOpts.onSave(ctx.makeRulePDA('c', 'S', 'none', ''));
+  const saved = ctx.__getCurrent().transitions.find(t => t.from === t.to).rules[0];
+  assert.equal(saved.manuallyReviewed, true);
+  assert.equal(saved.actionReview.value, 'ללא שינוי', 'the group answer stays on record after the full rule is confirmed');
+  assert.equal(saved.inputReview.value, 'c');
+  assert.equal(saved.scanEvidence.structured.action, 'POP');
 });

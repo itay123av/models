@@ -227,6 +227,7 @@ body{
 .glyph-shot.noimg{justify-content:flex-start}
 .glyph-other{display:inline-flex;gap:4px;align-items:center}
 .glyph-other .fld{width:52px;padding:3px 6px;font-size:13px;min-height:0;text-align:center}
+.glyph-other b{font-size:12px;color:#7c2d12}
 .ai-review-diag{margin-top:12px;font-size:11px;color:#78350f}
 .ai-review-diag summary{cursor:pointer;font-weight:800;color:#92400e}
 .ai-review-diag div{border-top:1px dashed #fcd34d;padding:5px 2px;line-height:1.35;overflow-wrap:anywhere}
@@ -1000,6 +1001,7 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
           `טקסט גולמי: ${esc(ev.raw_label_text||'—')}<br>`+
           `שמאל: ${esc(zones.left_text||'—')} · אמצע: ${esc(zones.middle_text||'—')} · ימין: ${esc(zones.right_text||'—')}`+
           (ai.inputReview?`<br><b>קלט אושר בידי אדם: «${esc(ai.inputReview.value)}»</b>${ai.inputReview.original!==ai.inputReview.value?` (הסריקה קראה «${esc(ai.inputReview.original)}»)`:''} — בדוק את שאר הכלל ושמור`:'')+
+          (ai.actionReview?`<br><b>מילת הפעולה אושרה בידי אדם: ${esc(ai.actionReview.value)}</b> (הסריקה קראה «${ai.actionReview.original&&ai.actionReview.original.op==='pop'?'שלוף':'דחוף'}» בלי סימן) — בדוק את שאר הכלל ושמור`:'')+
           (notes.length?`<br>הערות: ${notes.map(esc).join(' · ')}`:'');
         wrap.insertBefore(evidence, wrap.firstChild); }
       if(ai.cropped_image_segment_url){ const crop=document.createElement('div'); crop.className='ai-crop';
@@ -2240,19 +2242,25 @@ function inputGlyphChoices(g){
   (current&&current.transitions||[]).forEach(t=>(t.rules||[]).forEach(r=>{const s=scanRuleInputSymbol(r);if(s!=='?'&&s!=='ε')seen.add(s);}));
   return ['ε',...[...seen].sort()].sort((a,b)=>(b===g.symbol)-(a===g.symbol));
 }
-function inputGlyphPanelSelection(groupIndex,count){
-  const p=$('aiReviewPanel'),boxes=p&&p.querySelectorAll?Array.from(p.querySelectorAll(`input[data-glyph-group="${groupIndex}"]`)):[];
+/* בחירת השורות בכרטיס: רק תיבות הסימון של אותו כרטיס. אם אי אפשר לקרוא אותן — לא משנים דבר. */
+function scanPanelSelection(kind,groupIndex,count){
+  const p=$('aiReviewPanel'),boxes=p&&p.querySelectorAll?Array.from(p.querySelectorAll(`input[data-shot-kind="${kind}"][data-shot-group="${groupIndex}"]`)):[];
   if(boxes.length!==count)return null;
   return boxes.map(b=>Boolean(b.checked));
+}
+function scanRuleCountText(n){ return n===1?'בכלל אחד':`ב-${n} כללים`; }
+function scanGroupChosen(kind,g,groupIndex,selected){
+  const pick=Array.isArray(selected)?selected:scanPanelSelection(kind,groupIndex,g.members.length);
+  if(!pick||pick.length!==g.members.length){ toast('לא ניתן לקרוא אילו תמונות סומנו — לא שונה דבר','danger'); return null; }
+  const chosen=g.members.filter((_,i)=>pick[i]);
+  if(!chosen.length){ toast('לא סומנה אף תמונה — לא שונה דבר','danger'); return null; }
+  return chosen;
 }
 function applyInputGlyphReview(groupIndex,value,selected){
   const g=inputGlyphGroups()[groupIndex]; if(!g)return false;
   const symbol=inputGlyphValue(value);
   if(symbol==null){ toast('יש לבחור אות קלט אחת (או ε)','danger'); return false; }
-  const pick=Array.isArray(selected)?selected:inputGlyphPanelSelection(groupIndex,g.members.length);
-  if(!pick||pick.length!==g.members.length){ toast('לא ניתן לקרוא אילו תמונות סומנו — לא שונה דבר','danger'); return false; }
-  const chosen=g.members.filter((_,i)=>pick[i]);
-  if(!chosen.length){ toast('לא סומנה אף תמונה — לא שונה דבר','danger'); return false; }
+  const chosen=scanGroupChosen('glyph',g,groupIndex,selected); if(!chosen)return false;
   const point=modelUndoPoint(),at=new Date().toISOString(),touched=new Set();
   chosen.forEach(m=>{
     const t=trById(m.transitionId),r=t&&(t.rules||[])[m.ruleIndex]; if(!r)return;
@@ -2267,48 +2275,127 @@ function applyInputGlyphReview(groupIndex,value,selected){
   touched.forEach(t=>recomputeAiTransition(t));
   save(); renderAll();
   const changed=symbol===g.symbol?`אושר «${symbol}»`:`«${g.symbol}» → «${symbol}»`;
-  offerUndo(`קלט ב-${chosen.length} כללים: ${changed}. מילת הפעולה והמחסנית עדיין לאישור.`,restoreModelPoint(point));
+  offerUndo(`קלט ${scanRuleCountText(chosen.length)}: ${changed}. מילת הפעולה והמחסנית עדיין לאישור.`,restoreModelPoint(point));
   return true;
 }
 function applyInputGlyphReviewFromField(groupIndex){
   const el=$(`inputGlyphOther${groupIndex}`);
   return applyInputGlyphReview(groupIndex,el?el.value:'');
 }
+/* ── תיקון בצעד אחד של מילת פעולה בלי סימן ───────────────────────────────
+   דחוף/שלוף נכתבים תמיד עם סימן אחריהם, ולל״ש אף פעם לא. כשבכמה כללים
+   סרוקים שטרם אושרו נקרא דחוף/שלוף בלי סימן, הלוח מציג את תמונות השורות
+   ושואל פעם אחת מה כתוב: לל״ש (ללא), או דחוף/שלוף עם הסימן. שום תשובה לא
+   מסומנת מראש — האדם בוחר. רק השורות שנשארו מסומנות משתנות, הראיה המקורית
+   נשמרת, והכלל נשאר נעול עד אישור בדיאלוג (הקלט וראש המחסנית טרם נבדקו). */
+const ACTION_WORD_ISSUE=/^(חסר סימן (דחיפה|שליפה) מפורש|הפעולה בטקסט הגולמי|ראיית האזור הימני|סימן הפעולה באזור הימני|לא נמצא סימן פעולה קריא|חסר שדה ACTION מרחבי|השרת החזיר ערך גם בשדה פעולה|באזור הפעולה מופיע גם הסימן)/;
+function scanRuleMissingOperand(r){
+  const P=pdaRuleParts(r);
+  if(P.op==='push')return !P.push.length||P.push.includes('?');
+  if(P.op==='pop')return !P.popSym||P.popSym==='?';
+  return false;
+}
+function actionWordGroups(){
+  if(!current||current.type!=='pda')return [];
+  const groups=new Map();
+  (current.transitions||[]).forEach(t=>(t.rules||[]).forEach((r,i)=>{
+    if(!r||!r.scanEvidence||r.manuallyReviewed||r.actionReview||!scanRuleMissingOperand(r))return;
+    /* קבוצה לכל סריקה בנפרד, כמו בכרטיס אות הקלט */
+    const session=String(r.aiScanSession||'');
+    if(!groups.has(session))groups.set(session,{session,members:[]});
+    groups.get(session).members.push({transitionId:t.id,ruleIndex:i,lineId:String(r.aiLineId||''),read:pdaRuleParts(r).op});
+  }));
+  return [...groups.values()].filter(g=>g.members.length>=2);
+}
+/* תשובה חוקית: ללא, או דחוף/שלוף עם סימן מחסנית יחיד. ריק, "?", כמה סימנים ו-⊥ (המוגן) נדחים. */
+function actionWordAnswer(op,symbol){
+  const action=String(op||'').toLowerCase();
+  if(action==='none')return {op:'none',symbol:''};
+  if(action!=='push'&&action!=='pop')return null;
+  const toks=pdaTokens(String(symbol==null?'':symbol).trim());
+  if(toks.length!==1||toks[0]==='?'||toks[0]===PDA_BOTTOM)return null;
+  return {op:action,symbol:toks[0]};
+}
+function actionWordLabel(a){ return a.op==='none'?'ללא שינוי':`${a.op==='push'?'דחוף':'שלוף'} ${a.symbol}`; }
+function applyActionWordReview(groupIndex,op,symbol,selected){
+  const g=actionWordGroups()[groupIndex]; if(!g)return false;
+  const answer=actionWordAnswer(op,symbol);
+  if(!answer){ toast('יש לכתוב סימן מחסנית אחד אחרי דחוף/שלוף (לא ⊥)','danger'); return false; }
+  const chosen=scanGroupChosen('action',g,groupIndex,selected); if(!chosen)return false;
+  const point=modelUndoPoint(),at=new Date().toISOString(),touched=new Set();
+  chosen.forEach(m=>{
+    const t=trById(m.transitionId),r=t&&(t.rules||[])[m.ruleIndex]; if(!r)return;
+    const P=pdaRuleParts(r),original={op:P.op,operand:P.op==='push'?P.push.join(''):P.popSym};
+    r.op=answer.op;
+    r.push=answer.op==='push'?[answer.symbol]:[];
+    if(answer.op==='pop')r.popSym=answer.symbol; else delete r.popSym;
+    r.actionReview={op:answer.op,symbol:answer.symbol,value:actionWordLabel(answer),original,reviewedAt:at,groupSize:chosen.length,source:'action-word-group'};
+    /* רק ספקות שנגעו למילת הפעולה נסגרים; "סימן לא־קריא" נסגר רק אם לא נשאר ? באף שדה. */
+    const N=pdaRuleParts(r),unreadable=[N.read,N.guard,...N.push,N.popSym].includes('?');
+    r.aiIssues=scanUniqueIssues((r.aiIssues||[]).filter(x=>!ACTION_WORD_ISSUE.test(String(x))&&(unreadable||!String(x).startsWith('נשמר סימן לא'))));
+    r.semanticBlocked=pdaRuleBlocked(r);
+    touched.add(t);
+  });
+  touched.forEach(t=>recomputeAiTransition(t));
+  save(); renderAll();
+  offerUndo(`מילת הפעולה ${scanRuleCountText(chosen.length)}: ${actionWordLabel(answer)}. הקלט וראש המחסנית עדיין לאישור.`,restoreModelPoint(point));
+  return true;
+}
+function applyActionWordReviewFromField(groupIndex,op){
+  const el=$(`actionWord${op==='pop'?'Pop':'Push'}${groupIndex}`);
+  return applyActionWordReview(groupIndex,op,el?el.value:'');
+}
 /* תמונת הראיה של השורה, כמו שנשמרה — בלי חיתוך ובלי מסגרת. המיקום שהמודל
    החזיר לשורה בתוך התמונה אינו אמין (בסריקת 06.10 הוא זז שורה למטה), ולכן לא
    מציגים אותו כעובדה; הכיתוב "נקרא:" מזהה את השורה לפי סימן המחסנית שלה.
-   אחרי טעינה מחדש התמונות כבר לא שמורות, ואז מוצג רק הטקסט שנקרא. */
-function inputGlyphShotUrl(r){
+   אחרי טעינה מחדש התמונות כבר לא שמורות, ואז מוצג רק הטקסט שנקרא.
+   משותף לשני הכרטיסים: kind='glyph' (אות קלט) או 'action' (מילת פעולה). */
+function scanReviewGroups(kind){ return kind==='action'?actionWordGroups():inputGlyphGroups(); }
+function scanShotUrl(r){
   const ev=r&&r.scanEvidence||{},url=String(ev.cropped_image_segment_url||r&&r.cropped_image_segment_url||'');
   return /^data:image\//i.test(url)?url:'';
 }
-function inputGlyphMember(groupIndex,memberIndex){
-  const g=inputGlyphGroups()[groupIndex],m=g&&g.members[memberIndex],t=m&&trById(m.transitionId),r=t&&(t.rules||[])[m.ruleIndex];
+function scanShotMember(kind,groupIndex,memberIndex){
+  const g=scanReviewGroups(kind)[groupIndex],m=g&&g.members[memberIndex],t=m&&trById(m.transitionId),r=t&&(t.rules||[])[m.ruleIndex];
   if(!r)return null;
   const from=stById(t.from),to=stById(t.to);
-  return {g,t,r,where:`${from?from.label:'?'} ${isSelfLoopTransition(t)?'↺':'→'} ${to?to.label:'?'}`,
-    raw:String(r.raw_label_text||r.scanEvidence&&r.scanEvidence.raw_label_text||''),url:inputGlyphShotUrl(r)};
+  return {g,m,t,r,where:`${from?from.label:'?'} ${isSelfLoopTransition(t)?'↺':'→'} ${to?to.label:'?'}`,
+    raw:String(r.raw_label_text||r.scanEvidence&&r.scanEvidence.raw_label_text||''),url:scanShotUrl(r)};
 }
-function openInputGlyphShot(groupIndex,memberIndex){
-  const m=inputGlyphMember(groupIndex,memberIndex); if(!m||!m.url)return;
+function openScanShot(kind,groupIndex,memberIndex){
+  const m=scanShotMember(kind,groupIndex,memberIndex); if(!m||!m.url)return;
   const body=document.createElement('div');
   body.innerHTML=`<div class="glyph-big"><img src="${esc(m.url)}" alt="תמונת השורה"></div><div class="ai-review-sub" dir="auto">נקרא: ${esc(m.raw||'—')}</div>`;
-  _buildDialog({title:`${m.where} · הקלט נקרא «${m.g.symbol}»`,body,buttons:[{text:'סגור',value:null,primary:true}],dismissValue:null});
+  const what=kind==='action'?`נקרא «${m.m.read==='pop'?'שלוף':'דחוף'}» בלי סימן`:`הקלט נקרא «${m.g.symbol}»`;
+  _buildDialog({title:`${m.where} · ${what}`,body,buttons:[{text:'סגור',value:null,primary:true}],dismissValue:null});
 }
-function inputGlyphCardHtml(g,gi){
-  const shots=g.members.map((_,mi)=>{
-    const m=inputGlyphMember(gi,mi); if(!m)return '';
-    return `<div class="glyph-shot${m.url?'':' noimg'}"><label class="glyph-shot-head"><input type="checkbox" checked data-glyph-group="${gi}" data-glyph-member="${mi}"><b dir="ltr">${esc(m.where)}</b></label>`+
-      (m.url?`<button type="button" class="glyph-shot-img" onclick="openInputGlyphShot(${gi},${mi})" title="הגדל"><img src="${esc(m.url)}" alt="תמונת השורה"></button>`:'')+
+function scanShotsHtml(kind,g,gi){
+  return g.members.map((_,mi)=>{
+    const m=scanShotMember(kind,gi,mi); if(!m)return '';
+    return `<div class="glyph-shot${m.url?'':' noimg'}"><label class="glyph-shot-head"><input type="checkbox" checked data-shot-kind="${kind}" data-shot-group="${gi}" data-shot-member="${mi}"><b dir="ltr">${esc(m.where)}</b></label>`+
+      (m.url?`<button type="button" class="glyph-shot-img" onclick="openScanShot('${kind}',${gi},${mi})" title="הגדל"><img src="${esc(m.url)}" alt="תמונת השורה"></button>`:'')+
       `<span class="glyph-shot-raw" dir="auto">${m.url?'נקרא: ':'אין תמונה שמורה · נקרא: '}${esc(m.raw||'—')}</span></div>`;
   }).join('');
+}
+function inputGlyphCardHtml(g,gi){
   const chips=inputGlyphChoices(g).map(v=>`<button class="chip${v===g.symbol?' on':''}" onclick="applyInputGlyphReview(${gi},${esc(JSON.stringify(v))})">${esc(v)}${v===g.symbol?' — נכון':''}</button>`).join('');
   return `<div class="ai-review-item ai-review-card glyph-card">
     <div class="ai-review-title">הקלט נקרא «<span dir="ltr">${esc(g.symbol)}</span>» ב-${g.members.length} כללים</div>
     <div class="ai-review-sub">מה כתוב בפועל בתמונות המסומנות? תשובה אחת מתקנת את הקלט בכולן. הסר סימון מתמונה שכתוב בה משהו אחר.</div>
-    <div class="glyph-shots">${shots}</div>
+    <div class="glyph-shots">${scanShotsHtml('glyph',g,gi)}</div>
     <div class="ai-review-chips">${chips}<span class="glyph-other"><input id="inputGlyphOther${gi}" class="fld" maxlength="2" dir="ltr" placeholder="אחר" aria-label="אות אחרת"><button class="chip" onclick="applyInputGlyphReviewFromField(${gi})">החל</button></span></div>
     <div class="ai-review-sub">מתקן רק את אות הקלט. מילת הפעולה והמחסנית נשארות לאישור בכל כלל.</div></div>`;
+}
+function actionWordCardHtml(g,gi){
+  const pushes=g.members.filter(m=>m.read==='push').length,pops=g.members.length-pushes;
+  const what=pushes&&pops?'דחוף או שלוף':(pushes?'דחוף':'שלוף');
+  const field=(op,word)=>`<span class="glyph-other"><b>${word}</b><input id="actionWord${op==='pop'?'Pop':'Push'}${gi}" class="fld" maxlength="2" dir="ltr" placeholder="סימן" aria-label="${op==='pop'?'מה לשלוף':'מה לדחוף'}"><button class="chip" onclick="applyActionWordReviewFromField(${gi},'${op}')">החל</button></span>`;
+  return `<div class="ai-review-item ai-review-card glyph-card">
+    <div class="ai-review-title">נקרא «${what}» בלי סימן אחריו ב-${g.members.length} כללים</div>
+    <div class="ai-review-sub">דחוף ושלוף נכתבים עם סימן אחריהם, ולל״ש בלי. מה כתוב בפועל בתמונות המסומנות? הסר סימון מתמונה שכתוב בה משהו אחר.</div>
+    <div class="glyph-shots">${scanShotsHtml('action',g,gi)}</div>
+    <div class="ai-review-chips"><button class="chip" onclick="applyActionWordReview(${gi},'none')">לל״ש — ללא שינוי</button>${field('push','דחוף')}${field('pop','שלוף')}</div>
+    <div class="ai-review-sub">מתקן רק את מילת הפעולה והסימן שלה. הקלט וראש המחסנית נשארים לאישור בכל כלל.</div></div>`;
 }
 function collectAiReviewItems(){
   if(!current)return [];
@@ -2344,6 +2431,8 @@ function collectAiReviewItems(){
     if(semantic.length)parts.push('בעיה סמנטית: '+semantic.join(', '));
     const inputChecked=(t.rules||[]).filter(r=>r.inputReview&&!r.manuallyReviewed).map(r=>r.inputReview.value);
     if(inputChecked.length)parts.push(`קלט אושר בידי אדם (${inputChecked.join(', ')}) — עוד צריך לאשר את הכלל`);
+    const actionChecked=(t.rules||[]).filter(r=>r.actionReview&&!r.manuallyReviewed).map(r=>r.actionReview.value);
+    if(actionChecked.length)parts.push(`מילת הפעולה אושרה בידי אדם (${actionChecked.join(', ')}) — עוד צריך לאשר את הכלל`);
     add(`transition:${t.id}`,{kind:'transition',id:t.id,title:`${from?from.label:'?'} ${self?'↺':'→'} ${to?to.label:'?'}`,
       sub:parts.join(' · ')||'המעבר חסום לביקורת'});
   });
@@ -2367,12 +2456,12 @@ function pdaRuleToAi(r){
     zones:ev.zones||{left_text:'',middle_text:'',right_text:''},
     line_bbox:ev.line_bbox||{x:-1,y:-1,w:-1,h:-1},
     cropped_image_segment_url:r.cropped_image_segment_url||ev.cropped_image_segment_url||'',
-    field_notes:ev.field_notes||[], semantic_issues:ev.semantic_issues||[], scanEvidence:ev, inputReview:r.inputReview||null,
+    field_notes:ev.field_notes||[], semantic_issues:ev.semantic_issues||[], scanEvidence:ev, inputReview:r.inputReview||null, actionReview:r.actionReview||null,
     read_input:{value:readValue,confidence:confFor(readValue,'read_input')},
     pop_value:{value:topValue,confidence:confFor(topValue,'stack_top')},
     push_value:{value:pushValue,confidence:confFor(pushValue,'push_symbol')},
     pop_symbol:{value:popValue,confidence:confFor(popValue,'pop_symbol')},
-    stack_action:{type:op,confidence:reviewed?null:(cf.action??null)}
+    stack_action:{type:op,confidence:reviewed||r.actionReview?null:(cf.action??null)}
   };
 }
 function editPdaTransition(id,ruleIndex){
@@ -2402,6 +2491,7 @@ function editPdaTransition(id,ruleIndex){
       if(prevRaw) rules[idx].raw_label_text=prevRaw;
       if(prev.scanEvidence) rules[idx].scanEvidence=prev.scanEvidence;
       if(prev.inputReview) rules[idx].inputReview=prev.inputReview;
+      if(prev.actionReview) rules[idx].actionReview=prev.actionReview;
       if(prev.cropped_image_segment_url) rules[idx].cropped_image_segment_url=prev.cropped_image_segment_url;
       if(prev.aiLineId) rules[idx].aiLineId=prev.aiLineId;
       if(prev.aiTransitionId) rules[idx].aiTransitionId=prev.aiTransitionId;
@@ -2491,11 +2581,12 @@ function renderAiReviewPanel(){
     <div class="ai-review-chips">${it.canFocus?`<button class="chip" onclick="focusUnresolvedLabelRead(${Number(it.id)})">פתח</button>`:''}
       <button class="chip ai-review-ok" onclick="acknowledgeUnresolvedLabelRead(${Number(it.id)})">✓ בדקתי</button></div></div>`;
   const starts=actions.filter(x=>x.kind==='start'),states=actions.filter(x=>x.kind==='state'),rest=actions.filter(x=>x.kind!=='start'&&x.kind!=='state');
-  const glyphs=inputGlyphGroups();
+  const glyphs=inputGlyphGroups(),actionWords=actionWordGroups();
   p.innerHTML=`<div class="ai-review-head"><span>בדיקת סריקה · ${actions.length} לאישור</span><button class="ai-review-close" onclick="dismissAiReview()" title="מזער — הרשימה נשארת זמינה">–</button></div>
     <div class="ai-review-note">מה שזוהה מהתמונה נעול עד שתאשר אותו. התחל מהפריטים המסומנים ⚠.</div>`+
     starts.map(startRow).join('')+
     (glyphs.length?`<div class="ai-review-section">אות קלט שחוזרת · ${glyphs.length}</div>`+glyphs.map(inputGlyphCardHtml).join(''):'')+
+    (actionWords.length?`<div class="ai-review-section">מילת פעולה בלי סימן · ${actionWords.length}</div>`+actionWords.map(actionWordCardHtml).join(''):'')+
     (states.length?`<div class="ai-review-section">מצבים · ${states.length}</div>`+states.map(stateRow).join(''):'')+
     (rest.length?`<div class="ai-review-section">מעברים ותצפיות · ${rest.length}</div>`+rest.map(it=>it.kind==='label-read'?labelReadRow(it):itemBtn(it)).join(''):'')+
     (diag.length?`<details class="ai-review-diag"><summary>פרטים טכניים מהסריקה · ${diag.length}</summary>${diag.map(it=>`<div dir="auto">${esc(it.sub)}</div>`).join('')}</details>`:'');
