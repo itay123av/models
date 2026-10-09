@@ -645,6 +645,38 @@ test('a run blocked for non-determinism offers a button that switches the model'
   }
 });
 
+test('non-deterministic PDA: the rejection says why — stuck, input ended in a non-accepting state, or stack not back to ⊥', () => {
+  const ctx = loadClient();
+  const R = (read, top, op, push, popSym) => ({ read, top, op, push: push ? [push] : [], popSym });
+  ctx.__setCurrent({ type: 'pda', ndet: true, tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1' }, { id: 'c', label: 'q2' }, { id: 'd', label: 'q3', isAccept: true }],
+    transitions: [
+      { id: 't1', from: 'a', to: 'b', rules: [R('a', '', 'none')] },
+      { id: 't2', from: 'b', to: 'c', rules: [R('b', '', 'none')] },          // ab נגמרת ב-q2 שאינו מקבל
+      { id: 't3', from: 'a', to: 'd', rules: [R('c', '⊥', 'push', 'A')] },    // c נגמרת ב-q3 מקבל, אבל A נשאר במחסנית
+    ] });
+  const run = w => { const s = ctx.simInit(w); let g = 0; while (s.status === 'running' && g++ < 1000) ctx.simStepObj(s); return s; };
+
+  let s = run('ab');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /הקלט נגמר במצב לא מקבל \(q2\)/);
+  assert.doesNotMatch(s.reason, /נתקע/, 'ab was not stuck — it ended in q2');
+
+  s = run('c');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /המחסנית לא חזרה ל-⊥/);
+  assert.match(s.reason, /q3/);
+
+  s = run('b');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /נתקע/);
+  assert.match(s.reason, /q0 על 'b'/, 'says where it got stuck');
+
+  s = run('abb');
+  assert.match(s.reason, /נתקע/);
+  assert.match(s.reason, /q2 על 'b'/);
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */

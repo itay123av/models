@@ -4393,13 +4393,28 @@ function npdaSeenKeys(s){
   if(!s.seen){ s.seen=new Set(); s.history.forEach(h=>h.forEach(c=>s.seen.add(pdaCfgKey(c)))); s.configs.forEach(c=>s.seen.add(pdaCfgKey(c))); }
   return s.seen;
 }
+/* למה נעצרו כל המסלולים, לפי מה שקרה לכל אחד: נתקע באמצע הקלט (אין כלל
+   מתאים), הקלט נגמר במצב לא מקבל, או נגמר במצב מקבל אבל המחסנית לא חזרה
+   ל-⊥. קודם כל אלה נקראו "כל המסלולים נתקעו" — גם מילה שפשוט נגמרה ב-q2. */
+function npdaDeadReason(dead, revisits, input){
+  const n=input.length, lbl=id=>(stById(id)||{label:'?'}).label, list=a=>[...new Set(a)].join(', ');
+  const acc=c=>Boolean(stById(c.state)&&stById(c.state).isAccept);
+  const stuck=dead.filter(c=>c.pos<n), endNo=dead.filter(c=>c.pos>=n&&!acc(c)), endStack=dead.filter(c=>c.pos>=n&&acc(c));
+  const parts=[];
+  if(endNo.length) parts.push(`הקלט נגמר במצב לא מקבל (${list(endNo.map(c=>lbl(c.state)))})`);
+  if(endStack.length) parts.push(`הקלט נגמר במצב מקבל (${list(endStack.map(c=>lbl(c.state)))}), אבל המחסנית לא חזרה ל-${PDA_BOTTOM}`);
+  if(stuck.length) parts.push(`נתקע באמצע הקלט — אין כלל מתאים (${list(stuck.map(c=>`${lbl(c.state)} על '${input[c.pos]}'`))})`);
+  if(revisits) parts.push('מסלולים חזרו לקונפיגורציות שכבר נבדקו (לולאה)');
+  return parts.length?`אין מסלול מקבל: ${parts.join('; ')} ✗`:'כל המסלולים נתקעו ✗';
+}
 function npdaStep(s){
   if(s.configs.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול שמסיים במצב מקבל עם המחסנית בתחתית ✓'; return; }
-  const next=[], seen=npdaSeenKeys(s);
+  const next=[], seen=npdaSeenKeys(s), dead=[];
   let revisits=0;
-  for(const c of s.configs) for(const nc of pdaSuccCfg(c, s.input)){ const k=pdaCfgKey(nc); if(seen.has(k)){ revisits++; continue; } seen.add(k); next.push(nc); }
+  for(const c of s.configs){ const succ=pdaSuccCfg(c, s.input); if(!succ.length) dead.push(c);
+    for(const nc of succ){ const k=pdaCfgKey(nc); if(seen.has(k)){ revisits++; continue; } seen.add(k); next.push(nc); } }
   s.history.push(s.configs); s.configs=next; s.step=(s.step||0)+1;
-  if(!next.length){ s.status='rejected'; s.reason=revisits?'כל המסלולים נתקעו או חזרו לקונפיגורציות שכבר נבדקו (לולאה) ✗':'כל המסלולים נתקעו ✗'; }
+  if(!next.length){ s.status='rejected'; s.reason=npdaDeadReason(dead, revisits, s.input); }
   else if(next.some(c=>pdaCfgAccepts(c,s.input.length))){ s.status='accepted'; s.reason='קיים מסלול מקבל ✓'; }
   else if(s.step>4000 || next.length>1500){ s.status='stopped'; s.reason='נעצר — ריבוי מסלולים/צעדים'; }
 }
