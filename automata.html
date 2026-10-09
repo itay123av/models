@@ -3375,8 +3375,15 @@ function cropScanEvidenceDetailed(dataUrl,spec){
       c.width=Math.max(1,Math.round(sw*scale));c.height=Math.max(1,Math.round(sh*scale));
       const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
       ctx.drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);
-      resolve(Object.assign({},spec,{image_url:c.toDataURL('image/png'),image_role:spec.image_role||'original_same_frame_crop',crop_bbox:b,
-        target_line_bbox_in_crop:spec.kind==='line'?scanBBoxRelativeToCrop(spec.line_bbox,b):spec.target_line_bbox_in_crop,
+      const pixelBox={x:sx/im.width,y:sy/im.height,w:sw/im.width,h:sh/im.height};
+      const targets=(spec.target_line_bboxes_in_context||[]).map(target=>{
+        const n=normalizeScanBBox(target.bbox);if(!n.valid)return target;
+        const t=n.bbox,original={x:b.x+t.x*b.w,y:b.y+t.y*b.h,w:t.w*b.w,h:t.h*b.h};
+        return Object.assign({},target,{bbox:scanBBoxRelativeToCrop(original,pixelBox)});
+      });
+      resolve(Object.assign({},spec,{image_url:c.toDataURL('image/png'),image_role:spec.image_role||'original_same_frame_crop',requested_crop_bbox:b,crop_bbox:pixelBox,
+        target_line_bboxes_in_context:targets,
+        target_line_bbox_in_crop:spec.kind==='line'?scanBBoxRelativeToCrop(spec.line_bbox,pixelBox):spec.target_line_bbox_in_crop,
         original_size:{width:im.width,height:im.height},issues:[...(spec.bbox_audit&&spec.bbox_audit.issues||[]),...(padded.issues||[]),...(spec.crop_geometry_issues||[])]}));
     };
     im.onerror=()=>resolve(Object.assign({},spec,{image_url:'',original_size:null,crop_bbox:null,issues:[...(spec.bbox_audit&&spec.bbox_audit.issues||[]),...(spec.crop_geometry_issues||[]),'טעינת תמונת המקור ל-crop נכשלה']}));
@@ -3676,9 +3683,25 @@ function mergeTwoStageScan(passA,passB,crops,scanSessionId){
         const l=localBox.bbox,f=frameBox.bbox;
         originalEvidenceBox={x:f.x+l.x*f.w,y:f.y+l.y*f.h,w:l.w*f.w,h:l.h*f.h};
       }
+      // A syntactically valid local box can still point one physical row down.
+      // Keep the model's claim verbatim; never translate it to make it fit.
+      let rowAlignmentValid=Boolean(originalEvidenceBox);
+      const targetBox=normalizeScanBBox(crop.line_bbox||hint.bbox||hint.line_bbox);
+      if(originalEvidenceBox&&targetBox.valid){
+        const e=originalEvidenceBox,t=targetBox.bbox,center=e.y+e.h/2,distance=Math.abs(center-t.y-t.h/2);
+        const overlap=Math.max(0,Math.min(e.y+e.h,t.y+t.h)-Math.max(e.y,t.y))/Math.min(e.h,t.h);
+        const nearerRow=planCrops.some(other=>{
+          if(other.kind!=='line'||other.transition_id!==transitionId||other.line_id===lineId)return false;
+          const n=normalizeScanBBox(other.line_bbox);if(!n.valid)return false;
+          const b=n.bbox;return Math.abs(center-b.y-b.h/2)+Math.min(t.h,b.h)*.15<distance;
+        });
+        rowAlignmentValid=overlap>=.35&&!nearerRow;
+        if(!rowAlignmentValid)fieldNotes.push('local_bbox של הקריאה אינו תואם לפס השורה או קרוב יותר לשורה אחרת; המיקום נשמר כטענת המודל בלבד');
+      }
       read.pixel_provenance={row_crop_id:crop.crop_id,evidence_crop_id:evidenceId,
-        evidence_valid:ownEvidence&&validPixelFrame,local_bbox:cloneScanValue(read.bbox),
+        evidence_valid:ownEvidence&&validPixelFrame&&rowAlignmentValid,row_alignment_valid:rowAlignmentValid,local_bbox:cloneScanValue(read.bbox),
         original_bbox:originalEvidenceBox,original_line_bbox:cloneScanValue(hint.bbox||hint.line_bbox||crop.line_bbox),
+        aligned_line_bbox:cloneScanValue(crop.line_bbox),geometry_refinement:cloneScanValue(crop.geometry_refinement||null),
         row_image_url:crop.image_url};
       read.ai_line_id=lineId;read.cropped_image_segment_url=ownEvidence?evidenceCrop.image_url:crop.image_url;
       read.line_bbox=hint.bbox||hint.line_bbox||crop.line_bbox;

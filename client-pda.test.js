@@ -1182,6 +1182,52 @@ test('crop row alignment refuses extra bands, blank pixels and a shift beyond on
   }
 });
 
+test('crop pixel provenance maps through the actual integer raster bounds, including block targets', async () => {
+  const ctx=loadClient(),source={x:.123,y:.214,w:.221,h:.158},target={x:.15,y:.24,w:.16,h:.08};
+  ctx.Image=class{constructor(){this.width=100;this.height=80;}set src(_url){this.onload();}};
+  const draws=[];
+  ctx.document.createElement=()=>({getContext:()=>({drawImage(...args){draws.push(args);}}),toDataURL:()=> 'data:image/png;base64,AA=='});
+  for(const kind of ['line','label_block']){
+    const spec={kind,source_bbox:source,line_bbox:target,padding:0,
+      target_line_bboxes_in_context:[{line_id:'row',line_index:0,bbox:ctx.scanBBoxRelativeToCrop(target,source)}]};
+    const crop=await ctx.cropScanEvidenceDetailed('image',spec);
+    assert.deepEqual(JSON.parse(JSON.stringify(crop.crop_bbox)),{x:.12,y:.2125,w:.23,h:.1625});
+    const mapped=crop.target_line_bboxes_in_context[0].bbox,b=crop.crop_bbox;
+    assert.ok(Math.abs(b.y+mapped.y*b.h-target.y)<1e-12);
+    assert.ok(Math.abs(b.x+mapped.x*b.w-target.x)<1e-12);
+    if(kind==='line')assert.ok(Math.abs(b.y+crop.target_line_bbox_in_crop.y*b.h-target.y)<1e-12);
+    assert.equal(draws.at(-1)[1],12);assert.equal(draws.at(-1)[2],17);
+  }
+});
+
+test('merge rejects a local bbox shifted to the next row while preserving the model claim and geometry evidence', () => {
+  const ctx=loadClient(),session='row-displacement';
+  const states=[topologyState('s0','q0'),topologyState('s1','q1')];
+  const connector=topologyConnector('arrow','ink','s0','s1',['first','second'],{
+    label_block_bbox:{x:.4,y:.25,w:.12,h:.10},line_hints:[
+      {line_id:'first',bbox:{x:.4,y:.25,w:.12,h:.025}},
+      {line_id:'second',bbox:{x:.4,y:.31,w:.12,h:.025}},
+    ]});
+  const passA=topologyPass(session,states,[connector]),crops=materializedCropManifest(ctx,passA,session);
+  const block=crops.find(s=>s.kind==='label_block'),passB=labelsPass(session,passA.topology,crops);
+  const claim=ctx.scanBBoxRelativeToCrop({x:.41,y:.31,w:.09,h:.025},block.crop_bbox);
+  const read=passB.label_reads[0];read.evidence_crop_id=block.crop_id;read.bbox=claim;
+  const originalRead=JSON.stringify(read);
+  const merged=ctx.mergeTwoStageScan(passA,passB,crops,session).transitions[0].rules[0];
+  assert.equal(merged.pixel_provenance.evidence_valid,false);
+  assert.equal(merged.pixel_provenance.row_alignment_valid,false);
+  assert.equal(merged.pixel_provenance.original_bbox.y,.31,'the claim is not moved up to the owning row');
+  assert.equal(JSON.stringify(read),originalRead,'Pass B remains immutable');
+  assert.equal(JSON.stringify(merged.pixel_provenance.local_bbox),JSON.stringify(claim));
+  assert.match(merged.field_notes.join(' '),/local_bbox/);assert.equal(merged.scan_incomplete,true);
+  // An operand can extend below its baseline while the bbox remains centred on
+  // that row. This is retained rather than interpreted as a new/foreign row.
+  read.bbox=ctx.scanBBoxRelativeToCrop({x:.41,y:.25,w:.09,h:.042},block.crop_bbox);
+  const wrapped=ctx.mergeTwoStageScan(passA,passB,crops,session).transitions[0].rules[0];
+  assert.equal(wrapped.pixel_provenance.row_alignment_valid,true);
+  assert.equal(wrapped.pixel_provenance.evidence_valid,true);
+});
+
 test('context-read pixel provenance survives merge and rule import without moving the physical row', () => {
   const ctx=loadClient(),session='context-read';
   const states=[topologyState('s0','q0',{is_start:true}),topologyState('s1','q1',{is_accepting:true})];
