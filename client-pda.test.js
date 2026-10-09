@@ -2933,3 +2933,134 @@ test('without a usable IndexedDB the review keeps working with text only and not
     assert.match(ctx.scanShotsHtml('glyph', Array.from(ctx.inputGlyphGroups())[0], 0), /אין תמונה שמורה/);
   }
 });
+
+/* מהמעבר המלא כתלמיד על סריקת 06.10: מקומות שבהם התיקון נתקע. */
+function lockedArrowScan(ctx, over = {}) {
+  const row = (read, top) => scannedRule({
+    raw_label_text: `${read},${top} / לל״ש`, zones: { left_text: read, middle_text: top, right_text: 'לל״ש' },
+    read_input: { value: read, confidence: 0.9 }, pop_value: { value: top, confidence: 0.9 },
+    stack_action: { type: 'NONE', confidence: 0.9 }, push_value: { value: 'ε', confidence: 1 }, pop_symbol: { value: 'ε', confidence: 1 },
+    field_notes: ['Complete row recovered from the same-transition label_block context.'], scan_incomplete: true,
+  });
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q0', is_start: true, confidence: 0.95 }, { id: 'q1', confidence: 0.95 }],
+    transitions: [scannedTransition('t1', 'q0', 'q1', [row('b', 'A'), row('b', 'S')], over)] }, { atomic: true, scanSessionId: 'scan-walk' });
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__walkOpts=opts; }', ctx);
+  return model;
+}
+const approveInEditor = (ctx, t, i, rule) => { ctx.editPdaTransition(t.id, i); ctx.__walkOpts.onSave(rule); };
+
+test('an arrow whose rules are all approved asks once in the panel how many rows it has, instead of reopening an approved rule', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = lockedArrowScan(ctx, { scan_incomplete: true });
+  const t = model.transitions[0];
+  assert.equal(t.transitionScanIncomplete, true, 'the two-stage scan locks the arrow itself until its row count is confirmed');
+  approveInEditor(ctx, t, 0, ctx.makeRulePDA('b', 'A', 'none', ''));
+  let item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition');
+  assert.equal(item.pendingRules, 1);
+  const halfway = ctx.aiTransitionCardHtml(item);
+  assert.match(halfway, /כלל אחד מתוך 2 מחכה לאישור/);
+  const visible = (halfway.match(/<div class="ai-review-sub">[^<]*<\/div>/g) || []).join(' ');
+  assert.doesNotMatch(visible, /Complete row recovered/, 'technical English notes are not the card text');
+  assert.match(halfway, /title="[^"]*Complete row recovered/, 'they stay available on hover');
+  approveInEditor(ctx, model.transitions[0], 1, ctx.makeRulePDA('b', 'S', 'none', ''));
+
+  item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition');
+  assert.ok(item, 'the arrow is still locked by its row count');
+  assert.equal(item.pendingRules, 0);
+  const html = ctx.aiTransitionCardHtml(item);
+  assert.match(html, /כל הכללים אושרו\. על החץ בציור יש בדיוק 2 שורות\?/);
+  assert.match(html, new RegExp(`markTransitionStructureReviewed\\('${t.id}'\\)`));
+  assert.match(html, /יש עוד שורה/);
+
+  vm.runInContext('globalThis.__opened=0; editPdaTransition=()=>{ globalThis.__opened++; }; selectTransition=(id,open)=>{ globalThis.__selected=[id,open]; };', ctx);
+  ctx.focusAiIssue(t.id, 'transition');
+  assert.equal(ctx.__opened, 0, 'an approved rule is not reopened');
+  assert.deepEqual(Array.from(ctx.__selected), [t.id, false], 'the arrow is selected instead');
+
+  ctx.markTransitionStructureReviewed(t.id);
+  assert.equal(Array.from(ctx.collectAiReviewItems()).some(x => x.kind === 'transition'), false);
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
+});
+
+test('a doubtful source state is confirmed with one button, and a rule already checked in the editor is then approved', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = lockedArrowScan(ctx, { source_state: { id: 'q0', confidence: 0.5 } });
+  const t = model.transitions[0];
+  let item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition');
+  assert.equal(item.endpointPending.source, true);
+  assert.equal(item.endpointPending.target, false);
+  const html = ctx.aiTransitionCardHtml(item);
+  assert.match(html, new RegExp(`confirmTransitionEndpoint\\('${t.id}','from'\\)">✓ המקור q0 נכון`));
+  assert.doesNotMatch(html, /היעד q1 נכון/);
+
+  approveInEditor(ctx, t, 0, ctx.makeRulePDA('b', 'A', 'none', ''));
+  const checked = model.transitions[0].rules[0];
+  assert.equal(checked.manuallyReviewed, false, 'while the source is in doubt the rule cannot be approved');
+  assert.equal(checked.contentReviewed, true);
+
+  const source = t.from;
+  ctx.confirmTransitionEndpoint(t.id, 'from');
+  assert.equal(t.from, source, 'confirming keeps the same state');
+  assert.equal(t.endpointReview.source, false);
+  assert.equal(model.transitions[0].rules[0].manuallyReviewed, true, 'the rule the human already checked is now approved');
+  assert.notEqual(model.transitions[0].rules[1].manuallyReviewed, true, 'the unchecked rule still waits');
+  item = Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition');
+  assert.equal(item.pendingRules, 1);
+  assert.equal(item.endpointPending.source, false);
+});
+
+test('a symbol button replaces an unreadable "?" in the rule editor instead of appending to it', () => {
+  const ctx = loadClient();
+  const field = { value: '?', focus() {} };
+  ctx.pdaFocusOn(field);
+  ctx.pdaInsert('⊥');
+  assert.equal(field.value, '⊥', 'not "?⊥"');
+  field.value = ' ? ';
+  ctx.pdaInsert('ε');
+  assert.equal(field.value, 'ε');
+  field.value = 'A';
+  ctx.pdaInsert('⊥');
+  assert.equal(field.value, 'A⊥', 'real content is still extended as before');
+});
+
+test('the one-step cards read correctly in Hebrew: no reversed arrow, named checkboxes, and visible progress', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  vm.runInContext('offerUndo=(m)=>{ globalThis.__undoMsg=m; }', ctx);
+  const model = glyphScan(ctx, [['t21', 'q2', 'q1', [['ε', 0.78, 'S'], ['ε', 0.7, 'A']]]]);
+  const group = Array.from(ctx.inputGlyphGroups())[0];
+  assert.match(ctx.inputGlyphCardHtml(group, 0), /aria-label="כלול את q2 → q1"/);
+  assert.deepEqual({ ...ctx.scanRuleProgress() }, { total: 2, approved: 0 });
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', [true, true]), true);
+  assert.match(ctx.__undoMsg, /«ε» תוקן ל-«a»/);
+  assert.doesNotMatch(ctx.__undoMsg, /→/, 'an arrow is shown reversed inside right-to-left text');
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__walkOpts=opts; }', ctx);
+  approveInEditor(ctx, model.transitions[0], 0, ctx.makeRulePDA('a', 'S', 'push', 'A'));
+  assert.deepEqual({ ...ctx.scanRuleProgress() }, { total: 2, approved: 1 });
+});
+
+test('a wrong end of a scanned arrow is changed from its review card, without the rule editor covering the side panel', async () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const model = lockedArrowScan(ctx, { target_state: { id: 'q1', confidence: 0.5 } });
+  model.states.push({ id: 'q6', label: 'q6', x: 0, y: 0, isAccept: true });
+  const t = model.transitions[0];
+  const html = ctx.aiTransitionCardHtml(Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition'));
+  assert.match(html, new RegExp(`chooseTransitionEndpoint\\('${t.id}','to'\\)">יעד אחר…`));
+  assert.match(html, /✓ היעד q1 נכון/);
+
+  vm.runInContext('_buildDialog=o=>{ globalThis.__pick=o; return Promise.resolve(o.buttons[1].value); };', ctx);
+  const origCreate = ctx.document.createElement;
+  ctx.document.createElement = () => ({ innerHTML: '', querySelector: () => ({ value: 'q6' }) });
+  try { assert.equal(await ctx.chooseTransitionEndpoint(t.id, 'to'), true); }
+  finally { ctx.document.createElement = origCreate; }
+  assert.match(ctx.__pick.body.innerHTML, /לאיזה מצב החץ נכנס בציור\?/);
+  const q1 = model.states.find(s => s.label === 'q1');
+  assert.ok(ctx.__pick.body.innerHTML.includes(`<option value="${q1.id}" selected>q1</option>`), 'the current end is preselected, not a guess');
+  assert.equal(t.to, 'q6');
+  assert.equal(t.endpointReview.target, false);
+  assert.equal(t.humanEndpointResolution.target.label, 'q6');
+});
