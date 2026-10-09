@@ -26,6 +26,10 @@
   --red-soft:#fee2e2;
   --amber:#d97706;
   --amber-soft:#fef3c7;
+  /* טקסט על רקע לבן/בהיר — עומד בניגודיות AA (4.5:1); --green/--red/--amber נשארים לקווים ולמילוי */
+  --green-ink:#166534;
+  --red-ink:#b91c1c;
+  --amber-ink:#92400e;
   --dot:#e5e7eb;
   --shadow:0 10px 30px rgba(17,24,39,.08);
   --shadow-sm:0 2px 8px rgba(17,24,39,.05);
@@ -78,7 +82,7 @@ body{
 .cfg-card.idle{opacity:.9}
 .pda-sub{font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 16px}
 .pda-box{width:80px;height:54px;text-align:center;font-size:18px;font-weight:700;color:var(--ink-strong);border:1.5px solid var(--line);border-radius:13px;background:#fff;font-family:'Courier New',monospace}
-.pda-box::placeholder{color:#9ca3af;font-weight:500;font-size:14px;font-family:'Heebo',sans-serif}
+.pda-box::placeholder{color:var(--muted);font-weight:500;font-size:14px;font-family:'Heebo',sans-serif}
 .pda-box:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.16)}
 .pda-quick{display:flex;justify-content:center;gap:11px}
 .pda-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#f3f4f6;font-size:16px;font-weight:700;color:var(--ink-strong);cursor:pointer;font-family:'Courier New',monospace}
@@ -87,13 +91,17 @@ body{
 .pda-chip.sm{padding:0 14px;height:48px;font-size:15px}
 .pda-lbl{font-size:12.5px;font-weight:700;color:var(--ink-strong);margin-bottom:7px;text-align:right}
 .pda-row{display:flex;align-items:center;gap:9px}
+/* שדה סימנים + כפתור סימן (ε) לידו */
+.sym-row{display:flex;align-items:stretch;gap:8px}
+.sym-row input{flex:1;min-width:0}
+.sym-row .pda-chip.sm{height:auto;min-height:44px;flex-shrink:0;padding:0 16px;font-size:18px}
 .pda-box.wide{width:auto;flex:1;height:48px;font-size:17px}
 .pda-modes{display:flex;gap:8px}
 .pda-mode{flex:1;padding:11px 6px;border:1.5px solid var(--line);border-radius:12px;background:#f3f4f6;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Heebo',sans-serif}
 .pda-mode:hover{border-color:var(--indigo)}
 .pda-mode.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
 .pda-oplbl{font-size:12px;color:var(--muted);white-space:nowrap;min-width:96px;text-align:right}
-.pda-hint{margin-top:11px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;background:#f3f4f6;border-radius:9px;padding:8px 10px}
+.pda-hint{margin-top:11px;font-size:11.5px;color:#4b5563;text-align:center;line-height:1.5;background:#f3f4f6;border-radius:9px;padding:8px 10px}
 /* ── פענוח AI: הדגשת ביטחון נמוך + תצוגת חיתוך ── */
 .pda-box.lowconf{border-color:var(--amber);background:var(--amber-soft);box-shadow:0 0 0 3px rgba(217,119,6,.18)}
 .pda-modes.lowconf{outline:2px solid var(--amber);outline-offset:3px;border-radius:13px}
@@ -125,6 +133,13 @@ body{
 .tab.active .tab-type{background:var(--indigo)}
 .tab-name{font-weight:700; color:var(--ink-strong); overflow:hidden; text-overflow:ellipsis; max-width:120px; font-size:13.5px}
 .tab-x{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:1px 4px; border-radius:5px}
+/* פוקוס מקלדת על מצב או מעבר בקנבס */
+.node:focus,.edge:focus{outline:none}
+.node:focus-visible .ncirc{stroke:var(--indigo); stroke-width:5; stroke-dasharray:6 4}
+.edge:focus-visible .eline{stroke:var(--indigo); stroke-width:4}
+.edge:focus-visible .elabel{fill:var(--indigo)}
+/* שם הלשונית הוא כפתור — כדי שאפשר יהיה להגיע אליו ב-Tab */
+.tab-open{display:flex; align-items:center; gap:7px; background:none; border:0; padding:0; margin:0; font:inherit; color:inherit; cursor:pointer; min-width:0; border-radius:6px}
 .tab-x:hover{background:var(--red-soft); color:var(--red)}
 .tabbar-brand{flex-shrink:0; display:flex; align-items:center; gap:9px; font-weight:800; color:var(--ink-strong); font-size:15px; white-space:nowrap; padding-inline-start:6px}
 .tabbar-brand .brand-icon{width:30px; height:30px; font-size:16px; border-radius:9px}
@@ -137,8 +152,8 @@ body{
 .btn:disabled{opacity:.45; cursor:default; box-shadow:none}
 .btn-primary{background:var(--indigo); color:#fff; border-color:transparent}
 .btn-primary:hover{background:#4338ca; color:#fff; box-shadow:0 8px 22px rgba(79,70,229,.35)}
-.btn-run{background:var(--green); color:#fff; border-color:transparent}
-.btn-run:hover{background:#15803d; color:#fff}
+.btn-run{background:#15803d; color:#fff; border-color:transparent}
+.btn-run:hover{background:var(--green-ink); color:#fff}
 .btn-delete{background:var(--red); color:#fff; border-color:transparent}
 .btn-delete:hover{background:#dc2626; color:#fff}
 .btn-icon{padding:0; width:42px; height:42px; border-radius:11px}
@@ -254,11 +269,12 @@ body{
 .tape-label{font-size:11px; font-weight:800; color:var(--muted); letter-spacing:.6px; margin-bottom:8px; text-transform:uppercase}
 .tape-cells{display:flex; gap:8px; flex-wrap:nowrap; padding:2px 0}
 .cell{position:relative; display:grid; place-items:center; min-width:42px; height:48px; padding:0 11px; border-radius:9px; background:#fff; border:2px solid var(--line); font-family:'Courier New',monospace; font-weight:800; font-size:21px; color:var(--ink); transition:all .18s}
-.cell.read{background:var(--green-soft); border-color:var(--green); color:var(--green)}
+.cell.read{background:var(--green-soft); border-color:var(--green); color:var(--green-ink)}
 .cell.head{background:var(--indigo); color:#fff; border-color:transparent; transform:translateY(-3px); box-shadow:0 9px 18px rgba(79,70,229,.32)}
-.cell.stuck{background:var(--red-soft); border-color:var(--red); color:var(--red)}
+.cell.stuck{background:var(--red-soft); border-color:var(--red); color:var(--red-ink)}
 .cell.blank{color:var(--muted)}
 .cell.marker{background:#475569; color:#fff; border-color:#475569; font-weight:900}
+.cell.more{min-width:auto; white-space:nowrap; background:transparent; border-style:dashed; color:var(--muted); font-family:'Heebo',sans-serif; font-size:12px; font-weight:700}
 .cell .hmark{position:absolute; top:-13px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:9px solid var(--indigo)}
 .cell.empty{font-family:'Heebo',sans-serif; font-weight:600; font-size:14px; color:var(--muted); font-style:italic; border-style:dashed; min-width:150px}
 
@@ -351,8 +367,8 @@ details.legend[open]>summary{margin-bottom:10px}
 .simline b{color:var(--ink-strong)}
 .simpath{font-size:14px; color:var(--muted); font-family:'Courier New',monospace; word-break:break-word}
 .verdict{padding:11px 20px; border-radius:13px; font-weight:800; font-size:18px; display:inline-flex; align-items:center; gap:9px}
-.verdict.ok{background:var(--green-soft); color:var(--green)}
-.verdict.bad{background:var(--red-soft); color:var(--red)}
+.verdict.ok{background:var(--green-soft); color:var(--green-ink)}
+.verdict.bad{background:var(--red-soft); color:#991b1b}
 
 /* batch */
 .bhead{display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap}
@@ -361,7 +377,7 @@ details.legend[open]>summary{margin-bottom:10px}
 .brow .bword{flex:1; font-family:'Courier New',monospace; letter-spacing:2px}
 .brow .bexp{width:120px}
 .bres{min-width:130px; font-size:13.5px; font-weight:800}
-.bres.ok{color:var(--green)} .bres.bad{color:var(--red)}
+.bres.ok{color:var(--green-ink)} .bres.bad{color:var(--red-ink)}
 
 /* ─── MODAL ─── */
 .modal-bg{position:fixed; inset:0; background:rgba(17,24,39,.45); backdrop-filter:blur(6px); display:none; place-items:center; z-index:100}
@@ -374,7 +390,7 @@ details.legend[open]>summary{margin-bottom:10px}
 .modal-actions{display:flex; gap:11px; justify-content:flex-end; margin-top:22px; align-items:center; flex-wrap:wrap}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--paper); margin-bottom:9px}
 .lib-item.cur{border-color:var(--indigo); box-shadow:0 0 0 3px var(--indigo-soft)}
-.lib-item .li-main{flex:1; min-width:0; cursor:pointer}
+.lib-item .li-main{flex:1; min-width:0; cursor:pointer; background:none; border:0; padding:0; font:inherit; color:inherit; text-align:start; border-radius:8px}
 .lib-item .li-name{font-weight:800; color:var(--ink-strong); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .lib-item .li-meta{font-size:13px; color:var(--muted)}
 .lib-item .li-act{width:34px;height:34px;border:1px solid var(--line);background:var(--panel);border-radius:9px;cursor:pointer;color:var(--muted);display:grid;place-items:center}
@@ -383,8 +399,8 @@ details.legend[open]>summary{margin-bottom:10px}
 /* ─── TOAST ─── */
 .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--ink-strong); color:#fff; padding:13px 22px; border-radius:13px; box-shadow:var(--shadow); font-weight:700; z-index:200; transition:transform .3s; max-width:90vw}
 .toast.show{transform:translateX(-50%) translateY(0)}
-.toast.danger{background:var(--red)}
-.toast.success{background:var(--green)}
+.toast.danger{background:#dc2626}
+.toast.success{background:#15803d}
 .toast-action{margin-inline-start:14px; background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.65); border-radius:8px; padding:3px 12px; font:inherit; font-weight:800; cursor:pointer}
 .toast-action:hover{background:rgba(255,255,255,.15)}
 
@@ -430,8 +446,8 @@ details.legend[open]>summary{margin-bottom:10px}
 .btn:active{transform:translateY(1px)}
 .btn-primary{background:var(--indigo);border-color:transparent}
 .btn-primary:hover{background:#4338ca;box-shadow:0 8px 20px rgba(79,70,229,.30)}
-.btn-run{background:var(--green);border-color:transparent;color:#fff}
-.btn-run:hover{background:#15803d;box-shadow:0 8px 20px rgba(22,163,74,.25)}
+.btn-run{background:#15803d;border-color:transparent;color:#fff}
+.btn-run:hover{background:var(--green-ink);box-shadow:0 8px 20px rgba(22,163,74,.25)}
 .float{transition:box-shadow .25s}
 .float:hover{box-shadow:0 20px 50px rgba(17,24,39,.14)}
 .verdict.ok{background:linear-gradient(135deg,#dcfce7,#bbf7d0)}
@@ -453,8 +469,8 @@ details.legend[open]>summary{margin-bottom:10px}
 <div class="app">
   <!-- FULL-SCREEN CANVAS -->
   <div class="canvas-area" id="canvasArea">
-    <div class="arm-banner" id="armBanner"></div>
-    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+    <div class="arm-banner" id="armBanner" role="status" aria-live="polite"></div>
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="לוח השרטוט — מצבים ומעברים">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M0,0 L10,5 L0,10 z"></path>
@@ -478,8 +494,8 @@ details.legend[open]>summary{margin-bottom:10px}
   <!-- BRAND (top-left) -->
   <!-- TABS BAR (full-width, top) -->
   <div class="tabbar" id="tabBar">
-    <button class="tab-add" onclick="newModel()" title="מודל חדש (אוטומט סופי / אוטומט מחסנית / מכונת טיורינג)">+</button>
-    <div class="tabs" id="tabs"></div>
+    <button class="tab-add" onclick="newModel()" title="מודל חדש (אוטומט סופי / אוטומט מחסנית / מכונת טיורינג)" aria-label="מודל חדש">+</button>
+    <div class="tabs" id="tabs" role="group" aria-label="המודלים הפתוחים"></div>
     <div class="tabbar-brand"><div class="brand-icon">Σ</div><span>מודלים חישוביים</span></div>
   </div>
 
@@ -490,7 +506,7 @@ details.legend[open]>summary{margin-bottom:10px}
       <div class="cp-model">
         <span class="mtype" id="modelType">DFA</span>
         <span class="mname" id="modelName">—</span>
-        <button class="cp-iconbtn" id="renameBtn" title="שנה שם" onclick="renameModel()"></button>
+        <button class="cp-iconbtn" id="renameBtn" title="שנה שם" aria-label="שנה את שם המודל" onclick="renameModel()"></button>
       </div>
       <div class="cp-sec">
         <div class="cp-h">קובץ</div>
@@ -505,14 +521,14 @@ details.legend[open]>summary{margin-bottom:10px}
         <div class="cp-h">מצבים</div>
         <button class="btn btn-primary" id="addStateBtn" onclick="addStateCentered()" style="width:100%"></button>
         <div class="cp-row" style="margin-top:8px">
-          <button class="btn btn-sm" onclick="zoom(0.82)" title="התקרב">＋</button>
-          <button class="btn btn-sm" onclick="zoom(1.22)" title="התרחק">－</button>
-          <button class="btn btn-sm" onclick="fitView()">⤢ מרכוז</button>
+          <button class="btn btn-sm" onclick="zoom(0.82)" title="התקרב" aria-label="התקרב">＋</button>
+          <button class="btn btn-sm" onclick="zoom(1.22)" title="התרחק" aria-label="התרחק">－</button>
+          <button class="btn btn-sm" onclick="fitView()" aria-label="מרכוז התצוגה"><span aria-hidden="true">⤢</span> מרכוז</button>
         </div>
       </div>
       <div class="cp-sec">
         <div class="cp-h" id="wordLabel">הסרט שלך</div>
-        <input id="simWord" class="word" placeholder="הקלד אותיות, למשל aba…" oninput="onWordInput()" onkeydown="if(event.key==='Enter')playRun()">
+        <input id="simWord" class="word" aria-label="המילה שלך" placeholder="הקלד אותיות, למשל aba…" oninput="onWordInput()" onkeydown="if(event.key==='Enter')playRun()">
         <div class="run-btns">
           <button class="btn btn-run" id="runBtn" onclick="playRun()"></button>
           <button class="btn btn-step" id="stepBtn" onclick="stepOnce()"></button>
@@ -538,22 +554,13 @@ details.legend[open]>summary{margin-bottom:10px}
 
   <!-- GUIDE (bottom-left) -->
   <div class="guide-float" id="guideFloat">
-    <div class="guide-body" id="guideBody" style="display:none">
-      <ul>
-        <li>עיגול = מצב · עיגול כפול = מצב <b>מקבל</b>.</li>
-        <li>חץ נכנס מבחוץ = המצב <b>ההתחלתי</b> (המצב הראשון שתיצור; אפשר לשנות בלוח הבקרה).</li>
-        <li>תווית "a, b" = מעבר על <b>a</b> וגם על <b>b</b>.</li>
-        <li><b>בניית מעבר:</b> לחץ על מצב מקור ואז על מצב יעד, והקלד סימן.</li>
-        <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
-        <li><b>דטרמיניסטי:</b> מכל מצב — לכל היותר מעבר אחד על כל סימן. אם אין מעבר על הסימן הנוכחי, המילה נדחית (אוטומט לא מלא).</li>
-        <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
-      </ul>
-    </div>
-    <button class="guide-btn" onclick="toggleGuide()"><span>? מדריך</span><span id="guideChev">▴</span></button>
+    <!-- תוכן המדריך נכתב רק ב-renderGuide (לפי סוג המודל), כדי שלא יהיו שני עותקים -->
+    <div class="guide-body" id="guideBody" style="display:none"></div>
+    <button class="guide-btn" id="guideBtn" onclick="toggleGuide()" aria-label="מדריך" aria-expanded="false" aria-controls="guideBody"><span>? מדריך</span><span id="guideChev" aria-hidden="true">▴</span></button>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <input type="file" id="fileInput" accept="application/json,.json" style="display:none" onchange="onImport(event)">
 
 <!-- ליבת הסמנטיקה של אוטומט מחסנית. מודול משותף לדפדפן ולבדיקות ב-Node,
@@ -572,11 +579,15 @@ const qa = sel => [...document.querySelectorAll(sel)];
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 let toastTimer=null;
+/* ההודעה היא אזור חי (role=status) — קורא מסך מקריא אותה. אחרי שהיא גולשת
+   החוצה התוכן מתרוקן, כדי שכפתור «בטל» ישן לא יישאר יעד Tab בלתי נראה. */
+function hideToast(t){ t.className='toast'; toastTimer=null; t.onmouseenter=t.onmouseleave=t.onfocusin=t.onfocusout=null;
+  setTimeout(()=>{ if(!t.classList.contains('show'))t.textContent=''; },350); }
 function toast(msg, type='',duration){ const t=$('toast');
   if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
-  t.onmouseenter=t.onmouseleave=null; t.textContent=msg; t.className='toast show '+type;
+  t.onmouseenter=t.onmouseleave=t.onfocusin=t.onfocusout=null; t.textContent=msg; t.className='toast show '+type;
   const visibleFor=Number.isFinite(Number(duration))?Number(duration):(type==='danger'?10000:3200);
-  toastTimer=setTimeout(()=>{t.className='toast';toastTimer=null;},visibleFor); }
+  toastTimer=setTimeout(()=>hideToast(t),visibleFor); }
 /* ── ביטול מחיקה ─────────────────────────────────────────────────────────
    מחיקות שמתבצעות מיד (בלי חלון אישור) מציעות "בטל" בהודעה לכמה שניות.
    נשמר צילום לפני המחיקה. אם מאז נשמר שינוי נוסף, הביטול נחסם — כדי
@@ -586,13 +597,15 @@ let SAVE_SEQ=0, UNDO=null;
    כשהיא נעלמת מעצמה — כך שה"בטל" תקף בדיוק כל זמן שאפשר ללחוץ עליו. */
 function toastAction(msg,actionText,onAction,duration=10000,onExpire){ const t=$('toast'); if(!t)return;
   if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
-  const hide=()=>{ t.className='toast'; toastTimer=null; t.onmouseenter=t.onmouseleave=null; if(onExpire)onExpire(); };
+  const hide=()=>{ hideToast(t); if(onExpire)onExpire(); };
   t.textContent=''; const text=document.createElement('span'); text.textContent=msg;
   const b=document.createElement('button'); b.type='button'; b.className='toast-action'; b.textContent=actionText;
-  b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} t.onmouseenter=t.onmouseleave=null; t.className='toast'; onAction(); };
+  if(actionText==='בטל'){ b.title='בטל (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts','Control+Z'); }
+  b.onclick=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} hideToast(t); onAction(); };
   t.append(text,b); t.className='toast show';
-  t.onmouseenter=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} };
-  t.onmouseleave=()=>{ if(!toastTimer)toastTimer=setTimeout(hide,4000); };
+  /* העכבר או הפוקוס (Tab) על ההודעה עוצרים את הספירה */
+  t.onmouseenter=t.onfocusin=()=>{ if(toastTimer){clearTimeout(toastTimer);toastTimer=null;} };
+  t.onmouseleave=t.onfocusout=()=>{ if(!toastTimer)toastTimer=setTimeout(hide,4000); };
   toastTimer=setTimeout(hide,duration); }
 function undoLast(){ const token=UNDO; if(!token)return false; UNDO=null;
   if(SAVE_SEQ!==token.seq){ toast('אי אפשר לבטל — בוצעו שינויים נוספים מאז','danger'); return false; }
@@ -600,11 +613,28 @@ function undoLast(){ const token=UNDO; if(!token)return false; UNDO=null;
 function offerUndo(message,restore){ if(!restore){ toast(message); return; }
   const token={restore,seq:SAVE_SEQ}; UNDO=token;
   toastAction(message,'בטל',undoLast,10000,()=>{ if(UNDO===token)UNDO=null; }); }
+/* Ctrl+Z (או Cmd+Z) = הכפתור «בטל» שבהודעה, באותו חלון זמן. לפי e.code,
+   כדי שיעבוד גם בפריסת מקלדת עברית (שם e.key הוא «ז»). בשדה טקסט לא מגיעים
+   לכאן — שם Ctrl+Z מבטל הקלדה כרגיל. */
+function handleUndoShortcut(e){
+  if(!(e.ctrlKey||e.metaKey)||e.shiftKey||e.altKey)return false;
+  if(e.code!=='KeyZ'&&String(e.key).toLowerCase()!=='z')return false;
+  e.preventDefault();
+  if(!UNDO){ toast('אין מה לבטל — אפשר לבטל מחיקה רק כל עוד ההודעה עליה מוצגת'); return true; }
+  const t=$('toast'); if(t&&t.querySelector&&t.querySelector('.toast-action'))hideToast(t);
+  undoLast(); return true; }
 function modelUndoPoint(){ return current?{id:current.id,json:JSON.stringify(current)}:null; }
 function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return;
   const back=JSON.parse(point.json); Object.keys(m).forEach(k=>delete m[k]); Object.assign(m,back);
   current=m; DB.settings.lastId=m.id; sel={type:null,id:null}; armed=null; stopPlay(); SIM=null;
   save(); renderAll(); fitView(); toast('בוטל','success'); }); }
+/* מכניס טקסט במקום הסמן בשדה (מחליף בחירה), או בסופו אם אין מידע על הסמן */
+function insertAtCaret(input,text){ if(!input)return;
+  const v=String(input.value||''), s=Number.isInteger(input.selectionStart)?input.selectionStart:v.length,
+    e=Number.isInteger(input.selectionEnd)?input.selectionEnd:s;
+  input.value=v.slice(0,s)+text+v.slice(e);
+  const p=s+text.length; try{ if(input.setSelectionRange)input.setSelectionRange(p,p); }catch(_){}
+  if(input.focus)input.focus(); }
 function download(name, text){ const b=new Blob([text],{type:'application/json'}); const u=URL.createObjectURL(b);
   const a=document.createElement('a'); a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000); }
 
@@ -627,27 +657,55 @@ const PATHS={
   graph:'<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h6a3 3 0 0 1 3 3v6"/>',
   film:'<rect x="2.5" y="3" width="19" height="18" rx="2.5"/><path d="M7 3v18M17 3v18M2.5 8h4.5M2.5 12h19M2.5 16h4.5M17 8h4.5M17 16h4.5"/>'
 };
-function ico(name){ return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`; }
+function ico(name){ return `<svg class="ic" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`; }
 
 /* ─── dialog system ─── */
+function topModal(){ const all=qa('.modal-bg:not(.closing)'); return all[all.length-1]||null; }
+function modalFocusables(root){ return [...root.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])')]
+  .filter(el=>!el.disabled&&el.getClientRects().length); }
+/* מקלדת בחלון: Escape = ביטול. Enter = הכפתור הראשי, אלא אם הפוקוס על כפתור —
+   אז Enter מפעיל את הכפתור הזה (קודם Enter על «ביטול» הפעיל את «מחק»).
+   בכפתור בחירה (סוג מודל, דחיפה/שליפה) Enter בוחר בו ומאשר. Tab נשאר בתוך
+   החלון. רק החלון העליון מגיב — קודם Escape בחלון אישור סגר גם את הספרייה שמתחתיו. */
+function dialogKey(e,bg,dismiss){
+  if(e.key==='Escape'){ e.preventDefault(); dismiss(); return; }
+  if(e.key==='Tab'){ const f=modalFocusables(bg.querySelector('.modal')||bg); if(!f.length)return;
+    const a=document.activeElement, i=f.indexOf(a);
+    if(i<0){ e.preventDefault(); (e.shiftKey?f[f.length-1]:f[0]).focus(); }
+    else if(e.shiftKey&&i===0){ e.preventDefault(); f[f.length-1].focus(); }
+    else if(!e.shiftKey&&i===f.length-1){ e.preventDefault(); f[0].focus(); }
+    return; }
+  if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
+  const tg=e.target&&e.target.closest?e.target:null;
+  if(tg&&tg.closest('textarea,a'))return;
+  const b=tg&&tg.closest('button');
+  if(b){ if(!b.matches('.chip,.pda-mode'))return;
+    e.preventDefault(); if(!b.classList.contains('on'))b.click(); }
+  const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){ e.preventDefault(); p.click(); }
+}
 function _buildDialog({title, message, body, buttons, dismissValue=null}){
   return new Promise(resolve=>{
+    const opener=document.activeElement, did='dlg'+uid();
     const bg=document.createElement('div'); bg.className='modal-bg show';
-    bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true">
-      ${title?`<h2>${esc(title)}</h2>`:''}
-      ${message?`<p style="color:var(--muted);margin-bottom:16px;line-height:1.6;white-space:pre-wrap">${esc(message)}</p>`:''}
+    bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true"${title?` aria-labelledby="${did}-t"`:''}${message?` aria-describedby="${did}-m"`:''}>
+      ${title?`<h2 id="${did}-t">${esc(title)}</h2>`:''}
+      ${message?`<p id="${did}-m" style="color:var(--muted);margin-bottom:16px;line-height:1.6;white-space:pre-wrap">${esc(message)}</p>`:''}
       <div class="dialog-body"></div><div class="modal-actions"></div></div>`;
     if(body) bg.querySelector('.dialog-body').appendChild(body);
     const actions=bg.querySelector('.modal-actions');
     /* הדיאלוג נעלם באנימציה של 150ms אך ה-Promise נפתר מיד; closing מסמן אותו
-       כך ש-closeTopModal לא יסגור אותו שוב במקום את הדיאלוג שמתחתיו */
-    const close=val=>{ document.removeEventListener('keydown',escH); bg.classList.add('closing'); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150); resolve(val); };
+       כך ש-closeTopModal לא יסגור אותו שוב במקום את הדיאלוג שמתחתיו.
+       הפוקוס חוזר למה שפתח את החלון (אם הוא עדיין על המסך). */
+    const close=val=>{ document.removeEventListener('keydown',escH); bg.classList.add('closing'); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150);
+      if(opener&&opener!==document.body&&opener.isConnected&&opener.focus)opener.focus(); resolve(val); };
     (buttons||[]).forEach(btn=>{ const b=document.createElement('button');
       b.className='btn'+(btn.primary?' btn-primary':'')+(btn.danger?' btn-delete':''); b.textContent=btn.text;
       b.onclick=()=>close(btn.value); actions.appendChild(b); });
     bg.addEventListener('click',e=>{ if(e.target===bg) close(dismissValue); });
-    function escH(e){ if(e.key==='Escape'){e.preventDefault(); close(dismissValue);}
-      else if(e.key==='Enter'&&!e.shiftKey&&e.target.tagName!=='TEXTAREA'){ const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){e.preventDefault(); p.click();} } }
+    /* חלון שהוסר מבחוץ (closeTopModal) מסיר כאן את המאזין שלו */
+    function escH(e){ if(!bg.isConnected){ document.removeEventListener('keydown',escH); return; }
+      if(topModal()!==bg||bg.classList.contains('closing'))return;
+      dialogKey(e,bg,()=>close(dismissValue)); }
     document.addEventListener('keydown',escH); document.body.appendChild(bg);
     setTimeout(()=>{ const i=bg.querySelector('input,textarea'); if(i){i.focus(); i.select&&i.select();} else bg.querySelector('.btn-primary,.btn-delete,.btn')?.focus(); },50);
   });
@@ -662,7 +720,18 @@ function promptDialog(title, opts={}){
   if(opts.label){ const l=document.createElement('label'); l.textContent=opts.label;
     l.style.cssText='display:block;margin-bottom:7px;font-size:14px;color:var(--ink-strong);font-weight:700'; wrap.appendChild(l); }
   const input=document.createElement('input'); input.type='text';
-  if(opts.placeholder)input.placeholder=opts.placeholder; if(opts.value)input.value=opts.value; wrap.appendChild(input);
+  if(opts.placeholder)input.placeholder=opts.placeholder; if(opts.value)input.value=opts.value;
+  if(opts.label)input.setAttribute('aria-label',opts.label);
+  /* כפתורי סימן לתווים שאין במקלדת (למשל ε). הסימן נכנס במקום הסמן;
+     mousedown לא מוציא את הפוקוס מהשדה, כדי שהסמן יישאר במקומו. */
+  if(opts.symbolButtons&&opts.symbolButtons.length){
+    const row=document.createElement('div'); row.className='sym-row'; row.appendChild(input);
+    opts.symbolButtons.forEach(sb=>{ const b=document.createElement('button'); b.type='button'; b.className='pda-chip sm';
+      b.textContent=sb.symbol; b.title=sb.label; b.setAttribute('aria-label',sb.label);
+      b.addEventListener('mousedown',e=>e.preventDefault());
+      b.addEventListener('click',()=>insertAtCaret(input,sb.symbol)); row.appendChild(b); });
+    wrap.appendChild(row);
+  } else wrap.appendChild(input);
   const SUBMIT=Symbol();
   return _buildDialog({title, message:opts.message, body:wrap, buttons:[
     {text:'ביטול', value:null}, {text:opts.confirmText||'שמור', value:SUBMIT, primary:true}], dismissValue:null})
@@ -698,12 +767,100 @@ function normalizeTransitionTopology(model){
   model.transitions.forEach(t=>{if(t&&typeof t==='object')t.selfLoop=Boolean(t.from!=null&&t.from===t.to);});
   return model;
 }
+/* מודל מקובץ מיובא או מאחסון ישן עלול להיות שבור. מעבר שמפנה למצב שלא
+   קיים הפיל את הציור — ומכיוון שהמודל כבר נשמר, האפליקציה נשארה שבורה בכל
+   טעינה. כאן משלימים מזהים, מיקומים ומערכים חסרים, ומשמיטים רק מעבר שאין
+   לו מקור או יעד. מחזיר את מספר המעברים שהושמטו. */
+function sanitizeModel(a){
+  const tp=String(a.type||'dfa').toLowerCase();
+  if(tp==='nfa'||tp==='npda'){ a.ndet=true; }
+  a.type=(tp==='pda'||tp==='npda')?'pda':(tp==='tm'?'tm':'dfa');
+  if(typeof a.name!=='string'||!a.name.trim())a.name='מודל מיובא';
+  if(!Array.isArray(a.tests))a.tests=[];
+  if(!Array.isArray(a.alphabet))a.alphabet=[];
+  const seen=new Set();
+  a.states=(Array.isArray(a.states)?a.states:[]).filter(s=>s&&typeof s==='object');
+  a.states.forEach((s,i)=>{
+    s.id=(s.id==null||s.id==='')?'':String(s.id); if(!s.id||seen.has(s.id))s.id=uid(); seen.add(s.id);
+    if(s.label==null||String(s.label).trim()==='')s.label='q'+i; else s.label=String(s.label);
+    if(!Number.isFinite(s.x))s.x=150+(i%5)*170; if(!Number.isFinite(s.y))s.y=150+Math.floor(i/5)*170;
+    s.isStart=Boolean(s.isStart); s.isAccept=Boolean(s.isAccept); });
+  const all=(Array.isArray(a.transitions)?a.transitions:[]).filter(t=>t&&typeof t==='object');
+  a.transitions=all.filter(t=>{ t.from=t.from==null?'':String(t.from); t.to=t.to==null?'':String(t.to); return seen.has(t.from)&&seen.has(t.to); });
+  a.transitions.forEach(t=>{ if(t.id==null||t.id==='')t.id=uid();
+    if(a.type==='dfa')t.symbols=Array.isArray(t.symbols)?t.symbols.map(String):parseSyms(t.symbols);
+    else if(!Array.isArray(t.rules))t.rules=[]; });
+  normalizeTransitionTopology(a);
+  return all.length-a.transitions.length;
+}
+function droppedTransitionsText(n){ return n===1?'מעבר אחד הושמט כי הוא מפנה למצב שלא קיים.':`${n} מעברים הושמטו כי הם מפנים למצב שלא קיים.`; }
+/* JSON לא תקין: הודעת הדפדפן באנגלית, ובחלק מהשגיאות בלי מיקום. לכן
+   מאתרים כאן את התו הראשון שבו התחביר נשבר (אינדקס; -1 = תקין). */
+function jsonSyntaxErrorAt(text){
+  const s=String(text), n=s.length, NUM=/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y; let i=0;
+  const fail=()=>{ throw {jsonAt:i}; };
+  const ws=()=>{ while(i<n&&(s[i]===' '||s[i]==='\t'||s[i]==='\n'||s[i]==='\r'))i++; };
+  const lit=w=>{ for(let k=0;k<w.length;k++){ if(s[i]!==w[k])fail(); i++; } };
+  const str=()=>{ i++;
+    while(i<n){ const c=s[i];
+      if(c==='"'){ i++; return; }
+      if(c==='\\'){ i++; if(i>=n)fail();
+        if(s[i]==='u'){ for(let k=1;k<=4;k++){ if(!/[0-9a-fA-F]/.test(s[i+k]||'')){ i+=k; fail(); } } i+=5; }
+        else if('"\\/bfnrt'.includes(s[i]))i++; else fail();
+        continue; }
+      if(c<' ')fail();
+      i++; }
+    fail(); };
+  const num=()=>{ NUM.lastIndex=i; const m=NUM.exec(s); if(!m)fail(); i+=m[0].length; };
+  const val=()=>{ ws(); if(i>=n)fail(); const c=s[i];
+    if(c==='{'){ i++; ws(); if(s[i]==='}'){ i++; return; }
+      for(;;){ ws(); if(s[i]!=='"')fail(); str(); ws(); if(s[i]!==':')fail(); i++; val(); ws();
+        if(s[i]===','){ i++; continue; } if(s[i]==='}'){ i++; return; } fail(); } }
+    if(c==='['){ i++; ws(); if(s[i]===']'){ i++; return; }
+      for(;;){ val(); ws(); if(s[i]===','){ i++; continue; } if(s[i]===']'){ i++; return; } fail(); } }
+    if(c==='"')return str();
+    if(c==='t')return lit('true'); if(c==='f')return lit('false'); if(c==='n')return lit('null');
+    if(c==='-'||(c>='0'&&c<='9'))return num();
+    fail(); };
+  try{ val(); ws(); if(i<n)fail(); return -1; }
+  catch(e){ if(e&&typeof e.jsonAt==='number')return e.jsonAt; return -2; }   /* -2: קינון עמוק מדי לבדיקה */
+}
+function jsonErrorText(text){
+  const s=String(text==null?'':text);
+  if(!s.trim())return 'הקובץ ריק — אין בו JSON.';
+  const at=jsonSyntaxErrorAt(s);
+  if(at<0)return 'קובץ JSON לא תקין.';
+  const before=s.slice(0,at), line=before.split('\n').length, col=at-before.lastIndexOf('\n'), c=s[at];
+  const what=at>=s.length?'הקובץ נגמר באמצע (חסר סוגר או מירכאה?)'
+    :(c<' '?'ירידת שורה או תו בקרה בתוך מחרוזת':`תו לא צפוי «\u2066${c}\u2069»`);   /* בידוד LTR: בטקסט עברי } מוצג הפוך כ-{ */
+  return `קובץ JSON לא תקין: ${what} — בשורה ${line}, עמודה ${col}.`;
+}
 /* אם הנתונים השמורים אינם קריאים, init ימלא דוגמאות ו-save ידרוס אותם.
    לפני כן נשמר עותק של הטקסט הגולמי תחת מפתח נפרד, והמשתמש מקבל הודעה. */
-let LOAD_BACKUP_KEY='';
+let LOAD_BACKUP_KEY='', LOAD_REPAIRED=0;
 function load(){ let raw=null; try{ raw=localStorage.getItem(STORE); if(raw){ const d=JSON.parse(raw);
-  DB.automata=(d.automata||[]).map(normalizeTransitionTopology); DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e);
+  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object');
+  LOAD_REPAIRED=DB.automata.reduce((n,a)=>n+sanitizeModel(a),0);
+  DB.settings=Object.assign(DB.settings, d.settings||{}); } }catch(e){ console.error(e);
   if(raw){ LOAD_BACKUP_KEY=STORE+'_unreadable_'+Date.now(); try{ localStorage.setItem(LOAD_BACKUP_KEY,raw); }catch(_){ LOAD_BACKUP_KEY=''; } } } }
+/* האפליקציה פתוחה בשתי לשוניות דפדפן: כל לשונית שמרה את כל הרשימה מהעותק
+   שבזיכרון שלה, וכך מחקה בשקט מודלים ושינויים שנשמרו בלשונית השנייה.
+   כשלשונית אחרת שומרת (אירוע storage) — טוענים מחדש מהאחסון. המודל הפתוח
+   נשאר פתוח; צילום "בטל" ישן נזרק, כי הוא היה מחזיר אחורה גם את השינוי שם. */
+function onStorageSync(e){
+  if(!e||e.key!==STORE||e.newValue==null)return false;
+  let d; try{ d=JSON.parse(e.newValue); }catch(_){ return false; }
+  const keep=current&&current.id;
+  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object');
+  DB.automata.forEach(sanitizeModel);
+  current=DB.automata.find(a=>a.id===keep)||DB.automata[0]||null;
+  DB.settings.lastId=current?current.id:null;
+  UNDO=null; stopPlay(); SIM=null; armed=null;
+  if(sel.id&&!(current&&(stById(sel.id)||trById(sel.id))))sel={type:null,id:null};
+  renderAll();
+  if(keep&&(!current||current.id!==keep))toast('המודל שהיה פתוח כאן נמחק בלשונית אחרת');
+  return true;
+}
 /* Vision scans carry many JPEG crops as data: URLs.  Keeping those pixels in
    the in-memory evidence is useful during the current review session, but
    persisting every duplicate crop in localStorage quickly exceeds the
@@ -728,7 +885,7 @@ function save(){
     return true;
   }catch(error){
     console.error('Local model persistence failed',error);
-    setTimeout(()=>toast('המודל עודכן במסך, אך הדפדפן לא הצליח לשמור אותו מקומית. מומלץ לייצא קובץ JSON.','danger',15000),0);
+    setTimeout(()=>toast('המודל עודכן במסך, אבל הדפדפן לא הצליח לשמור אותו. כדי לא לאבד אותו — לחץ «שמור» והורד עותק כקובץ.','danger',15000),0);
     return false;
   }
 }
@@ -793,6 +950,10 @@ function toggleStart(id){ const s=stById(id); if(!s)return;
 function markStateReviewed(id){ const s=stById(id); if(!s)return; s.aiLow=false; s.aiIssues=[]; s.manuallyReviewed=true; s.scanStructuralReviewed=true; save(); renderAll(); }
 
 function parseSyms(str){ return [...new Set(String(str||'').replace(/[\s,]/g,'').split(''))]; }  /* כל תו = סימן נפרד */
+/* ε אינו במקלדת — באוטומט סופי לא-דטרמיניסטי יש לו כפתור. באוטומט
+   דטרמיניסטי מעבר ε היה נשמר כחץ מת שהריצה מתעלמת ממנו בשקט, ולכן נחסם. */
+const EPS_BUTTON={symbol:'ε', label:'הוסף ε — מעבר בלי לקרוא אות'};
+const DFA_NO_EPSILON='באוטומט סופי דטרמיניסטי אין מעברי ε. כדי להשתמש ב-ε צור «אוטומט סופי לא-דטרמיניסטי».';
 function addTransition(from,to,symbols){
   let t=current.transitions.find(t=>t.from===from&&t.to===to);
   if(t){ symbols.forEach(s=>{ if(!t.symbols.includes(s)) t.symbols.push(s); }); }
@@ -803,16 +964,19 @@ function promptTransition(from,to){
   if(current.type==='tm'){ promptTransitionTM(from,to); return; }
   if(current.type==='pda'){ promptTransitionPDA(from,to); return; }
   const existing=current.transitions.find(t=>t.from===from&&t.to===to);
-  const self = from===to;
+  const self = from===to, ndet=Boolean(current.ndet);
   promptDialog(self?'סימן ללולאה עצמית':'סימן המעבר', {
     label:`${stById(from).label}  →  ${stById(to).label}`,
-    placeholder:'סימנים, למשל a או 245',
-    message: (existing? 'כבר קיימים: '+existing.symbols.join(', ')+'. ' : '') + 'כל תו = סימן נפרד (למשל 245 ⟵ 2, 4, 5).',
+    placeholder:ndet?'סימנים, למשל a או ε':'סימנים, למשל a או 245',
+    message: (existing? 'כבר קיימים: '+existing.symbols.join(', ')+'. ' : '') + 'כל תו = סימן נפרד (למשל 245 ⟵ 2, 4, 5).'
+      + (ndet?'\nלמעבר ε (בלי לקרוא אות) — לחץ על הכפתור ε.':''),
+    symbolButtons: ndet?[EPS_BUTTON]:null,
     confirmText:'הוסף'
   }).then(v=>{
     armed=null;
     if(v==null){ renderGraph(); renderArmBanner(); return; }
     const syms=parseSyms(v); if(!syms.length){ toast('לא הוקלד סימן','danger'); renderGraph(); renderArmBanner(); return; }
+    if(!ndet&&syms.includes('ε')){ toast(DFA_NO_EPSILON,'danger'); renderGraph(); renderArmBanner(); return; }
     sel={type:null,id:null}; addTransition(from,to,syms); renderArmBanner();
   });
 }
@@ -870,7 +1034,7 @@ function editTmRule(transitionId,index){
     const kept={scanEvidence:prev.scanEvidence,aiLineId:prev.aiLineId,aiScanSession:prev.aiScanSession,aiTransitionId:prev.aiTransitionId};
     t.rules[index]=Object.assign(next,kept,{raw_label_text:`${next.read} -> ${next.write}, ${next.move}`,aiLow:false,scanIncomplete:false,aiIssues:[],manuallyReviewed:true});
     t.scanIncomplete=Boolean(t.endpointReview&&(t.endpointReview.source||t.endpointReview.target)||(t.rules||[]).some(r=>r.scanIncomplete||r.aiLow));
-    t.aiIssues=(t.rules||[]).flatMap(r=>r.aiIssues||[]);t.aiLow=Boolean(t.scanIncomplete||t.aiIssues.length);save();renderAll();toast('כלל TM עודכן','success');
+    t.aiIssues=(t.rules||[]).flatMap(r=>r.aiIssues||[]);t.aiLow=Boolean(t.scanIncomplete||t.aiIssues.length);save();renderAll();toast('הכלל עודכן','success');
   }});
 }
 let _pdaFocus=null;
@@ -903,34 +1067,34 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     <div style="font-weight:700;color:var(--ink-strong);text-align:center;margin-bottom:12px">${esc(stById(from).label)} → ${esc(stById(to).label)}</div>
     <div class="pda-lbl">קלט שנקרא</div>
     <div class="pda-row">
-      <input id="pdaRead" class="pda-box wide" placeholder="אות (או ε)" onfocus="pdaFocusOn(this)" autocomplete="off">
-      <button type="button" class="pda-chip sm" id="pdaEpsRead">ε</button>
+      <input id="pdaRead" class="pda-box wide" placeholder="אות (או ε)" aria-label="קלט שנקרא" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <button type="button" class="pda-chip sm" id="pdaEpsRead" title="ε — מעבר בלי לקרוא אות" aria-label="קלט ε — מעבר בלי לקרוא אות">ε</button>
     </div>
     <div class="pda-lbl" style="margin-top:13px">מה בראש המחסנית עכשיו</div>
     <div class="pda-row">
-      <input id="pdaTop" class="pda-box wide" placeholder="A / S / ⊥ — או ε לכל תוכן" onfocus="pdaFocusOn(this)" autocomplete="off">
-      <button type="button" class="pda-chip sm" id="pdaEpsTop">ε</button>
-      <button type="button" class="pda-chip sm" id="pdaBotTop">⊥</button>
+      <input id="pdaTop" class="pda-box wide" placeholder="A / S / ⊥ — או ε לכל תוכן" aria-label="מה בראש המחסנית עכשיו" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <button type="button" class="pda-chip sm" id="pdaEpsTop" title="ε — בלי תנאי על ראש המחסנית" aria-label="ראש ε — בלי תנאי על ראש המחסנית">ε</button>
+      <button type="button" class="pda-chip sm" id="pdaBotTop" title="⊥ — תחתית המחסנית" aria-label="הכנס ⊥ — תחתית המחסנית">⊥</button>
     </div>
     <div class="pda-lbl" style="margin-top:13px">פעולה על המחסנית</div>
-    <div class="pda-modes">
-      <button type="button" class="pda-mode on" data-mode="push">דחיפה ↑</button>
-      <button type="button" class="pda-mode" data-mode="pop">שליפה ↓</button>
-      <button type="button" class="pda-mode" data-mode="none">ללא</button>
+    <div class="pda-modes" role="group" aria-label="פעולה על המחסנית">
+      <button type="button" class="pda-mode on" data-mode="push" aria-pressed="true">דחיפה ↑</button>
+      <button type="button" class="pda-mode" data-mode="pop" aria-pressed="false">שליפה ↓</button>
+      <button type="button" class="pda-mode" data-mode="none" aria-pressed="false">ללא</button>
     </div>
     <div class="pda-row" id="pdaOpRow" style="margin-top:10px">
       <span class="pda-oplbl">מה לדחוף</span>
-      <input id="pdaOp" class="pda-box wide" placeholder="סימן" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <input id="pdaOp" class="pda-box wide" placeholder="סימן" aria-label="מה לדחוף" onfocus="pdaFocusOn(this)" autocomplete="off">
     </div>
     <div class="pda-row" id="pdaPopRow" style="margin-top:10px;display:none">
       <span class="pda-oplbl">מה לשלוף</span>
-      <input id="pdaPop" class="pda-box wide" placeholder="סימן" onfocus="pdaFocusOn(this)" autocomplete="off">
+      <input id="pdaPop" class="pda-box wide" placeholder="סימן" aria-label="מה לשלוף" onfocus="pdaFocusOn(this)" autocomplete="off">
     </div>
     <div class="pda-hint" id="pdaHint"></div>
-    <div class="pda-sem" id="pdaSem" style="display:none"></div>`;
+    <div class="pda-sem" id="pdaSem" role="status" style="display:none"></div>`;
   let mode='push';
   const upd=()=>{
-    wrap.querySelectorAll('.pda-mode').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
+    wrap.querySelectorAll('.pda-mode').forEach(b=>{ b.classList.toggle('on',b.dataset.mode===mode); b.setAttribute('aria-pressed',String(b.dataset.mode===mode)); });
     wrap.querySelector('#pdaOpRow').style.display = mode==='push' ? 'flex' : 'none';
     wrap.querySelector('#pdaPopRow').style.display = mode==='pop' ? 'flex' : 'none';
     const rd=pdaTok1(wrap.querySelector('#pdaRead').value)||'ε';
@@ -968,6 +1132,8 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     el.addEventListener('input',e=>{ if(/[⊥⟂]/.test(e.target.value)||/Z_?0/i.test(e.target.value)) pdaNormalizeStackField(e.target); upd(); });
     el.addEventListener('blur',e=>{ pdaNormalizeStackField(e.target); upd(); });
   });
+  /* כפתורי הסימן לא לוקחים פוקוס בלחיצת עכבר: הפוקוס נשאר בשדה, ו-Enter שומר */
+  wrap.querySelectorAll('.pda-chip').forEach(b=>b.addEventListener('mousedown',e=>e.preventDefault()));
   wrap.querySelector('#pdaEpsRead').addEventListener('click',()=>{ wrap.querySelector('#pdaRead').value='ε'; upd(); });
   wrap.querySelector('#pdaEpsTop').addEventListener('click',()=>{ wrap.querySelector('#pdaTop').value='ε'; upd(); });
   wrap.querySelector('#pdaBotTop').addEventListener('click',()=>{ _pdaFocus=wrap.querySelector('#pdaTop'); pdaInsert(PDA_BOTTOM); upd(); });
@@ -3552,8 +3718,12 @@ function openAiScan(){
   checkHealth();
 }
 function selfLoop(id){ promptTransition(id,id); }
+/* כפתור ε בעורך המעבר (אוטומט סופי לא-דטרמיניסטי): מצרף ε למה שכתוב בשדה */
+function addEpsilonSymbol(id){ const t=trById(id); if(!t)return; const f=$('trSyms');
+  setTransSymbols(id,(f&&typeof f.value==='string'?f.value:(t.symbols||[]).join(''))+'ε'); }
 function setTransSymbols(id,str){ const t=trById(id); if(!t)return; const syms=parseSyms(str);
   if(!syms.length){ toast('מעבר חייב סימן אחד לפחות','danger'); renderInspector(); return; }
+  if(!current.ndet&&syms.includes('ε')){ toast(DFA_NO_EPSILON,'danger'); renderInspector(); return; }
   t.symbols=syms;t.manuallyReviewed=true;
   (t.scanRuleEvidence||[]).forEach(e=>{e.scanIncomplete=false;e.aiLow=false;e.manuallyReviewed=true;});
   const endpointPending=Boolean(t.endpointReview&&(t.endpointReview.source||t.endpointReview.target));
@@ -3645,7 +3815,7 @@ function computeValidation(){
         if(!readOverlap||!topOverlap)continue;
         const outcome=x=>[x.t.to,Boolean(x.P.read),x.P.op,x.P.push.join(''),x.P.popSym||''].join('\u0001');
         if(outcome(a1)===outcome(a2))continue; /* שתי ראיות לאותה תוצאה נשמרות אך אינן יוצרות בחירה */
-        ambiguities.push({state:s,sym:`קלט ${a1.P.read||'ε'}/${a2.P.read||'ε'}, ראש ${a1.P.guard||'ε'}/${a2.P.guard||'ε'}`});
+        ambiguities.push({state:s,sym:`קלט ${a1.P.read||'ε'} מול ${a2.P.read||'ε'}, ראש ${a1.P.guard||'ε'} מול ${a2.P.guard||'ε'}`});
       }
     });
     return {starts,dupes:[],ambiguities,gaps:[],alpha:[],deterministic:ambiguities.length?null:true,complete:false};
@@ -3744,15 +3914,28 @@ function fitView(){
 function zoom(f){ const w=Math.min(5000,Math.max(260, view.w*f)); const ratio=w/view.w;
   const cx=view.x+view.w/2, cy=view.y+view.h/2; view.w=w; view.h*=ratio; view.x=cx-view.w/2; view.y=cy-view.h/2; applyView(); }
 
+/* מצבים ומעברים הם יעדי Tab (Enter/רווח = לחיצה). הציור מחליף את ה-DOM,
+   ולכן נשמר איזה מהם היה בפוקוס, והפוקוס מוחזר אליו אחרי הציור. */
+function graphFocusKey(){ const a=document.activeElement, g=a&&a.closest&&a.closest('[data-state-id],[data-trans-id]');
+  return g?(g.dataset.stateId?`[data-state-id="${g.dataset.stateId}"]`:`[data-trans-id="${g.dataset.transId}"]`):null; }
+/* שם מצב ארוך גלש מהעיגול על החצים והמצבים השכנים: מקטינים בהדרגה, ומעל 8
+   תווים חותכים עם … — השם המלא נשאר ב-title (ריחוף) ובשם שקורא מסך מקריא. */
+function stateLabelSvg(label){
+  const full=String(label==null?'':label), chars=[...full], n=chars.length;
+  const size=n<=4?0:(n<=6?15:12), text=n>8?chars.slice(0,7).join('')+'…':full;
+  return `<text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central"${size?` style="font-size:${size}px"`:''}>${esc(text)}</text>`
+    +(text!==full?`<title>${esc(full)}</title>`:''); }
+function stateAriaLabel(s){ return 'מצב '+s.label+(s.isStart?', התחלתי':'')+(s.isAccept?', מקבל':'')+(armed===s.id?', נבחר כמקור למעבר':''); }
 function renderGraph(){
   if(!current){ $('edges').innerHTML=''; $('nodes').innerHTML=''; renderAiReviewPanel(); return; }
+  const focusKey=graphFocusKey();
   $('nodes').innerHTML = current.states.map(s=>{
     const doubt=s.aiLow&&aiStateConcerns(s);
     const cls='node'+(sel.type==='state'&&sel.id===s.id?' sel':'')+(armed===s.id?' armed':'')+(s.aiLow?' ai-low':'')+(doubt&&doubt.length?' ai-doubt':'');
-    return `<g class="${cls}" data-state-id="${s.id}" transform="translate(${s.x},${s.y})">
+    return `<g class="${cls}" data-state-id="${s.id}" transform="translate(${s.x},${s.y})" tabindex="0" role="button" aria-label="${esc(stateAriaLabel(s))}">
       <circle class="ncirc" r="${R}"></circle>
       ${s.isAccept?`<circle class="nacc" r="${R-6}"></circle>`:''}
-      <text class="nlabel" x="0" y="0" text-anchor="middle" dominant-baseline="central">${esc(s.label)}</text>
+      ${stateLabelSvg(s.label)}
       ${doubt&&doubt.length?`<g class="ndoubt" transform="translate(${Math.round(R*.74)},${-Math.round(R*.74)})"><title>${esc(doubt.join(' · '))}</title><circle r="12"></circle><text text-anchor="middle" dominant-baseline="central">?</text></g>`:''}
       ${s.isStart?`<path class="sarrow" d="M ${-R-30} 0 L ${-R-3} 0" marker-end="url(#arrow)"></path>`:''}
     </g>`; }).join('');
@@ -3762,12 +3945,13 @@ function renderGraph(){
     const lx=g.lx.toFixed(1);
     const ly=(t.from===t.to ? g.ly-(lines.length-1)*19 : g.ly-(lines.length-1)*9).toFixed(1);   /* רב-שורתי: מרימים את הבסיס כדי לא לדרוס את הקשת */
     const tspans=lines.map((ln,k)=>`<tspan x="${lx}" dy="${k===0?((-(lines.length-1)*0.6).toFixed(2)+'em'):'1.2em'}">${esc(ln)}</tspan>`).join('');
-    return `<g class="${cls}" data-trans-id="${t.id}" data-from="${t.from}" data-to="${t.to}">
+    return `<g class="${cls}" data-trans-id="${t.id}" data-from="${t.from}" data-to="${t.to}" tabindex="0" role="button" aria-label="${esc(`מעבר ${(stById(t.from)||{label:'?'}).label} → ${(stById(t.to)||{label:'?'}).label}: ${lines.join(' · ')}`)}">
       <path class="ehit" d="${g.d}"></path>
       <path class="eline" d="${g.d}" marker-end="url(#${t.aiLow?'arrowA':'arrow'})"></path>
       <text class="elabel" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central">${tspans}</text>
     </g>`; }).join('');
   $('stageEmpty').style.display = current.states.length ? 'none' : 'grid';
+  if(focusKey){ const el=$('canvas').querySelector(focusKey); if(el&&el.focus)el.focus({preventScroll:true}); }
   renderAiReviewPanel();
   if(SIM) paintSim();
 }
@@ -3779,7 +3963,8 @@ function refreshEdgeEl(el){ const t=trById(el.dataset.transId); if(!t)return; co
   spans.forEach(ts=>ts.setAttribute('x',g.lx.toFixed(1))); }
 
 /* ─── render: chrome ─── */
-function renderTopbar(){ $('modelName').textContent = current?current.name:'—'; $('modelType').textContent = current?(current.ndet?(current.type==='pda'?'NPDA':'NFA'):current.type.toUpperCase()):'—'; }
+function modelBadge(a){ return a.ndet?(a.type==='pda'?'NPDA':'NFA'):String(a.type||'dfa').toUpperCase(); }
+function renderTopbar(){ $('modelName').textContent = current?current.name:'—'; $('modelType').textContent = current?modelBadge(current):'—'; }
 function renderArmBanner(){ const b=$('armBanner');
   if(armed && stById(armed)){ b.innerHTML=`לחץ על מצב <b>יעד</b> כדי למתוח מעבר מ-<b>${esc(stById(armed).label)}</b> · Esc לביטול`; b.classList.add('show'); }
   else b.classList.remove('show'); $('canvasArea').dataset.arming = armed?'1':'0'; }
@@ -3790,11 +3975,11 @@ function renderInspector(){
     el.innerHTML=`
       <div class="insp-title">מצב ${esc(s.label)}</div>
       ${(s.aiObservationIds&&s.aiObservationIds.length)?`<div class="help-box" dir="ltr">physical state observations: ${s.aiObservationIds.map(esc).join(', ')}</div>`:''}
-      <label class="lbl">שם המצב</label>
-      <input class="fld" value="${esc(s.label)}" onchange="renameState('${s.id}',this.value)">
+      <label class="lbl" for="stName">שם המצב</label>
+      <input id="stName" class="fld" value="${esc(s.label)}" onchange="renameState('${s.id}',this.value)">
       <div class="toggles" style="grid-template-columns:1fr 1fr">
-        <button class="chip ${s.isStart?'on':''}" onclick="toggleStart('${s.id}')">מצב התחלתי</button>
-        <button class="chip ${s.isAccept?'on':''}" onclick="toggleAccept('${s.id}')">מצב מקבל</button>
+        <button class="chip ${s.isStart?'on':''}" aria-pressed="${s.isStart?'true':'false'}" onclick="toggleStart('${s.id}')">מצב התחלתי</button>
+        <button class="chip ${s.isAccept?'on':''}" aria-pressed="${s.isAccept?'true':'false'}" onclick="toggleAccept('${s.id}')">מצב מקבל</button>
       </div>
       ${(s.aiLow||(!s.scanStructuralReviewed&&s.scanStructuralIssues&&s.scanStructuralIssues.length))?`<button class="btn btn-sm" onclick="markStateReviewed('${s.id}')">בדקתי את זיהוי המצב</button>`:''}
       <div class="help-box" style="margin:2px 0 6px">לולאה עצמית: <b>לחיצה כפולה</b> על המצב.</div>
@@ -3841,8 +4026,10 @@ function renderInspector(){
         ${physicalIdentity}
         ${endpointEditor}
         ${structureReview}
-        <label class="lbl">סימנים (מופרדים בפסיק)</label>
-        <input class="fld" value="${esc(t.symbols.join(', '))}" onchange="setTransSymbols('${t.id}',this.value)">
+        <label class="lbl" for="trSyms">סימנים (מופרדים בפסיק)</label>
+        ${current.ndet?`<div class="sym-row"><input id="trSyms" class="fld" value="${esc(t.symbols.join(', '))}" onchange="setTransSymbols('${t.id}',this.value)">
+          <button type="button" class="pda-chip sm" onmousedown="event.preventDefault()" onclick="addEpsilonSymbol('${t.id}')" title="${EPS_BUTTON.label}" aria-label="${EPS_BUTTON.label}">ε</button></div>`
+        :`<input id="trSyms" class="fld" value="${esc(t.symbols.join(', '))}" onchange="setTransSymbols('${t.id}',this.value)">`}
         <div class="insp-actions" style="margin-top:12px">
           <button class="btn btn-delete" onclick="deleteTransition('${t.id}')">${ico('trash')} מחק מעבר</button>
         </div>`;
@@ -3947,6 +4134,8 @@ function simReady(){ const v=computeValidation();
      לא יודע מה לתקן */
   if(!v.starts.length){ toast('אין מצב התחלתי — בחר מצב ולחץ «מצב התחלתי» בלוח הבקרה','danger'); return false; }
   if(v.starts.length>1){ toast(`יש ${v.starts.length} מצבים התחלתיים (${v.starts.map(s=>s.label).join(', ')}) — צריך בדיוק אחד`,'danger'); return false; }
+  if(current.type==='dfa'&&!current.ndet){ const et=current.transitions.find(t=>(t.symbols||[]).includes('ε'));
+    if(et){ const lb=id=>(stById(id)||{label:'?'}).label; toast(`במעבר ${lb(et.from)} → ${lb(et.to)} יש ε, ובאוטומט סופי דטרמיניסטי אין מעברי ε. מחק את ה-ε מהמעבר, או צור «אוטומט סופי לא-דטרמיניסטי».`,'danger'); return false; } }
   if(current.type==='pda'&&!current.ndet&&v.ambiguities&&v.ambiguities.length){ const a=v.ambiguities[0];
     toast(`במצב ${a.state.label} כמה כללים עשויים להתאים יחד (${a.sym}). ערוך את הכללים, או בחר אוטומט מחסנית לא-דטרמיניסטי.`,'danger'); return false; }
   if(!current.ndet && !v.deterministic){ const d=(v.dupes||[])[0];
@@ -4218,46 +4407,56 @@ function paintSim(){
   const node=$('canvas').querySelector(`[data-state-id="${SIM.stateId}"]`);
   if(node){ node.classList.add('active'); if(SIM.status==='accepted')node.classList.add('ok'); if(SIM.status==='rejected')node.classList.add('bad'); }
 }
+/* מילה ארוכה מאוד: מציירים רק חלון של תאים סביב הראש. 1000 תאים עלו כ-100ms
+   של פריסת עמוד בכל צעד. בקצוות תא «…N» אומר כמה תווים לא מוצגים. */
+const TAPE_WINDOW=120;
+function tapeSpan(lo,hi,a,b){   /* [lo,hi] = כל הסרט; [a,b] = מה שחייב להיראות (הראש או הראשים) */
+  if(hi-lo+1<=TAPE_WINDOW)return [lo,hi];
+  let from=Math.max(lo,a-40), to=Math.min(hi,Math.max(b+40,from+TAPE_WINDOW-1));
+  if(to-from+1<TAPE_WINDOW)from=Math.max(lo,to-TAPE_WINDOW+1);
+  return [from,to]; }
+function tapeMore(k,before){ return k>0?`<span class="cell more" title="עוד ${k} תווים ${before?'לפני':'אחרי'} החלק המוצג" aria-label="עוד ${k} תווים ${before?'לפני':'אחרי'}">…${k}</span>`:''; }
 function tapeHTML(chars, pos, status){
-  const cells = chars.length ? chars.map((c,i)=>{
+  if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
+  const [from,to]=tapeSpan(0,chars.length-1,pos,pos);
+  let cells=tapeMore(from,true);
+  for(let i=from;i<=to;i++){
     let cls='cell'; const head=i===pos&&(status==='running'||status==='preview'); const stuck=status==='rejected'&&i===pos;
     if(status!=='preview'&&i<pos)cls+=' read'; if(head)cls+=' head'; if(stuck)cls+=' stuck';
-    return `<span class="${cls}">${esc(c)}${head?'<span class="hmark"></span>':''}</span>`;
-  }).join('') : '<span class="cell empty">ε — מילה ריקה</span>';
-  return `<div class="tape-cells">${cells}</div>`;
+    cells+=`<span class="${cls}">${esc(chars[i])}${head?'<span class="hmark"></span>':''}</span>`; }
+  return `<div class="tape-cells">${cells}${tapeMore(chars.length-1-to,false)}</div>`;
 }
+function tmCellHTML(v,head){ return `<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`; }
 function tmTapeHTML(s){
   const used=Object.keys(s.tape).map(Number);
   const lo=Math.min(s.head, used.length?Math.min(...used):s.head);
   const hi=Math.max(s.head, used.length?Math.max(...used):s.head);
-  let cells='';
-  for(let p=lo;p<=hi;p++){ const v=(p in s.tape)?s.tape[p]:BLANK; const head=p===s.head;
-    cells+=`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`; }
-  return `<div class="tape-cells">${cells}</div>`;
+  const [from,to]=tapeSpan(lo,hi,s.head,s.head);
+  let cells=tapeMore(from-lo,true);
+  for(let p=from;p<=to;p++) cells+=tmCellHTML((p in s.tape)?s.tape[p]:BLANK, p===s.head);
+  return `<div class="tape-cells">${cells}${tapeMore(hi-to,false)}</div>`;
 }
 function tmPreviewHTML(word){ const chars=[...String(word)];
-  const cell=(v,head)=>`<span class="cell ${head?'head':''} ${v===BLANK?'blank':''} ${v==='&'?'marker':''}">${esc(v)}${head?'<span class="hmark"></span>':''}</span>`;
-  let html = cell('&')+cell('&');                  /* שני סימני התחלה */
-  chars.forEach((c,i)=> html+=cell(c, i===0));     /* קלט, ראש על הראשון */
-  html += cell('&', chars.length===0);              /* סימן סוף (אם הקלט ריק — הראש עליו) */
-  return `<div class="tape-cells">${html}</div>`;
+  /* שני סימני התחלה, הקלט וסימן סוף. הראש על התו הראשון (קלט ריק — על סימן הסוף) */
+  const all=['&','&',...chars,'&'], head=chars.length?2:all.length-1;
+  const [from,to]=tapeSpan(0,all.length-1,head,head);
+  let html=tapeMore(from,true);
+  for(let i=from;i<=to;i++) html+=tmCellHTML(all[i],i===head);
+  return `<div class="tape-cells">${html}${tapeMore(all.length-1-to,false)}</div>`;
 }
 function pdaInputHTML(s){
-  if(s.npda){
-    const heads=new Set(s.configs.map(c=>c.pos)), minPos=s.configs.length?Math.min(...s.configs.map(c=>c.pos)):0;
-    const cs=[...s.input].map((c,i)=>{ let cls='cell'; if(i<minPos)cls+=' read'; if(heads.has(i))cls+=' head'; return `<span class="${cls}">${esc(c)}${heads.has(i)?'<span class="hmark"></span>':''}</span>`; }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
-    return `<div class="tape-cells">${cs}</div>`;
-  }
-  const cells = [...s.input].map((c,i)=>{
-    let cls='cell'; if(i<s.pos)cls+=' read'; if(i===s.pos)cls+=' head';
-    return `<span class="${cls}">${esc(c)}${i===s.pos?'<span class="hmark"></span>':''}</span>`;
-  }).join('') || '<span class="cell empty">ε — מילה ריקה</span>';
-  return `<div class="tape-cells">${cells}</div>`;
+  const chars=[...s.input]; if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
+  /* דטרמיניסטי: ראש אחד. לא-דטרמיניסטי: ראש לכל מסלול; "נקרא" = לפני הראש השמאלי */
+  const heads=s.npda?new Set(s.configs.map(c=>c.pos)):new Set([s.pos]);
+  const minPos=s.npda?(s.configs.length?Math.min(...s.configs.map(c=>c.pos)):0):s.pos;
+  const maxPos=heads.size?Math.max(...heads):minPos;
+  const [from,to]=tapeSpan(0,chars.length-1,minPos,maxPos);
+  let cells=tapeMore(from,true);
+  for(let i=from;i<=to;i++){ let cls='cell'; if(i<minPos)cls+=' read'; if(heads.has(i))cls+=' head';
+    cells+=`<span class="${cls}">${esc(chars[i])}${heads.has(i)?'<span class="hmark"></span>':''}</span>`; }
+  return `<div class="tape-cells">${cells}${tapeMore(chars.length-1-to,false)}</div>`;
 }
-function pdaInputPreview(word){ const chars=[...String(word)];
-  if(!chars.length) return '<div class="tape-cells"><span class="cell empty">ε — מילה ריקה</span></div>';
-  return `<div class="tape-cells">${chars.map((c,i)=>`<span class="cell ${i===0?'head':''}">${esc(c)}${i===0?'<span class="hmark"></span>':''}</span>`).join('')}</div>`;
-}
+function pdaInputPreview(word){ return tapeHTML([...String(word)],0,'preview'); }
 function nfaControlsHTML(s){
   const ctrls=`<div class="simctrls" style="margin-top:11px">
       <button class="btn btn-sm" onclick="simBackR()" ${s.history.length?'':'disabled'}>${ico('back')} אחורה</button>
@@ -4286,7 +4485,7 @@ function pdaControlsHTML(s){
     <label class="spd" style="margin-top:9px">מהירות<input type="range" min="120" max="1200" step="120" value="${1320-speed}" onchange="setSpeed(1320-this.value)"></label>`;
   let verdict=''; if(s.status==='accepted') verdict=`<div class="verdict ok">${ico('check')} מתקבלת</div>`;
   else if(s.status==='rejected') verdict=`<div class="verdict bad">נדחית</div>`;
-  else if(s.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber)">נעצר</div>`;
+  else if(s.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber-ink)">נעצר</div>`;
   if(s.npda){
     return `${ctrls}
     <div class="simstat" style="margin-top:9px"><div>מסלולים פעילים: <b>${s.configs.length}</b> · צעד: <b>${s.step||0}</b></div><div style="font-size:11px;margin-top:2px;color:var(--muted)">כל מסלול = מחסנית נפרדת, בכרטיס «מחסנית» ←</div></div>
@@ -4301,7 +4500,7 @@ function pdaControlsHTML(s){
       <div>בראש המחסנית: <b>${top}</b></div>
       <div>נותר לקרוא: <b>${rem}</b> · צעד: <b>${s.step||0}</b></div>
     </div>
-    ${s.nd?`<div class="simline" style="margin-top:6px;color:var(--amber)">יש כאן יותר ממעבר אחד אפשרי (אי-דטרמיניזם) — נבחר הראשון.</div>`:''}
+    ${s.nd?`<div class="simline" style="margin-top:6px;color:var(--amber-ink)">יש כאן יותר ממעבר אחד אפשרי (אי-דטרמיניזם) — נבחר הראשון.</div>`:''}
     ${s.reason?`<div class="simline" style="margin-top:6px">${esc(s.reason)}</div>`:''}
     ${verdict?`<div style="margin-top:8px">${verdict}</div>`:''}`;
 }
@@ -4354,7 +4553,7 @@ function renderSim(){
     const path=[...SIM.history.map(h=>stById(h.stateId).label), stById(SIM.stateId).label].join(' → ');
     let verdict=''; if(SIM.status==='accepted') verdict=`<div class="verdict ok">${ico('check')} מתקבלת</div>`;
     else if(SIM.status==='rejected') verdict=`<div class="verdict bad">נדחית</div>`;
-    else if(SIM.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber)">נעצר</div>`;
+    else if(SIM.status==='stopped') verdict=`<div class="verdict" style="background:var(--amber-soft);color:var(--amber-ink)">נעצר</div>`;
     const stat = SIM.tm ? `
       <div class="simstat" style="margin-top:9px">
         <div>מיקום הראש: <b>${SIM.head}</b></div>
@@ -4388,18 +4587,18 @@ function renderBatch(){
   const el=$('batchBody'); if(!el||!current) return;
   const rows=current.tests.map((t,i)=>`
     <div class="brow">
-      <input class="fld bword" value="${esc(t.word)}" placeholder="מילה (ריק = ε)" onchange="setTest(${i},'word',this.value)">
-      <select class="fld bexp" onchange="setTest(${i},'expect',this.value)">
+      <input class="fld bword" value="${esc(t.word)}" placeholder="מילה (ריק = ε)" aria-label="מילת מבחן ${i+1}" onchange="setTest(${i},'word',this.value)">
+      <select class="fld bexp" aria-label="תוצאה צפויה למילה ${i+1}" onchange="setTest(${i},'expect',this.value)">
         <option value="true" ${t.expect?'selected':''}>מתקבלת</option>
         <option value="false" ${!t.expect?'selected':''}>נדחית</option>
       </select>
       <span class="bres" id="bres-${i}"></span>
-      <button class="btn btn-sm" onclick="delTest(${i})">✕</button>
+      <button class="btn btn-sm" onclick="delTest(${i})" title="מחק את המילה" aria-label="מחק את מילת מבחן ${i+1}">✕</button>
     </div>`).join('');
   el.innerHTML=`<div class="bhead">
       <button class="btn btn-sm" onclick="addTest()">${ico('plus')} מילה</button>
       <button class="btn btn-sm btn-run" onclick="runBatch()">${ico('play')} הרץ הכל</button>
-      <span class="bsum" id="batchSummary"></span>
+      <span class="bsum" id="batchSummary" role="status"></span>
     </div>${rows||'<div class="help-box">הוסף מילות מבחן עם התוצאה הצפויה, ובדוק שהאוטומט מזהה בדיוק את השפה.</div>'}`;
 }
 function setTest(i,k,v){ if(k==='expect') v=(v==='true'); current.tests[i][k]=v; save(); }
@@ -4417,14 +4616,14 @@ function openLibrary(){
   const wrap=document.createElement('div');
   wrap.innerHTML = (DB.automata.map(a=>`
     <div class="lib-item ${current&&a.id===current.id?'cur':''}">
-      <div class="li-main" data-open="${a.id}">
+      <button type="button" class="li-main" data-open="${a.id}"${current&&a.id===current.id?' aria-current="true"':''}>
         <div class="li-name">${esc(a.name)}</div>
-        <div class="li-meta">${a.type.toUpperCase()} · ${a.states.length} מצבים · ${a.transitions.length} מעברים</div>
-      </div>
-      <button class="li-act" title="שכפל" data-dup="${a.id}">${ico('copy')}</button>
-      <button class="li-act" title="שנה שם" data-ren="${a.id}">${ico('pencil')}</button>
-      <button class="li-act" title="ייצא" data-exp="${a.id}">${ico('download')}</button>
-      <button class="li-act" title="מחק" data-del="${a.id}">${ico('trash')}</button>
+        <div class="li-meta">${esc(modelBadge(a))} · ${(a.states||[]).length} מצבים · ${(a.transitions||[]).length} מעברים</div>
+      </button>
+      <button type="button" class="li-act" title="שכפל" aria-label="שכפל את «${esc(a.name)}»" data-dup="${a.id}">${ico('copy')}</button>
+      <button type="button" class="li-act" title="שנה שם" aria-label="שנה את השם של «${esc(a.name)}»" data-ren="${a.id}">${ico('pencil')}</button>
+      <button type="button" class="li-act" title="ייצא" aria-label="ייצא את «${esc(a.name)}» לקובץ" data-exp="${a.id}">${ico('download')}</button>
+      <button type="button" class="li-act" title="מחק" aria-label="מחק את «${esc(a.name)}»" data-del="${a.id}">${ico('trash')}</button>
     </div>`).join('') || '<div class="help-box">אין מודלים עדיין.</div>')
     + `<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="exportAll()">${ico('download')} ייצוא הכל</button>
@@ -4449,18 +4648,18 @@ function safeName(n){ return String(n||'model').replace(/[\\/:*?"<>|]+/g,'_').sl
 function newModel(){
   const wrap=document.createElement('div');
   wrap.innerHTML=`
-    <label class="lbl">שם המודל</label>
+    <label class="lbl" for="nmName">שם המודל</label>
     <input id="nmName" class="fld" placeholder="למשל: זוגי a-ים">
-    <label class="lbl" style="margin-top:12px">סוג המודל</label>
-    <div class="toggles" style="grid-template-columns:1fr;margin-top:4px">
-      <button type="button" class="chip on" data-tp="dfa">אוטומט סופי דטרמיניסטי</button>
-      <button type="button" class="chip" data-tp="nfa">אוטומט סופי לא-דטרמיניסטי</button>
-      <button type="button" class="chip" data-tp="pda">אוטומט מחסנית דטרמיניסטי</button>
-      <button type="button" class="chip" data-tp="npda">אוטומט מחסנית לא-דטרמיניסטי</button>
-      <button type="button" class="chip" data-tp="tm">מכונת טיורינג</button>
+    <div class="lbl" id="nmTypeLbl" style="margin-top:12px">סוג המודל</div>
+    <div class="toggles" role="group" aria-labelledby="nmTypeLbl" style="grid-template-columns:1fr;margin-top:4px">
+      <button type="button" class="chip on" data-tp="dfa" aria-pressed="true">אוטומט סופי דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="nfa" aria-pressed="false">אוטומט סופי לא-דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="pda" aria-pressed="false">אוטומט מחסנית דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="npda" aria-pressed="false">אוטומט מחסנית לא-דטרמיניסטי</button>
+      <button type="button" class="chip" data-tp="tm" aria-pressed="false">מכונת טיורינג</button>
     </div>`;
   let tp='dfa';
-  wrap.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ tp=c.dataset.tp; wrap.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c)); });
+  wrap.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ tp=c.dataset.tp; wrap.querySelectorAll('.chip').forEach(x=>{ x.classList.toggle('on',x===c); x.setAttribute('aria-pressed',String(x===c)); }); });
   const nm={dfa:'מודל חדש', nfa:'אוטומט סופי לא-דטרמיניסטי', pda:'אוטומט מחסנית', npda:'אוטומט מחסנית לא-דטרמיניסטי', tm:'מכונת טיורינג'};
   const SUBMIT=Symbol();
   _buildDialog({title:'מודל חדש', body:wrap, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
@@ -4472,7 +4671,7 @@ function dupAutomaton(id){ const a=DB.automata.find(x=>x.id===id); const c=JSON.
   c.id=uid(); c.name=a.name+' (עותק)'; const map={};
   c.states.forEach(s=>{ const n=uid(); map[s.id]=n; s.id=n; });
   c.transitions.forEach(t=>{ t.id=uid(); t.from=map[t.from]; t.to=map[t.to]; });
-  c.updated=Date.now(); DB.automata.push(c); save(); toast('שוכפל'); }
+  c.updated=Date.now(); DB.automata.push(c); save(); toast(`נוצר עותק: «${c.name}»`,'success'); }
 function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone=DB.automata[index]; if(!gone)return;
   const json=JSON.stringify(gone); DB.automata=DB.automata.filter(a=>a.id!==id);
   if(current&&current.id===id){ current=DB.automata[0]||null; if(current)DB.settings.lastId=current.id; renderAll(); fitView(); } save(); renderTabs();
@@ -4481,16 +4680,20 @@ function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone
     save(); renderAll(); fitView(); toast('המודל שוחזר','success'); }); }
 
 /* ─── import / export ─── */
-function exportAll(){ download('automata-backup.json', JSON.stringify({automata:DB.automata}, null, 2)); toast('יוצא גיבוי','success'); }
+function exportAll(){ download('automata-backup.json', JSON.stringify({automata:DB.automata}, null, 2)); toast('כל המודלים נשמרו לקובץ automata-backup.json','success'); }
 function onImport(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader();
-  r.onload=()=>{ try{ importData(JSON.parse(r.result)); }catch(err){ toast('קובץ JSON לא תקין','danger'); } };
+  r.onload=()=>{ let data; try{ data=JSON.parse(r.result); }catch(err){ toast(jsonErrorText(r.result),'danger',15000); return; }
+    importData(data); };
+  r.onerror=()=>toast('לא הצלחנו לקרוא את הקובץ','danger');
   r.readAsText(f); e.target.value=''; }
-function importData(data){ let arr=data.automata||(data.states?[data]:null);
-  if(!Array.isArray(arr)){ toast('מבנה קובץ לא מזוהה','danger'); return; }
-  let n=0; arr.forEach(a=>{ if(!a||!Array.isArray(a.states))return; a.id=uid(); a.tests=a.tests||[]; a.type=a.type||'dfa';
-    a.alphabet=a.alphabet||[]; a.transitions=a.transitions||[]; normalizeTransitionTopology(a); DB.automata.push(a); n++; });
+function importData(data){ let arr=data&&typeof data==='object'?(data.automata||(data.states?[data]:null)):null;
+  if(!Array.isArray(arr)){ toast('הקובץ הוא JSON תקין, אבל אין בו מודלים של האפליקציה (לא נמצאו "automata" או "states").','danger',12000); return; }
+  let n=0, dropped=0; arr.forEach(a=>{ if(!a||typeof a!=='object'||!Array.isArray(a.states))return; a.id=uid();
+    dropped+=sanitizeModel(a); DB.automata.push(a); n++; });
   if(!n){ toast('לא נמצאו בקובץ מודלים תקינים','danger'); return; }
-  save(); toast(n===1?'יובא מודל אחד':`יובאו ${n} מודלים`,'success'); qa('.modal-bg').forEach(m=>m.remove()); openAutomaton(DB.automata[DB.automata.length-1].id);
+  save(); const done=n===1?'יובא מודל אחד':`יובאו ${n} מודלים`;
+  if(dropped)toast(`${done}. שים לב: ${droppedTransitionsText(dropped)}`,'danger',15000); else toast(done,'success');
+  qa('.modal-bg').forEach(m=>m.remove()); openAutomaton(DB.automata[DB.automata.length-1].id);
 }
 
 /* ─── render all ─── */
@@ -4598,8 +4801,10 @@ function makeDraggable(el, handle){
   });
   handle.addEventListener('pointerup', ()=>{ dragging=false; });
 }
-function toggleGuide(){ const b=$('guideBody'), c=$('guideChev'); const open=b.style.display!=='none';
-  b.style.display=open?'none':'block'; if(c)c.textContent=open?'▴':'▾'; }
+function toggleGuide(){ const b=$('guideBody'), c=$('guideChev'), btn=$('guideBtn'); const open=b.style.display!=='none';
+  b.style.display=open?'none':'block'; if(c)c.textContent=open?'▴':'▾'; if(btn)btn.setAttribute('aria-expanded',String(!open)); }
+/* שורה משותפת לכל גרסאות המדריך */
+const GUIDE_UNDO_TIP='<li>מחקת בטעות? לחץ <b>«בטל»</b> בהודעה שמופיעה, או <b>Ctrl+Z</b>.</li>';
 function renderGuide(){ const el=$('guideBody'); if(!el) return;
   if(current && current.type==='pda'){ el.innerHTML=`<ul>
       <li><b>אוטומט מחסנית ${current.ndet?'לא-דטרמיניסטי':'דטרמיניסטי'}:</b> מצבים + <b>מחסנית</b> שמתחילה עם <b>⊥</b> בתחתית.</li>
@@ -4615,13 +4820,15 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li>על חץ אחד יכולים לשבת <b>כמה כללים עצמאיים</b>. בכל צעד נבחר רק הכלל שמתאים גם לקלט וגם לראש המחסנית; ייתכן שאף כלל אינו מתאים.</li>
       <li><b>לחיצה כפולה</b> על מצב = כלל-עצמי.</li>
       <li><b>קבלה:</b> כל הקלט נקרא, נמצאים ב<b>מצב מקבל</b>, והמחסנית חזרה ל<b>תחתית (⊥)</b>.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   if(current && current.type==='dfa' && current.ndet){ el.innerHTML=`<ul>
       <li><b>אוטומט סופי לא-דטרמיניסטי (NFA):</b> מאותו מצב מותר <b>כמה מעברים על אותו סימן</b>, וגם מעברי-<b>ε</b> (מעבר בלי לקרוא אות).</li>
       <li>בריצה נשמרת <b>קבוצת מצבים פעילים</b> — כל המסלולים נבדקים במקביל (תראה אותם מודגשים יחד).</li>
-      <li><b>בניית מעבר:</b> לחץ מצב מקור ואז יעד, והקלד סימן (אפשר להקליד <b>ε</b> למעבר ספונטני).</li>
+      <li><b>בניית מעבר:</b> לחץ מצב מקור ואז יעד, והקלד סימן. למעבר <b>ε</b> (בלי לקרוא אות) — לחץ על <b>הכפתור ε</b> שבחלון, או בעורך המעבר שבלוח הבקרה.</li>
       <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
       <li><b>קבלה:</b> המילה מתקבלת אם <b>קיים ולו מסלול אחד</b> שמסיים ב<b>מצב מקבל</b>.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`; return; }
   el.innerHTML = (current && current.type==='tm') ? `<ul>
       <li><b>מכונת טיורינג:</b> סרט עם ראש קורא/כותב שזז ימינה/שמאלה.</li>
@@ -4633,6 +4840,7 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li>בכל מצב — <b>כלל אחד לכל תו נקרא</b> (המכונה דטרמיניסטית).</li>
       <li><b>קבלה:</b> עוצרת ומקבלת כשמגיעה למצב מקבל; אין כלל מתאים ⟵ נדחית; ריצה שלא נגמרת נעצרת אחרי 20000 צעדים.</li>
       <li>«הסרט שלך» = התוכן ההתחלתי של הסרט.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>` : `<ul>
       <li>עיגול = מצב · עיגול כפול = מצב <b>מקבל</b>.</li>
       <li>חץ נכנס מבחוץ = המצב <b>ההתחלתי</b> (המצב הראשון שתיצור; אפשר לשנות בלוח הבקרה).</li>
@@ -4640,11 +4848,14 @@ function renderGuide(){ const el=$('guideBody'); if(!el) return;
       <li><b>בניית מעבר:</b> לחץ על מצב מקור ואז על מצב יעד, והקלד סימן.</li>
       <li><b>לחיצה כפולה</b> על מצב = לולאה עצמית.</li>
       <li><b>דטרמיניסטי:</b> מכל מצב — לכל היותר מעבר אחד על כל סימן. אם אין מעבר על הסימן הנוכחי, המילה נדחית (אוטומט לא מלא).</li>
+      <li>מעברי <b>ε</b> (בלי לקרוא אות) קיימים רק ב<b>אוטומט סופי לא-דטרמיניסטי</b> — בוחרים אותו ב-+ (מודל חדש).</li>
       <li><b>קבלה:</b> המילה מתקבלת אם הריצה מסתיימת במצב מקבל.</li>
+      ${GUIDE_UNDO_TIP}
     </ul>`;
 }
 function renderModeBits(){ const wi=$('simWord');
   const wl=$('wordLabel'); if(wl) wl.textContent = (current&&current.type==='pda') ? 'מילת הקלט' : (current&&current.type==='tm') ? 'הסרט שלך' : 'המילה שלך';
+  if(wi&&wl) wi.setAttribute('aria-label',wl.textContent);
   if(wi) wi.placeholder = (current&&current.type==='tm') ? 'תוכן התחלתי לסרט, למשל 1011' : (current&&current.type==='pda') ? 'מילת קלט, למשל aabb' : 'הקלד אותיות, למשל aba…';
   const ab=$('aiBtn'); if(ab) ab.style.display = current ? 'block' : 'none';   /* סריקה זמינה ל-DFA/NFA/PDA/TM */
   renderStack();
@@ -4652,17 +4863,18 @@ function renderModeBits(){ const wi=$('simWord');
 function renderTabs(){ const el=$('tabs'); if(!el) return;
   el.innerHTML = DB.automata.map(a=>`
     <div class="tab ${current&&a.id===current.id?'active':''}" data-tab="${a.id}" title="${esc(a.name)}">
-      <span class="tab-type">${esc(a.type.toUpperCase())}</span>
-      <span class="tab-name">${esc(a.name)}</span>
-      <button class="tab-x" data-close="${a.id}" title="סגור">✕</button>
+      <button type="button" class="tab-open" aria-label="${esc(a.name)} (${esc(modelBadge(a))})"${current&&a.id===current.id?' aria-current="true"':''}><span class="tab-type">${esc(modelBadge(a))}</span>
+      <span class="tab-name">${esc(a.name)}</span></button>
+      <button type="button" class="tab-x" data-close="${a.id}" title="סגור ומחק את «${esc(a.name)}»" aria-label="סגור ומחק את «${esc(a.name)}»">✕</button>
     </div>`).join('');
 }
 function closeTab(id){ delAutomaton(id); }   /* מחיקה מיידית — בלי אישור */
-function exportCurrent(){ if(!current){ toast('אין מודל','danger'); return; } download(safeName(current.name)+'.json', JSON.stringify(current,null,2)); toast('נשמר','success'); }
+function exportCurrent(){ if(!current){ toast('אין מודל פתוח לשמירה','danger'); return; } const file=safeName(current.name)+'.json'; download(file, JSON.stringify(current,null,2)); toast(`המודל נשמר לקובץ «${file}»`,'success'); }
 function init(){
   load(); setIcons();
   if(!DB.automata.length) seedExamples();
   if(LOAD_BACKUP_KEY) setTimeout(()=>toast(`הנתונים השמורים לא נקראו. עותק שלהם נשמר בדפדפן תחת «${LOAD_BACKUP_KEY}» ולא נמחק.`,'danger',15000),0);
+  else if(LOAD_REPAIRED) setTimeout(()=>toast(`תוקנו נתונים שמורים: ${droppedTransitionsText(LOAD_REPAIRED)}`,'danger',15000),0);
   qa('.float-head').forEach(h=>{ const card=h.closest('.float'); if(card) makeDraggable(card, h); });
   try{ if(localStorage.getItem('automata_cp_collapsed')==='1') setControlPanelCollapsed(true); }catch(e){}
   $('tabs').addEventListener('click', e=>{ const x=e.target.closest('[data-close]'), tab=e.target.closest('[data-tab]');
@@ -4671,11 +4883,16 @@ function init(){
   $('canvas').addEventListener('wheel', e=>{ e.preventDefault(); zoom(e.deltaY>0?1.1:0.9); }, {passive:false});
   document.addEventListener('keydown', e=>{
     if(e.target.matches('input,textarea,select')) return;
+    if(topModal()) return;   /* חלון פתוח: Backspace/Escape לא מוחקים או מבטלים בחירה מאחוריו */
+    if(handleUndoShortcut(e)) return;
+    const g=(e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('[data-state-id],[data-trans-id]');
+    if(g){ e.preventDefault(); if(g.dataset.stateId)onStateClick(g.dataset.stateId); else { armed=null; selectTransition(g.dataset.transId); } return; }
     if(e.key==='Delete'||e.key==='Backspace'){ if(sel.type==='state') deleteState(sel.id); else if(sel.type==='transition') deleteTransition(sel.id); }
     else if(e.key==='Escape'){ armed=null; deselect(); }
     else if(e.key==='n'||e.key==='N'){ addStateCentered(); }
   });
   window.addEventListener('resize', ()=>{ if(!SIM) applyView(); });
+  window.addEventListener('storage', onStorageSync);
   applyView();
   openAutomaton(DB.settings.lastId || (DB.automata[0]&&DB.automata[0].id));
 }
