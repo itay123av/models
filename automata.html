@@ -3110,7 +3110,8 @@ function paddedScanBBox(bbox,pad){
   const objectPad=pad&&typeof pad==='object';
   const px=Math.max(0,Number(objectPad?(pad.x??pad.horizontal??pad.left??0):pad)||0);
   const py=Math.max(0,Number(objectPad?(pad.y??pad.vertical??pad.top??0):pad)||0);
-  const b=n.bbox,x1=Math.max(0,b.x-px),y1=Math.max(0,b.y-py),x2=Math.min(1,b.x+b.w+px),y2=Math.min(1,b.y+b.h+py);
+  const margin=(side,fallback)=>Math.max(0,Number(objectPad?(pad[side]??fallback):fallback)||0);
+  const b=n.bbox,x1=Math.max(0,b.x-margin('left',px)),y1=Math.max(0,b.y-margin('top',py)),x2=Math.min(1,b.x+b.w+margin('right',px)),y2=Math.min(1,b.y+b.h+margin('bottom',py));
   return Object.assign({},n,{bbox:{x:x1,y:y1,w:x2-x1,h:y2-y1},padding:objectPad?{x:px,y:py}:px});
 }
 function twoStageTopology(passA){ return passA&&passA.topology&&typeof passA.topology==='object'?passA.topology:(passA||{}); }
@@ -3184,7 +3185,13 @@ function scanLabelContextSource(connector,states){
   // as CONTEXT, not a replacement line or an additional computational rule.
   const source=connector.source_observation_id,target=connector.target_observation_id;
   if(!source||source!==target)return block;
-  const state=(states||[]).find(s=>s.observation_id===source);
+  const state=(states||[]).find(s=>s.observation_id===source),circle=normalizeScanBBox(state&&state.bbox);
+  // A lateral label already identifies its neighbourhood. Adding the whole
+  // circle vertically can bring in an unrelated outgoing-arrow label.
+  if(circle.valid){
+    const b=block.bbox,c=circle.bbox,lateral=b.x>=c.x+c.w*.9||b.x+b.w<=c.x+c.w*.1;
+    if(lateral&&b.y<c.y+c.h&&b.y+b.h>c.y)return block;
+  }
   const nearby=[block,normalizeScanBBox(connector.connector_bbox),normalizeScanBBox(state&&state.bbox)].filter(x=>x.valid);
   const x=Math.min(...nearby.map(n=>n.bbox.x)),y=Math.min(...nearby.map(n=>n.bbox.y));
   const right=Math.max(...nearby.map(n=>n.bbox.x+n.bbox.w)),bottom=Math.max(...nearby.map(n=>n.bbox.y+n.bbox.h));
@@ -3237,7 +3244,7 @@ function buildTwoStageCropSpecs(passA,scanSessionId){
       const cropId=scanCropId(scanSessionId,transitionId,lineId||`missing-${lineIndex}`,'line');
       specs.push({crop_id:cropId,transition_id:transitionId,line_id:lineId,kind:'line',source_bbox:adaptive.bbox,label_block_bbox:block.bbox,line_bbox:line.bbox,
         target_line_bbox_in_crop:scanBBoxRelativeToCrop(line.bbox,adaptive.bbox),expanded_horizontally_from_line_bbox:Boolean(adaptive.expanded),bbox_audit:line,
-        connector_index:index,line_index:lineIndex,padding:scanLineCropPadding(hints,lineIndex,adaptive),
+        connector_index:index,line_index:lineIndex,geometry_confidence:hint&&hint.confidence,padding:scanLineCropPadding(hints,lineIndex,adaptive),
         crop_notes:['line crop ראשי מוגבל אנכית לפי baseline סמוך; label_block נשמר כהקשר רחב נפרד',
           ...(adaptive.expanded?['החיתוך הורחב אופקית לרוחב label_block כדי לשמור INPUT, STACK_TOP ו-ACTION באותה שורה']:[]),...(adaptive.issues||[])]});
       if(!line.valid)issues.push(...line.issues.map(x=>`transition ${transitionId||index} line ${lineId||lineIndex}: ${x}`));
@@ -3258,7 +3265,93 @@ function buildTwoStageCropSpecs(passA,scanSessionId){
     if(blockForLineMissing(spec,topology))geometryIssues.push('line_hint אינו ממוקם באופן מהימן בתוך label_block של החץ');
     spec.crop_geometry_issues=[...new Set(geometryIssues)];
   });
-  return {scan_session_id:String(scanSessionId||''),specs,issues};
+  return boundScanCropContexts({scan_session_id:String(scanSessionId||''),specs,issues});
+}
+/* Only trim added context, never the owning label itself. A separate nearby
+   label limits padding at the midpoint of the intervening gap. */
+function boundScanCropContexts(plan){
+  const groups=new Map();
+  for(const spec of plan.specs.filter(s=>s.kind==='line')){
+    const n=normalizeScanBBox(spec.line_bbox);if(!n.valid)continue;
+    const previous=groups.get(spec.transition_id),b=n.bbox;
+    groups.set(spec.transition_id,previous?{x:Math.min(previous.x,b.x),y:Math.min(previous.y,b.y),
+      w:Math.max(previous.x+previous.w,b.x+b.w)-Math.min(previous.x,b.x),
+      h:Math.max(previous.y+previous.h,b.y+b.h)-Math.min(previous.y,b.y)}:b);
+  }
+  for(const spec of plan.specs.filter(s=>s.kind==='label_block')){
+    const core=normalizeScanBBox(spec.source_bbox);if(!core.valid)continue;
+    const own=groups.get(spec.transition_id);
+    // Include every declared row, even if Pass A's block only enclosed one.
+    if(own){const b=core.bbox,x=Math.min(b.x,own.x),y=Math.min(b.y,own.y);
+      spec.source_bbox={x,y,w:Math.max(b.x+b.w,own.x+own.w)-x,h:Math.max(b.y+b.h,own.y+own.h)-y};}
+    const b=spec.source_bbox,p=Object.assign({},spec.padding);
+    p.left=p.right=p.x;p.top=p.bottom=p.y;
+    for(const [id,other] of groups){
+      if(id===spec.transition_id)continue;
+      if(b.x-p.left<other.x+other.w&&b.x+b.w+p.right>other.x){
+        if(b.y+b.h<=other.y)p.bottom=Math.min(p.bottom,(other.y-b.y-b.h)/2);
+        if(other.y+other.h<=b.y)p.top=Math.min(p.top,(b.y-other.y-other.h)/2);
+      }
+      if(b.y-p.top<other.y+other.h&&b.y+b.h+p.bottom>other.y){
+        if(b.x+b.w<=other.x)p.right=Math.min(p.right,(other.x-b.x-b.w)/2);
+        if(other.x+other.w<=b.x)p.left=Math.min(p.left,(b.x-other.x-other.w)/2);
+      }
+    }
+    spec.padding=p;
+    const padded=paddedScanBBox(spec.source_bbox,p).bbox;
+    spec.target_line_bboxes_in_context=plan.specs.filter(s=>s.kind==='line'&&s.transition_id===spec.transition_id)
+      .map(s=>({line_id:s.line_id,line_index:s.line_index,bbox:scanBBoxRelativeToCrop(s.line_bbox,padded)}));
+  }
+  return plan;
+}
+/* Align suspicious stacked-row hints using local contrast in their common
+   left prefix strip. No glyph is recognized and no pixel is changed. Accept
+   only an exact row-count match in the original order, within one row-height;
+   faint, connected, crowded or strongly slanted ink leaves the hints intact. */
+function refineScanCropPlanFromPixels(plan,pixels,width,height){
+  const copy=cloneScanValue(plan),states=copy.specs.filter(s=>s.kind==='state_label').map(s=>s.state_bbox).filter(Boolean);
+  const ids=new Set(copy.specs.filter(s=>s.kind==='line').map(s=>s.transition_id));
+  for(const id of ids){
+    const rows=copy.specs.filter(s=>s.kind==='line'&&s.transition_id===id).sort((a,b)=>a.line_index-b.line_index);
+    if(rows.length<2||!rows.every(s=>normalizeScanBBox(s.line_bbox).valid)||
+      !rows.some(s=>(s.crop_geometry_issues||[]).length||Number(s.geometry_confidence)<.75))continue;
+    const boxes=rows.map(s=>s.line_bbox),nominal=boxes.map(b=>b.h).sort((a,b)=>a-b)[Math.floor(rows.length/2)]*height;
+    const x1=Math.ceil(Math.max(...boxes.map(b=>b.x))*width),x2=Math.floor(Math.min(...boxes.map(b=>b.x+b.w*.5))*width);
+    if(x2-x1<8||nominal<8||boxes.some((b,i)=>i&&b.y<=boxes[i-1].y))continue;
+    const offset=Math.max(3,Math.round(nominal*.22)),gap=Math.max(2,Math.round(nominal*.22));
+    const start=Math.max(offset,Math.floor(boxes[0].y*height-nominal*.75)),
+      end=Math.min(height-offset,Math.ceil((boxes.at(-1).y+boxes.at(-1).h)*height+nominal*.75));
+    const bands=[];let band=null;
+    const value=(x,y)=>{const i=(y*width+x)*4;return Math.max(pixels[i],pixels[i+1],pixels[i+2]);};
+    for(let y=start;y<end;y++){
+      let count=0;
+      for(let x=x1;x<x2;x++){
+        if(states.some(b=>x/width>=b.x&&x/width<=b.x+b.w&&y/height>=b.y&&y/height<=b.y+b.h))continue;
+        if((value(x,y-offset)+value(x,y+offset))/2-value(x,y)>20)count++;
+      }
+      if(count<Math.max(3,(x2-x1)*.06))continue;
+      if(!band||y-band.last>gap){band={first:y,last:y,ink:0};bands.push(band);}
+      band.last=y;band.ink+=count;
+    }
+    const found=bands.filter(b=>b.last-b.first+1>=nominal*.15&&b.last-b.first+1<=nominal*1.5&&b.ink>=(x2-x1)*.8);
+    if(found.length!==rows.length||found.some((b,i)=>Math.abs((b.first+b.last)/2-(boxes[i].y+boxes[i].h/2)*height)>nominal*.85))continue;
+    // Preserve space for ascenders and the Hebrew word's slight slant.
+    const margin=Math.max(3,Math.round(nominal*.15));
+    const aligned=found.map((b,i)=>Object.assign({},boxes[i],{y:(b.first-margin)/height,h:(b.last-b.first+1+2*margin)/height}));
+    if(aligned.some((b,i)=>i&&b.y<aligned[i-1].y+aligned[i-1].h))continue;
+    const context=copy.specs.find(s=>s.kind==='label_block'&&s.transition_id===id);
+    const top=Math.min(...aligned.map(b=>b.y)),bottom=Math.max(...aligned.map(b=>b.y+b.h));
+    const block=Object.assign({},context?context.label_block_bbox:boxes[0],{y:top,h:bottom-top});
+    rows.forEach((s,i)=>{
+      s.original_geometry_line_bbox=cloneScanValue(s.line_bbox);s.line_bbox=aligned[i];
+      s.source_bbox=adaptiveScanLineSource(aligned[i],block).bbox;
+      s.padding=scanLineCropPadding(aligned.map(b=>({bbox:b})),i,{bbox:s.source_bbox});
+      s.geometry_refinement={method:'local-prefix-contrast-v1',original_bbox:s.original_geometry_line_bbox,aligned_bbox:aligned[i]};
+      s.crop_geometry_issues=[...(s.crop_geometry_issues||[]),'תיבת שורה יושרה לפי פסי דיו מקומיים; שיוך השורה דורש ביקורת'];
+    });
+    if(context){context.source_bbox=block;context.geometry_refinement={method:'local-prefix-contrast-v1'};}
+  }
+  return boundScanCropContexts(copy);
 }
 function blockForLineMissing(spec,topology){
   const connector=topologyConnectors(topology)[spec.connector_index],block=normalizeScanBBox(connector&&connector.label_block_bbox),line=normalizeScanBBox(spec&&(spec.line_bbox||spec.source_bbox));
@@ -3282,8 +3375,15 @@ function cropScanEvidenceDetailed(dataUrl,spec){
       c.width=Math.max(1,Math.round(sw*scale));c.height=Math.max(1,Math.round(sh*scale));
       const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
       ctx.drawImage(im,sx,sy,sw,sh,0,0,c.width,c.height);
-      resolve(Object.assign({},spec,{image_url:c.toDataURL('image/png'),image_role:spec.image_role||'original_same_frame_crop',crop_bbox:b,
-        target_line_bbox_in_crop:spec.kind==='line'?scanBBoxRelativeToCrop(spec.line_bbox,b):spec.target_line_bbox_in_crop,
+      const pixelBox={x:sx/im.width,y:sy/im.height,w:sw/im.width,h:sh/im.height};
+      const targets=(spec.target_line_bboxes_in_context||[]).map(target=>{
+        const n=normalizeScanBBox(target.bbox);if(!n.valid)return target;
+        const t=n.bbox,original={x:b.x+t.x*b.w,y:b.y+t.y*b.h,w:t.w*b.w,h:t.h*b.h};
+        return Object.assign({},target,{bbox:scanBBoxRelativeToCrop(original,pixelBox)});
+      });
+      resolve(Object.assign({},spec,{image_url:c.toDataURL('image/png'),image_role:spec.image_role||'original_same_frame_crop',requested_crop_bbox:b,crop_bbox:pixelBox,
+        target_line_bboxes_in_context:targets,
+        target_line_bbox_in_crop:spec.kind==='line'?scanBBoxRelativeToCrop(spec.line_bbox,pixelBox):spec.target_line_bbox_in_crop,
         original_size:{width:im.width,height:im.height},issues:[...(spec.bbox_audit&&spec.bbox_audit.issues||[]),...(padded.issues||[]),...(spec.crop_geometry_issues||[])]}));
     };
     im.onerror=()=>resolve(Object.assign({},spec,{image_url:'',original_size:null,crop_bbox:null,issues:[...(spec.bbox_audit&&spec.bbox_audit.issues||[]),...(spec.crop_geometry_issues||[]),'טעינת תמונת המקור ל-crop נכשלה']}));
@@ -3291,7 +3391,16 @@ function cropScanEvidenceDetailed(dataUrl,spec){
   });
 }
 async function materializeTwoStageCrops(originalDataUrl,plan){
-  return Promise.all((plan&&plan.specs||[]).map(spec=>cropScanEvidenceDetailed(originalDataUrl,spec)));
+  let refined=plan;
+  if((plan&&plan.specs||[]).some(s=>s.kind==='line'&&((s.crop_geometry_issues||[]).length||Number(s.geometry_confidence)<.75))){
+    try{
+      const im=new Image();im.src=originalDataUrl;await im.decode();
+      const canvas=document.createElement('canvas');canvas.width=im.width;canvas.height=im.height;
+      const context=canvas.getContext('2d');context.drawImage(im,0,0);
+      refined=refineScanCropPlanFromPixels(plan,context.getImageData(0,0,im.width,im.height).data,im.width,im.height);
+    }catch(_e){ /* Failed optional localization keeps original geometry and its review gates. */ }
+  }
+  return Promise.all((refined&&refined.specs||[]).map(spec=>cropScanEvidenceDetailed(originalDataUrl,spec)));
 }
 function buildTopologyAuditTileSpecs(scanSessionId,initialPassA){
   /* Four overlapping 60%-frame tiles preserve whole-graph continuity. */
@@ -3574,9 +3683,25 @@ function mergeTwoStageScan(passA,passB,crops,scanSessionId){
         const l=localBox.bbox,f=frameBox.bbox;
         originalEvidenceBox={x:f.x+l.x*f.w,y:f.y+l.y*f.h,w:l.w*f.w,h:l.h*f.h};
       }
+      // A syntactically valid local box can still point one physical row down.
+      // Keep the model's claim verbatim; never translate it to make it fit.
+      let rowAlignmentValid=Boolean(originalEvidenceBox);
+      const targetBox=normalizeScanBBox(crop.line_bbox||hint.bbox||hint.line_bbox);
+      if(originalEvidenceBox&&targetBox.valid){
+        const e=originalEvidenceBox,t=targetBox.bbox,center=e.y+e.h/2,distance=Math.abs(center-t.y-t.h/2);
+        const overlap=Math.max(0,Math.min(e.y+e.h,t.y+t.h)-Math.max(e.y,t.y))/Math.min(e.h,t.h);
+        const nearerRow=planCrops.some(other=>{
+          if(other.kind!=='line'||other.transition_id!==transitionId||other.line_id===lineId)return false;
+          const n=normalizeScanBBox(other.line_bbox);if(!n.valid)return false;
+          const b=n.bbox;return Math.abs(center-b.y-b.h/2)+Math.min(t.h,b.h)*.15<distance;
+        });
+        rowAlignmentValid=overlap>=.35&&!nearerRow;
+        if(!rowAlignmentValid)fieldNotes.push('local_bbox של הקריאה אינו תואם לפס השורה או קרוב יותר לשורה אחרת; המיקום נשמר כטענת המודל בלבד');
+      }
       read.pixel_provenance={row_crop_id:crop.crop_id,evidence_crop_id:evidenceId,
-        evidence_valid:ownEvidence&&validPixelFrame,local_bbox:cloneScanValue(read.bbox),
+        evidence_valid:ownEvidence&&validPixelFrame&&rowAlignmentValid,row_alignment_valid:rowAlignmentValid,local_bbox:cloneScanValue(read.bbox),
         original_bbox:originalEvidenceBox,original_line_bbox:cloneScanValue(hint.bbox||hint.line_bbox||crop.line_bbox),
+        aligned_line_bbox:cloneScanValue(crop.line_bbox),geometry_refinement:cloneScanValue(crop.geometry_refinement||null),
         row_image_url:crop.image_url};
       read.ai_line_id=lineId;read.cropped_image_segment_url=ownEvidence?evidenceCrop.image_url:crop.image_url;
       read.line_bbox=hint.bbox||hint.line_bbox||crop.line_bbox;
