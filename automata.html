@@ -812,15 +812,15 @@ function jsonSyntaxErrorAt(text){
   try{ val(); ws(); if(i<n)fail(); return -1; }
   catch(e){ if(e&&typeof e.jsonAt==='number')return e.jsonAt; return -2; }   /* -2: קינון עמוק מדי לבדיקה */
 }
-function jsonErrorText(text){
-  const s=String(text==null?'':text);
-  if(!s.trim())return 'הקובץ ריק — אין בו JSON.';
+function jsonErrorText(text,opts){
+  const s=String(text==null?'':text), pasted=Boolean(opts&&opts.pasted), subject=pasted?'ה-JSON שהודבק':'קובץ JSON';
+  if(!s.trim())return pasted?'לא הודבק JSON.':'הקובץ ריק — אין בו JSON.';
   const at=jsonSyntaxErrorAt(s);
-  if(at<0)return 'קובץ JSON לא תקין.';
+  if(at<0)return `${subject} לא תקין.`;
   const before=s.slice(0,at), line=before.split('\n').length, col=at-before.lastIndexOf('\n'), c=s[at];
-  const what=at>=s.length?'הקובץ נגמר באמצע (חסר סוגר או מירכאה?)'
+  const what=at>=s.length?`${pasted?'הטקסט':'הקובץ'} נגמר באמצע (חסר סוגר או מירכאה?)`
     :(c<' '?'ירידת שורה או תו בקרה בתוך מחרוזת':`תו לא צפוי «\u2066${c}\u2069»`);   /* בידוד LTR: בטקסט עברי } מוצג הפוך כ-{ */
-  return `קובץ JSON לא תקין: ${what} — בשורה ${line}, עמודה ${col}.`;
+  return `${subject} לא תקין: ${what} — בשורה ${line}, עמודה ${col}.`;
 }
 /* אם הנתונים השמורים אינם קריאים, init ימלא דוגמאות ו-save ידרוס אותם.
    לפני כן נשמר עותק של הטקסט הגולמי תחת מפתח נפרד, והמשתמש מקבל הודעה. */
@@ -3437,7 +3437,7 @@ function openAiScan(){
     else if(act==='back'){ cancelActiveDiagramScan(); imgData=null; previewData=null; busy=false; setState(serverOk?'source':'offline'); }
     else if(act==='go') runScan();
     else if(act==='jsonGo'){
-      let data; try{ data=JSON.parse(wrap.querySelector('#scanJson').value); }catch(err){ toast('JSON לא תקין: '+err.message,'danger'); return; }
+      const text=wrap.querySelector('#scanJson').value; let data; try{ data=JSON.parse(text); }catch(err){ toast(jsonErrorText(text,{pasted:true}),'danger',15000); return; }
       const list=aiPayloadList(data);
       if(!list.length){ toast('לא נמצאו מעברים בקלט','danger'); return; }
       close(); reviewAiList(data,0);

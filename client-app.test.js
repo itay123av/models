@@ -394,6 +394,14 @@ test('Ctrl+Z undoes the last deletion (same window as the «בטל» button), al
   }
 });
 
+test('pasting invalid JSON in the scan dialog shows the Hebrew message with position, not the browser\'s English text', () => {
+  const ctx = loadClient();
+  const src = ctx.openAiScan.toString();
+  assert.doesNotMatch(src, /'JSON לא תקין: '\s*\+\s*err\.message/, 'the English browser message is gone');
+  assert.match(src, /jsonErrorText\(text,\{pasted:true\}\)/);
+  assert.match(ctx.jsonErrorText('{,}', { pasted: true }), /^ה-JSON שהודבק לא תקין/, 'pasted text is not called a file');
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
