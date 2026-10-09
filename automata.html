@@ -989,6 +989,9 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
       if(mode==='push') flag('#pdaOp', ai.push_value&&ai.push_value.confidence);
       if(mode==='pop')  flag('#pdaPop', ai.pop_symbol&&ai.pop_symbol.confidence);
       if(ai.stack_action&&ai.stack_action.confidence!=null&&ai.stack_action.confidence<LOW) wrap.querySelector('.pda-modes').classList.add('lowconf');
+      const operandHint=pdaMissingOperandHint(ai);
+      if(operandHint){ const note=document.createElement('div'); note.className='ai-conf-note'; note.style.marginTop='9px'; note.textContent=operandHint;
+        wrap.querySelector('.pda-modes').insertAdjacentElement('afterend',note); }
       const sc=ai.source_state&&ai.source_state.confidence, tc=ai.target_state&&ai.target_state.confidence;
       if((sc!=null&&sc<LOW)||(tc!=null&&tc<LOW)){ const note=document.createElement('div'); note.className='ai-conf-note'; note.textContent='⚠ זיהוי המצבים אינו ודאי — ודא שהחץ מחבר את המצבים הנכונים'; wrap.insertBefore(note, wrap.firstChild); }
       if(ai.scanEvidence){ const ev=ai.scanEvidence, zones=ev.zones||{}, notes=Array.isArray(ev.field_notes)?ev.field_notes:[];
@@ -1052,6 +1055,20 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
     else addRulePDA(from,to,read,top,mode,push,popSym);
     renderArmBanner(); if(onDone)onDone(true);
   });
+}
+/* דחוף/שלוף נכתבים תמיד עם סימן אחריהם, ולל״ש אף פעם לא. בסריקות הדף מ-29.9
+   (10 ריצות), כשהסריקה החזירה דחוף/שלוף בלי סימן, ב-31 מתוך 40 המקרים היה כתוב
+   בפועל לל״ש. לכן העורך מבקש להסתכל שוב על המילה — בלי לבחור במקום האדם. */
+function pdaMissingOperandHint(ai){
+  if(!ai||!ai.scanEvidence)return '';
+  const mode=String(ai.stack_action&&ai.stack_action.type||'').toUpperCase();
+  const field=mode==='PUSH'?ai.push_value:mode==='POP'?ai.pop_symbol:null;
+  if(!field)return '';
+  const v=String(field.value==null?'':field.value).trim();
+  if(v&&v!=='?'&&v!=='ε')return '';
+  return mode==='PUSH'
+    ? 'הסריקה קראה «דחוף», אבל לא מצאה אחריו מה לדחוף. בדוק בתמונה: אם כתוב לל״ש או ללא שינוי — בחר «ללא». אם כתוב דחוף — כתוב מה לדחוף.'
+    : 'הסריקה קראה «שלוף», אבל לא מצאה אחריו מה לשלוף. בדוק בתמונה: אם כתוב לל״ש או ללא שינוי — בחר «ללא». אם כתוב שלוף — כתוב מה לשלוף.';
 }
 /* makeRulePDA ו-pdaRuleKey מגיעים מ-pda-core.js. המפתח כולל גם את סימן
    השליפה, כך ששני כללים שנבדלים רק בו אינם נחשבים כפילות. */

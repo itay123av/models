@@ -2679,3 +2679,31 @@ test('a glyph answer can be undone, and the final confirmation in the editor kee
   assert.equal(saved.inputReview.value, 'a', 'the group answer stays on record after the full rule is confirmed');
   assert.equal(saved.scanEvidence.structured.read_input, 'ε');
 });
+
+test('a scanned push/pop word without any symbol after it asks the human to look again, without choosing for them', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const row = (action, push, pop) => scannedRule({
+    raw_label_text: `c,A / ${action === 'PUSH' ? 'דחוף' : action === 'POP' ? 'שלוף' : 'לל״ש'}`,
+    zones: { left_text: 'c', middle_text: 'A', right_text: action === 'PUSH' ? `${push} דחוף` : action === 'POP' ? `${pop} שלוף` : 'לל״ש' },
+    read_input: { value: 'c', confidence: 0.9 },
+    stack_action: { type: action, confidence: 0.66 },
+    push_value: { value: push, confidence: 0.3 },
+    pop_symbol: { value: pop, confidence: 0.3 },
+    scan_incomplete: true,
+  });
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q0', is_start: true, confidence: 0.95 }, { id: 'q1', confidence: 0.95 }], transitions: [
+    scannedTransition('t1', 'q0', 'q1', [row('PUSH', '?', 'ε'), row('POP', 'ε', '?'), row('PUSH', 'A', 'ε'), row('NONE', 'ε', 'ε')]),
+  ] }, { atomic: true, scanSessionId: 'scan-hint' });
+  const rules = model.transitions[0].rules;
+  const hint = i => ctx.pdaMissingOperandHint(ctx.pdaRuleToAi(rules[i]));
+  assert.match(hint(0), /קראה «דחוף», אבל לא מצאה אחריו מה לדחוף/);
+  assert.match(hint(0), /לל״ש או ללא שינוי — בחר «ללא»/, 'both readings are offered to the human');
+  assert.match(hint(1), /קראה «שלוף», אבל לא מצאה אחריו מה לשלוף/);
+  assert.equal(hint(2), '', 'a push with its symbol gets no hint');
+  assert.equal(hint(3), '', 'no-change gets no hint');
+  assert.equal(ctx.pdaMissingOperandHint({ stack_action: { type: 'PUSH' }, push_value: { value: '?' } }), '', 'only scanned rules, not hand-made ones');
+  assert.equal(rules[0].op, 'push', 'the hint changes nothing in the rule');
+  assert.equal(rules[0].scanIncomplete, true);
+});
