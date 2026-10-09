@@ -2289,6 +2289,7 @@ function applyAiTransitionsToCanvas(payload,opts){
   flagAiStructuralIssues();    /* סימון מצבים מבודדים/לא-נגישים לבדיקה — "מצב ברצף שדולג" */
   current.aiReviewDismissed=false;
   save(); renderAll(); fitView();
+  scanImagesRemember(current);   /* התמונות לא נשמרות ב-localStorage; מאגר נפרד, ראה scanImagesRemember */
   const lows=aiIssueCount();
   toast(`זוהו ${added} מעברים והם צוירו על הקנבס${lows?` · ${lows} דורשים בדיקה`:''}`, lows?'':'success');
   if(skipped) toast(`${skipped} מעברים דולגו כי חסר מקור/יעד`, 'danger');
@@ -2547,6 +2548,104 @@ function scanShotUrl(r){
   const ev=r&&r.scanEvidence||{},url=String(ev.cropped_image_segment_url||r&&r.cropped_image_segment_url||'');
   return /^data:image\//i.test(url)?url:'';
 }
+/* ── תמונות הראיה של סריקה שעדיין בבדיקה: מאגר IndexedDB נפרד ─────────────
+   localStorage לא מחזיק את התמונות (compactForLocalStorage מוחק אותן בגלל
+   מגבלת המקום), ולכן אחרי רענון, או אחרי שמירה בלשונית אחרת, כרטיסי הבדיקה
+   הציגו רק טקסט. כאן נשמרת רשומה אחת לכל סשן סריקה: תמונת הראיה של כל כלל
+   שעוד לא אושר. כשהלוח מצויר, תמונה חסרה בזיכרון נטענת בחזרה לאותו שדה
+   ראיה שבו הייתה (כך גם דיאלוג העריכה מציג אותה). save/load לא משתנים:
+   השמירה הבאה מוחקת אותה שוב מ-localStorage, כמו תמיד.
+   ניקוי: סשן שכל הכללים שלו אושרו נמחק מיד. סשן שאף מודל לא מפנה אליו נמחק
+   רק אחרי 10 דקות — כדי שלשונית אחרת, שעוד לא קיבלה את הסריקה החדשה
+   מ-localStorage, לא תמחק אותה. אם IndexedDB לא זמין — הכל כמו קודם, בשקט. */
+const SCAN_IMG_DB='automata_scan_images_v1', SCAN_IMG_STORE='sessions', SCAN_IMG_GRACE_MS=10*60*1000;
+let SCAN_IMG_BACKEND=null, scanImgBackendPromise=null, scanImgPrunedOnce=false;
+const SCAN_IMG_CACHE=new Map(), SCAN_IMG_LOADING=new Set();   /* session → {images} | null */
+function scanImgIdbBackend(){
+  return new Promise(resolve=>{
+    try{
+      if(typeof indexedDB==='undefined'||!indexedDB||typeof indexedDB.open!=='function')return resolve(null);
+      const req=indexedDB.open(SCAN_IMG_DB,1);
+      req.onupgradeneeded=()=>{ const db=req.result; if(!db.objectStoreNames.contains(SCAN_IMG_STORE))db.createObjectStore(SCAN_IMG_STORE,{keyPath:'session'}); };
+      req.onerror=()=>resolve(null); req.onblocked=()=>resolve(null);
+      req.onsuccess=()=>{ const db=req.result;
+        const run=(mode,make)=>new Promise(done=>{ try{ const tx=db.transaction(SCAN_IMG_STORE,mode),r=make(tx.objectStore(SCAN_IMG_STORE));
+          let value=null; r.onsuccess=()=>{ value=r.result; }; tx.oncomplete=()=>done(value===undefined?null:value); tx.onerror=tx.onabort=()=>done(null);
+        }catch(_){ done(null); } });
+        resolve({ get:session=>run('readonly',st=>st.get(session)), put:record=>run('readwrite',st=>st.put(record)),
+          del:session=>run('readwrite',st=>st.delete(session)), all:()=>run('readonly',st=>st.getAll()) }); };
+    }catch(_){ resolve(null); }
+  });
+}
+function scanImgBackend(){
+  if(SCAN_IMG_BACKEND)return Promise.resolve(SCAN_IMG_BACKEND);
+  if(!scanImgBackendPromise)scanImgBackendPromise=scanImgIdbBackend().catch(()=>null);
+  return scanImgBackendPromise;
+}
+function scanImgCall(op,arg){ return scanImgBackend().then(b=>b?b[op](arg):null).catch(()=>null); }
+/* תמונה אחת לכל crop ראיה; שני כללים מאותו label_block חולקים אותה */
+function scanImageKey(r){
+  const ev=r&&r.scanEvidence||{},pp=ev.pixel_provenance||{};
+  return String(pp.evidence_crop_id||r&&r.aiLineId||'');
+}
+/* נקרא אחרי ייבוא סריקה: שומר את התמונות של כללים שעוד לא אושרו */
+function scanImagesRemember(model){
+  const bySession=new Map();
+  ((model&&model.type==='pda'&&model.transitions)||[]).forEach(t=>(t.rules||[]).forEach(r=>{
+    if(!r||!r.scanEvidence||r.manuallyReviewed||!r.aiScanSession)return;
+    const url=scanShotUrl(r),key=scanImageKey(r); if(!url||!key)return;
+    const session=String(r.aiScanSession);
+    if(!bySession.has(session))bySession.set(session,{});
+    bySession.get(session)[key]=url;
+  }));
+  return Promise.all([...bySession].map(([session,images])=>scanImgCall('get',session).then(old=>{
+    const merged=Object.assign({},old&&old.images||{},images);
+    SCAN_IMG_CACHE.set(session,{images:merged});
+    return scanImgCall('put',{session,images:merged,savedAt:Date.now()});
+  }))).then(()=>scanImagesPrune());
+}
+/* מחזיר true אם תמונה נטענה לזיכרון; סשן שעוד לא נקרא מהמאגר נטען ברקע, ואז הלוח מצויר שוב */
+function scanImagesHydrate(model){
+  if(!model||model.type!=='pda')return false;
+  let changed=false; const missing=new Set();
+  (model.transitions||[]).forEach(t=>(t.rules||[]).forEach(r=>{
+    if(!r||!r.scanEvidence||!r.aiScanSession||scanShotUrl(r))return;
+    const key=scanImageKey(r),session=String(r.aiScanSession); if(!key)return;
+    if(!SCAN_IMG_CACHE.has(session)){ missing.add(session); return; }
+    const rec=SCAN_IMG_CACHE.get(session),url=rec&&rec.images&&rec.images[key];
+    if(typeof url==='string'&&/^data:image\//i.test(url)){ r.scanEvidence.cropped_image_segment_url=url; r.cropped_image_segment_url=url; changed=true; }
+  }));
+  missing.forEach(session=>{
+    if(SCAN_IMG_LOADING.has(session))return;
+    SCAN_IMG_LOADING.add(session);
+    scanImgCall('get',session).then(rec=>{
+      SCAN_IMG_LOADING.delete(session);
+      if(!SCAN_IMG_CACHE.has(session))SCAN_IMG_CACHE.set(session,rec&&rec.images?{images:rec.images}:null);
+      if(current&&scanImagesHydrate(current))renderAiReviewPanel();
+    });
+  });
+  return changed;
+}
+/* סשן → האם נשאר בו כלל סרוק שלא אושר, בכל המודלים */
+function scanImageSessionsInUse(){
+  const live=new Map();
+  (DB.automata||[]).forEach(a=>((a&&a.type==='pda'&&a.transitions)||[]).forEach(t=>(t.rules||[]).forEach(r=>{
+    if(!r||!r.scanEvidence||!r.aiScanSession)return;
+    const session=String(r.aiScanSession);
+    live.set(session,Boolean(live.get(session))||!r.manuallyReviewed);
+  })));
+  return live;
+}
+function scanImagesPrune(now){
+  const at=Number.isFinite(now)?now:Date.now(),live=scanImageSessionsInUse();
+  return scanImgCall('all').then(records=>Promise.all((Array.isArray(records)?records:[]).map(rec=>{
+    const session=String(rec&&rec.session||''),pending=live.get(session);
+    const allApproved=pending===false, orphan=pending===undefined&&at-(Number(rec&&rec.savedAt)||0)>SCAN_IMG_GRACE_MS;
+    if(!session||!(allApproved||orphan))return null;
+    SCAN_IMG_CACHE.delete(session);
+    return scanImgCall('del',session);
+  })));
+}
 function scanShotMember(kind,groupIndex,memberIndex){
   const g=scanReviewGroups(kind)[groupIndex],m=g&&g.members[memberIndex],t=m&&trById(m.transitionId),r=t&&(t.rules||[])[m.ruleIndex];
   if(!r)return null;
@@ -2690,6 +2789,7 @@ function editPdaTransition(id,ruleIndex){
       if(prev.aiScanSession) rules[idx].aiScanSession=prev.aiScanSession;
       recomputeAiTransition(t);
       save(); renderAll(); toast('המעבר עודכן','success');
+      scanImagesPrune();
     }
   });
 }
@@ -2747,6 +2847,8 @@ function expandAiReview(){ if(current){ current.aiReviewDismissed=false; save();
 function renderAiReviewPanel(){
   const p=$('aiReviewPanel'); if(!p) return;
   if(!current){ p.className='ai-review-panel'; p.innerHTML=''; return; }
+  scanImagesHydrate(current);
+  if(!scanImgPrunedOnce){ scanImgPrunedOnce=true; scanImagesPrune(); }
   const items=collectAiReviewItems(),actions=items.filter(x=>!x.diagnostic),diag=items.filter(x=>x.diagnostic);
   if(!actions.length){ p.className='ai-review-panel'; p.innerHTML=''; return; }
   if(current.aiReviewDismissed){ p.className='ai-review-panel show collapsed';

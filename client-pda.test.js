@@ -2831,3 +2831,105 @@ test('an action answer can be undone, works beside the input-letter answer, and 
   assert.equal(saved.inputReview.value, 'c');
   assert.equal(saved.scanEvidence.structured.action, 'POP');
 });
+
+/* תמונות הראיה נשמרות במאגר נפרד (IndexedDB) ונטענות בחזרה כשהלוח מצויר. */
+function memoryImageStore(ctx) {
+  vm.runInContext(`SCAN_IMG_BACKEND=(()=>{ const m=new Map(), copy=v=>JSON.parse(JSON.stringify(v)); globalThis.__imgStore=m;
+    return { get:s=>Promise.resolve(m.has(s)?copy(m.get(s)):null), put:r=>{ m.set(r.session,copy(r)); return Promise.resolve(true); },
+      del:s=>{ m.delete(s); return Promise.resolve(true); }, all:()=>Promise.resolve([...m.values()].map(copy)) }; })()`, ctx);
+  return ctx.__imgStore;
+}
+const flush = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r)); };
+function imageScan(ctx, session = 'scan-img') {
+  const img = name => `data:image/png;base64,${Buffer.from(name).toString('base64')}`;
+  const row = (read, top, crop, url) => scannedRule({
+    raw_label_text: `${read},${top} / A דחוף`,
+    zones: { left_text: read, middle_text: top, right_text: 'A דחוף' },
+    read_input: { value: read, confidence: 0.7 }, pop_value: { value: top, confidence: 0.9 },
+    push_value: { value: 'A', confidence: 0.9 }, scan_incomplete: true,
+    cropped_image_segment_url: url, pixel_provenance: { evidence_crop_id: crop, evidence_valid: true },
+  });
+  const model = pdaModel(ctx, [], []);
+  model.id = 'm-img';
+  vm.runInContext('DB', ctx).automata = [model];
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q0', is_start: true, confidence: 0.95 }, { id: 'q1', confidence: 0.95 }], transitions: [
+    scannedTransition('t01', 'q0', 'q1', [row('ε', 'S', 'crop:block-1', img('block-1')), row('ε', 'A', 'crop:block-1', img('block-1'))]),
+    scannedTransition('t11', 'q1', 'q1', [row('ε', 'A', 'crop:line-2', img('line-2'))]),
+  ] }, { atomic: true, scanSessionId: session });
+  return { model, img };
+}
+
+test('scan evidence images survive a reload in their own store and come back when the review cards are drawn', async () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const store = memoryImageStore(ctx);
+  const { model, img } = imageScan(ctx);
+  await ctx.scanImagesRemember(model);
+  const record = store.get('scan-img');
+  assert.ok(record, 'one record per scan session');
+  assert.deepEqual(Object.keys(record.images).sort(), ['crop:block-1', 'crop:line-2'], 'rows that share an evidence crop share one image');
+  assert.equal(record.images['crop:line-2'], img('line-2'));
+
+  // A reload: localStorage keeps no image bytes (save/load are unchanged), and the page memory is empty.
+  const reloaded = JSON.parse(JSON.stringify(ctx.compactForLocalStorage(model)));
+  const rules = () => reloaded.transitions.flatMap(t => t.rules);
+  assert.ok(rules().every(r => r.scanEvidence.cropped_image_segment_url === ''), 'what is saved in localStorage has no images');
+  ctx.__setCurrent(reloaded);
+  vm.runInContext('DB', ctx).automata = [reloaded];
+  vm.runInContext('SCAN_IMG_CACHE.clear(); renderAiReviewPanel=()=>{ globalThis.__panelRenders=(globalThis.__panelRenders||0)+1; }', ctx);
+  const groupBefore = Array.from(ctx.inputGlyphGroups())[0];
+  assert.doesNotMatch(ctx.scanShotsHtml('glyph', groupBefore, 0), /<img /, 'before loading, the card has only text');
+
+  assert.equal(ctx.scanImagesHydrate(reloaded), false, 'the store is read in the background');
+  await flush();
+  assert.equal(ctx.__panelRenders, 1, 'the panel is drawn again once the images are back');
+  assert.deepEqual(rules().map(r => r.scanEvidence.cropped_image_segment_url), [img('block-1'), img('block-1'), img('line-2')]);
+  assert.match(ctx.scanShotsHtml('glyph', Array.from(ctx.inputGlyphGroups())[0], 0), /<img src="data:image\/png/);
+  assert.equal(ctx.pdaRuleToAi(rules()[2]).cropped_image_segment_url, img('line-2'), 'the rule editor shows the picture too');
+  assert.equal(JSON.stringify(ctx.compactForLocalStorage(reloaded)).includes('data:image'), false, 'the next save still keeps images out of localStorage');
+});
+
+test('stored scan images are removed when all their rules are approved, or when no model uses them any more', async () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const store = memoryImageStore(ctx);
+  const { model } = imageScan(ctx, 'scan-live');
+  await ctx.scanImagesRemember(model);
+  const now = Date.now(), minute = 60 * 1000;
+  store.set('scan-gone-old', { session: 'scan-gone-old', images: { k: 'data:image/png;base64,AA' }, savedAt: now - 11 * minute });
+  store.set('scan-gone-new', { session: 'scan-gone-new', images: { k: 'data:image/png;base64,AA' }, savedAt: now - 1 * minute });
+
+  await ctx.scanImagesPrune(now);
+  assert.deepEqual([...store.keys()].sort(), ['scan-gone-new', 'scan-live'],
+    'a session still in review stays; an orphan stays for its grace period, in case another tab has not loaded it yet');
+  await ctx.scanImagesPrune(now + 11 * minute);
+  assert.deepEqual([...store.keys()], ['scan-live'], 'after the grace period an orphan is removed');
+
+  model.transitions.flatMap(t => t.rules).slice(0, 2).forEach(r => { r.manuallyReviewed = true; });
+  await ctx.scanImagesPrune(now);
+  assert.ok(store.has('scan-live'), 'one rule still waits for review');
+  model.transitions.flatMap(t => t.rules).forEach(r => { r.manuallyReviewed = true; });
+  await ctx.scanImagesPrune(now);
+  assert.equal(store.has('scan-live'), false, 'when every rule of the scan is approved, its images are deleted at once');
+});
+
+test('without a usable IndexedDB the review keeps working with text only and nothing throws', async () => {
+  for (const indexedDB of [undefined, { open() { throw new Error('denied'); } },
+    { open() { const req = {}; setImmediate(() => req.onerror && req.onerror()); return req; } }]) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    if (indexedDB) ctx.indexedDB = indexedDB;
+    const { model } = imageScan(ctx);
+    await ctx.scanImagesRemember(model);
+    await ctx.scanImagesPrune();
+    const reloaded = JSON.parse(JSON.stringify(ctx.compactForLocalStorage(model)));
+    ctx.__setCurrent(reloaded);
+    vm.runInContext('DB', ctx).automata = [reloaded];
+    vm.runInContext('SCAN_IMG_CACHE.clear()', ctx);
+    assert.equal(ctx.scanImagesHydrate(reloaded), false);
+    await flush();
+    ctx.renderAiReviewPanel();
+    assert.doesNotMatch(ctx.scanShotsHtml('glyph', Array.from(ctx.inputGlyphGroups())[0], 0), /<img /);
+    assert.match(ctx.scanShotsHtml('glyph', Array.from(ctx.inputGlyphGroups())[0], 0), /אין תמונה שמורה/);
+  }
+});
