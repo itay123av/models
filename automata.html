@@ -580,6 +580,11 @@ function toast(msg, type='',duration){ const t=$('toast');
    נשמר צילום לפני המחיקה. אם מאז נשמר שינוי נוסף, הביטול נחסם — כדי
    שלא יחזיר אחורה בשקט גם את השינוי הנוסף. */
 let SAVE_SEQ=0, UNDO=null;
+/* גרסה לכל מודל: עולה כשהאובייקט של המודל מוחלף — שמירה בלשונית אחרת,
+   «בטל» או מחיקה. חלון שנפתח על גרסה קודמת מחזיק עותק ישן של המודל. */
+const MODEL_GEN={};
+function modelGen(id){ return MODEL_GEN[id]||0; }
+function bumpModel(id){ if(id!=null)MODEL_GEN[id]=modelGen(id)+1; }
 /* הודעה עם כפתור פעולה. הספירה נעצרת כל עוד העכבר מעליה, ו-onExpire נקרא
    כשהיא נעלמת מעצמה — כך שה"בטל" תקף בדיוק כל זמן שאפשר ללחוץ עליו. */
 function toastAction(msg,actionText,onAction,duration=10000,onExpire){ const t=$('toast'); if(!t)return;
@@ -611,7 +616,7 @@ function handleUndoShortcut(e){
   const t=$('toast'); if(t&&t.querySelector&&t.querySelector('.toast-action'))hideToast(t);
   undoLast(); return true; }
 function modelUndoPoint(){ return current?{id:current.id,json:JSON.stringify(current)}:null; }
-function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return;
+function restoreModelPoint(point){ return point&&(()=>{ const m=DB.automata.find(a=>a.id===point.id); if(!m)return; bumpModel(m.id);
   const back=JSON.parse(point.json); Object.keys(m).forEach(k=>delete m[k]); Object.assign(m,back);
   current=m; DB.settings.lastId=m.id; sel={type:null,id:null}; armed=null; stopPlay(); SIM=null;
   save(); renderAll(); fitView(); toast('בוטל','success'); }); }
@@ -670,9 +675,13 @@ function dialogKey(e,bg,dismiss){
     e.preventDefault(); if(!b.classList.contains('on'))b.click(); }
   const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){ e.preventDefault(); p.click(); }
 }
-function _buildDialog({title, message, body, buttons, dismissValue=null}){
+const STALE_DIALOG_TEXT='המודל השתנה בזמן שהחלון היה פתוח (למשל בלשונית אחרת), ולכן השינוי מהחלון לא נשמר — פתח אותו שוב.';
+function _buildDialog({title, message, body, buttons, dismissValue=null, bound=true}){
   return new Promise(resolve=>{
     const opener=document.activeElement, did='dlg'+uid();
+    /* חלון שעורך את המודל הפתוח (bound) זוכר את גרסתו. אם המודל הוחלף עד
+       הלחיצה על אישור, העריכה הייתה נכתבת לעותק הישן והולכת לאיבוד בשקט. */
+    const guard=bound&&current?{id:current.id,gen:modelGen(current.id)}:null;
     const bg=document.createElement('div'); bg.className='modal-bg show';
     bg.innerHTML=`<div class="modal" role="dialog" aria-modal="true"${title?` aria-labelledby="${did}-t"`:''}${message?` aria-describedby="${did}-m"`:''}>
       ${title?`<h2 id="${did}-t">${esc(title)}</h2>`:''}
@@ -684,7 +693,9 @@ function _buildDialog({title, message, body, buttons, dismissValue=null}){
        כך ש-closeTopModal לא יסגור אותו שוב במקום את הדיאלוג שמתחתיו.
        הפוקוס חוזר למה שפתח את החלון (אם הוא עדיין על המסך). */
     const close=val=>{ document.removeEventListener('keydown',escH); bg.classList.add('closing'); bg.style.opacity='0'; setTimeout(()=>bg.remove(),150);
-      if(opener&&opener!==document.body&&opener.isConnected&&opener.focus)opener.focus(); resolve(val); };
+      if(opener&&opener!==document.body&&opener.isConnected&&opener.focus)opener.focus();
+      if(guard&&val!==dismissValue&&modelGen(guard.id)!==guard.gen){ val=dismissValue; toast(STALE_DIALOG_TEXT,'danger',12000); }
+      resolve(val); };
     (buttons||[]).forEach(btn=>{ const b=document.createElement('button');
       b.className='btn'+(btn.primary?' btn-primary':'')+(btn.danger?' btn-delete':''); b.textContent=btn.text;
       b.onclick=()=>close(btn.value); actions.appendChild(b); });
@@ -837,9 +848,14 @@ function load(){ let raw=null; try{ raw=localStorage.getItem(STORE); if(raw){ co
 function onStorageSync(e){
   if(!e||e.key!==STORE||e.newValue==null)return false;
   let d; try{ d=JSON.parse(e.newValue); }catch(_){ return false; }
-  const keep=current&&current.id;
-  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object');
-  DB.automata.forEach(sanitizeModel);
+  const keep=current&&current.id, before=new Map(DB.automata.map(a=>[a.id,a]));
+  /* מודל שלא השתנה שם נשאר כאן אותו אובייקט, כדי שחלון שפתוח עליו יישאר תקף.
+     מודל שהשתנה או נמחק מקבל גרסה חדשה. */
+  DB.automata=(Array.isArray(d.automata)?d.automata:[]).filter(a=>a&&typeof a==='object').map(a=>{
+    const old=before.get(a.id); before.delete(a.id);
+    if(old&&JSON.stringify(compactForLocalStorage(old))===JSON.stringify(a))return old;
+    sanitizeModel(a); bumpModel(a.id); return a; });
+  before.forEach((_,id)=>bumpModel(id));
   current=DB.automata.find(a=>a.id===keep)||DB.automata[0]||null;
   DB.settings.lastId=current?current.id:null;
   UNDO=null; stopPlay(); SIM=null; armed=null;
@@ -4388,7 +4404,7 @@ function openLibrary(){
         <button class="btn btn-sm" onclick="exportAll()">${ico('download')} ייצוא הכל</button>
         <button class="btn btn-sm" onclick="fileInput.click()">${ico('upload')} ייבוא</button>
       </div>`;
-  const dlg=_buildDialog({ title:'המודלים שלי', body:wrap,
+  const dlg=_buildDialog({ title:'המודלים שלי', body:wrap, bound:false,
     buttons:[{text:'מודל חדש', value:'new'}, {text:'סגור', value:null, primary:true}], dismissValue:null });
   wrap.addEventListener('click', e=>{ const t=e.target;
     const open=t.closest('[data-open]'), dup=t.closest('[data-dup]'), ren=t.closest('[data-ren]'), del=t.closest('[data-del]'), exp=t.closest('[data-exp]');
@@ -4421,7 +4437,7 @@ function newModel(){
   wrap.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ tp=c.dataset.tp; wrap.querySelectorAll('.chip').forEach(x=>{ x.classList.toggle('on',x===c); x.setAttribute('aria-pressed',String(x===c)); }); });
   const nm={dfa:'מודל חדש', nfa:'אוטומט סופי לא-דטרמיניסטי', pda:'אוטומט מחסנית', npda:'אוטומט מחסנית לא-דטרמיניסטי', tm:'מכונת טיורינג'};
   const SUBMIT=Symbol();
-  _buildDialog({title:'מודל חדש', body:wrap, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
+  _buildDialog({title:'מודל חדש', body:wrap, bound:false, buttons:[{text:'ביטול',value:null},{text:'צור',value:SUBMIT,primary:true}], dismissValue:null})
   .then(v=>{ if(v!==SUBMIT)return; const name=(wrap.querySelector('#nmName').value||'').trim()||nm[tp]||'מודל חדש';
     const a=newAutomaton(name, (tp==='npda'?'pda':tp==='nfa'?'dfa':tp)); if(tp==='npda'||tp==='nfa') a.ndet=true; DB.automata.push(a); openAutomaton(a.id); });
 }
@@ -4431,7 +4447,7 @@ function dupAutomaton(id){ const a=DB.automata.find(x=>x.id===id); const c=JSON.
   c.states.forEach(s=>{ const n=uid(); map[s.id]=n; s.id=n; });
   c.transitions.forEach(t=>{ t.id=uid(); t.from=map[t.from]; t.to=map[t.to]; });
   c.updated=Date.now(); DB.automata.push(c); save(); toast(`נוצר עותק: «${c.name}»`,'success'); }
-function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone=DB.automata[index]; if(!gone)return;
+function delAutomaton(id){ const index=DB.automata.findIndex(a=>a.id===id), gone=DB.automata[index]; if(!gone)return; bumpModel(id);
   const json=JSON.stringify(gone); DB.automata=DB.automata.filter(a=>a.id!==id);
   if(current&&current.id===id){ current=DB.automata[0]||null; if(current)DB.settings.lastId=current.id; renderAll(); fitView(); } save(); renderTabs();
   offerUndo(`המודל «${gone.name}» נמחק`,()=>{ if(DB.automata.some(a=>a.id===id))return; const back=JSON.parse(json);

@@ -301,6 +301,88 @@ test('two browser tabs: a save in the other tab is loaded here, so this tab no l
   assert.match(toasts.at(-1).m, /נמחק בלשונית אחרת/);
 });
 
+/* DOM קטן מספיק ל-_buildDialog ולחלונות המעבר: כל querySelector מחזיר אלמנט
+   קבוע לכל סלקטור (עם value), והכפתורים שנוצרו נרשמים כדי שאפשר יהיה ללחוץ. */
+function miniDom(ctx) {
+  const created = [];
+  const miniEl = tag => {
+    const subs = {};
+    const el = {
+      tagName: String(tag).toUpperCase(), children: [], style: {}, dataset: {}, attrs: {}, value: '', textContent: '', innerHTML: '', className: '', isConnected: true,
+      classList: { s: new Set(), add(...c) { c.forEach(x => this.s.add(x)); }, remove(...c) { c.forEach(x => this.s.delete(x)); }, contains(c) { return this.s.has(c); },
+        toggle(c, on) { if (on === undefined) on = !this.s.has(c); if (on) this.s.add(c); else this.s.delete(c); return on; } },
+      appendChild(c) { this.children.push(c); return c; }, append(...c) { this.children.push(...c); }, insertBefore(c) { this.children.push(c); return c; },
+      setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, removeAttribute(k) { delete this.attrs[k]; },
+      addEventListener() {}, removeEventListener() {}, focus() {}, select() {}, remove() { this.isConnected = false; }, closest() { return null; },
+      querySelector(sel) { if (sel === 'input,textarea') return null; return subs[sel] || (subs[sel] = miniEl('div')); },
+      querySelectorAll() { return []; }, getClientRects() { return [1]; },
+    };
+    created.push(el);
+    return el;
+  };
+  ctx.document.createElement = miniEl;
+  ctx.document.removeEventListener = () => {};
+  return {
+    created,
+    clickPrimary() { const b = created.filter(e => e.tagName === 'BUTTON' && /btn-primary/.test(e.className)).at(-1); b.onclick(); },
+  };
+}
+
+function pdaTabModels() {
+  const rule = (read, top, op, push) => ({ read, top, op, push: push ? [push] : [] });
+  return [
+    { id: 'm1', name: 'מחסנית', type: 'pda', tests: [], states: [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }, { id: 'b', label: 'q1', x: 99, y: 0, isAccept: true }],
+      transitions: [{ id: 't', from: 'a', to: 'b', rules: [rule('a', '⊥', 'push', 'A')] }] },
+    { id: 'm2', name: 'אחר', type: 'dfa', tests: [], states: [{ id: 's', label: 'q0', x: 0, y: 0, isStart: true }], transitions: [] },
+  ];
+}
+
+function tabB() {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderArmBanner=()=>{}; renderTabs=()=>{}; fitView=()=>{}; stopPlay=()=>{};', ctx);
+  const toasts = [];
+  ctx.toast = (m, k) => toasts.push({ m, k: k || '' });
+  const db = vm.runInContext('DB', ctx);
+  db.automata = pdaTabModels();
+  ctx.__setCurrent(db.automata[0]);
+  const dom = miniDom(ctx);
+  return { ctx, toasts, db, dom };
+}
+
+test('two tabs: an edit dialog left open while the other tab changes the same model is not saved silently into a stale copy', async () => {
+  const { ctx, toasts, db, dom } = tabB();
+  ctx.editPdaTransition('t', 0);                       // לשונית B: חלון עריכת כלל פתוח
+  const wrap = dom.created[0];
+  wrap.querySelector('#pdaOp').value = 'B';             // משנה: דחיפה של B במקום A
+
+  const fromA = pdaTabModels();                         // לשונית A שמרה שינוי באותו מודל
+  fromA[0].transitions[0].rules.push({ read: 'b', top: 'A', op: 'pop', push: [], popSym: 'A' });
+  ctx.onStorageSync({ key: 'automata_data_v1', newValue: JSON.stringify({ automata: fromA }) });
+
+  dom.clickPrimary();                                   // B: «שמור שינויים»
+  await tick(); await tick();
+  const t = db.automata[0].transitions[0];
+  const savedHere = t.rules.some(r => (r.push || []).includes('B'));
+  const warned = toasts.some(x => x.k === 'danger' && /לשונית אחרת|השתנה/.test(x.m));
+  assert.ok(savedHere || warned, 'the edit is either applied to the current model or the user is told it was not saved');
+  assert.ok(!toasts.some(x => x.k === 'success' && /עודכן/.test(x.m)), 'no false "saved" message');
+  assert.equal(t.rules.length, 2, 'the other tab\'s rule is not lost');
+});
+
+test('two tabs: an edit dialog stays valid when the other tab changed a different model', async () => {
+  const { ctx, toasts, db, dom } = tabB();
+  ctx.editPdaTransition('t', 0);
+  dom.created[0].querySelector('#pdaOp').value = 'B';
+  const fromA = pdaTabModels();
+  fromA[1].name = 'אחר — שונה בלשונית A';
+  ctx.onStorageSync({ key: 'automata_data_v1', newValue: JSON.stringify({ automata: fromA }) });
+  dom.clickPrimary();
+  await tick(); await tick();
+  assert.deepEqual(Array.from(db.automata[0].transitions[0].rules[0].push), ['B'], 'the edit is saved');
+  assert.equal(db.automata[1].name, 'אחר — שונה בלשונית A', 'and the other tab\'s change is kept');
+  assert.ok(!toasts.some(x => x.k === 'danger'));
+});
+
 /* ── קלטים קיצוניים ─────────────────────────────────────────────────── */
 
 test('a long state name shrinks, then is cut with "…" inside the circle; the full name stays in the tooltip and spoken label', () => {
