@@ -848,6 +848,31 @@ test('dialog keyboard: Enter saves, even when a delete button comes before the s
   assert.equal(confirmDel.clicks, 1);
 });
 
+test('dialog focus: a dialog whose only field is a select starts on the select, so Enter saves (it started on «ביטול» and cancelled)', () => {
+  const ctx = loadClient();
+  /* אלמנטים בסדר המסמך; querySelector מחזיר את הראשון שמתאים לאחד הסלקטורים (תג או מחלקה) */
+  const el = (tag, cls = []) => ({ tag, cls });
+  const dialog = items => ({ querySelector: sel => { const want = sel.split(',').map(x => x.trim());
+    return items.find(it => want.some(w => (w.startsWith('.') ? it.cls.includes(w.slice(1)) : it.tag === w))) || null; } });
+  const cancel = el('button', ['btn']), save = el('button', ['btn', 'btn-primary']), del = el('button', ['btn', 'btn-delete']);
+  const select = el('select', ['fld']), input = el('input', ['fld']);
+
+  // "מקור/יעד אחר…": רק select
+  assert.equal(ctx.dialogInitialFocus(dialog([select, cancel, save])), select, 'the select gets the focus');
+  // שדה טקסט קודם ל-select (כלל במכונת טיורינג)
+  assert.equal(ctx.dialogInitialFocus(dialog([input, select, cancel, save])), input, 'a text field still comes first');
+  assert.equal(ctx.dialogInitialFocus(dialog([select, input, cancel, save])), input);
+  // חלון אישור מחיקה: בלי שדות — הפוקוס נשאר על «ביטול», כמו היום
+  assert.equal(ctx.dialogInitialFocus(dialog([cancel, del])), cancel, 'a delete confirmation still starts on «ביטול»');
+
+  // ומשם: Enter על ה-select שומר, Enter על «ביטול» לא מוחק
+  const primary = { clicks: 0, click() { this.clicks++; } };
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['select'])), { querySelector: () => primary }, () => {});
+  assert.equal(primary.clicks, 1, 'Enter on the select presses «שמור»');
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['button'])), { querySelector: () => primary }, () => {});
+  assert.equal(primary.clicks, 1, 'Enter on «ביטול» does not press the delete button');
+});
+
 test('dialog keyboard: Tab stays inside the dialog', () => {
   const ctx = loadClient();
   let focused = '';

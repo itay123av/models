@@ -711,6 +711,12 @@ function dialogKey(e,bg,dismiss){
      בעורך כלל סרוק «מחק את השורה» בא לפני «שמור שינויים», ו-Enter בשדה מחק את הכלל. */
   const p=bg.querySelector('.btn-primary')||bg.querySelector('.btn-delete'); if(p){ e.preventDefault(); p.click(); }
 }
+/* איפה הפוקוס כשחלון נפתח: שדה טקסט ראשון; אם אין — תיבת בחירה; ואם גם אין —
+   הכפתור הראשון. חלון שיש בו רק select ("מקור/יעד אחר…") נפתח קודם על «ביטול»,
+   ו-Enter מיד אחרי הפתיחה ביטל במקום לשמור. בחלון אישור מחיקה אין שדות, ולכן
+   הפוקוס נשאר על «ביטול» — שם Enter לא מוחק. */
+function dialogInitialFocus(bg){
+  return bg.querySelector('input,textarea')||bg.querySelector('select')||bg.querySelector('.btn-primary,.btn-delete,.btn'); }
 const STALE_DIALOG_TEXT='המודל השתנה בזמן שהחלון היה פתוח (למשל בלשונית אחרת), ולכן השינוי מהחלון לא נשמר — פתח אותו שוב.';
 function _buildDialog({title, message, body, buttons, dismissValue=null, bound=true}){
   return new Promise(resolve=>{
@@ -741,7 +747,7 @@ function _buildDialog({title, message, body, buttons, dismissValue=null, bound=t
       if(topModal()!==bg||bg.classList.contains('closing'))return;
       dialogKey(e,bg,()=>close(dismissValue)); }
     document.addEventListener('keydown',escH); document.body.appendChild(bg);
-    setTimeout(()=>{ const i=bg.querySelector('input,textarea'); if(i){i.focus(); i.select&&i.select();} else bg.querySelector('.btn-primary,.btn-delete,.btn')?.focus(); },50);
+    setTimeout(()=>{ const el=dialogInitialFocus(bg); if(el){ el.focus(); if(el.select)el.select(); } },50);
   });
 }
 function confirmDialog(title, message='', opts={}){
