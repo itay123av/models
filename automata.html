@@ -707,7 +707,9 @@ function dialogKey(e,bg,dismiss){
   const b=tg&&tg.closest('button');
   if(b){ if(!b.matches('.chip,.pda-mode'))return;
     e.preventDefault(); if(!b.classList.contains('on'))b.click(); }
-  const p=bg.querySelector('.btn-primary,.btn-delete'); if(p){ e.preventDefault(); p.click(); }
+  /* הכפתור הראשי קודם. כפתור מחיקה נבחר רק כשהוא האישור היחיד (חלון "למחוק?"):
+     בעורך כלל סרוק «מחק את השורה» בא לפני «שמור שינויים», ו-Enter בשדה מחק את הכלל. */
+  const p=bg.querySelector('.btn-primary')||bg.querySelector('.btn-delete'); if(p){ e.preventDefault(); p.click(); }
 }
 const STALE_DIALOG_TEXT='המודל השתנה בזמן שהחלון היה פתוח (למשל בלשונית אחרת), ולכן השינוי מהחלון לא נשמר — פתח אותו שוב.';
 function _buildDialog({title, message, body, buttons, dismissValue=null, bound=true}){
