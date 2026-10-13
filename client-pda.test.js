@@ -3192,3 +3192,49 @@ test('a wrong end of a scanned arrow is changed from its review card, without th
   assert.equal(t.endpointReview.target, false);
   assert.equal(t.humanEndpointResolution.target.label, 'q6');
 });
+
+/* מהסריקה האמיתית של 13.10: סימן שנכתב מתחת ל"שלוף" נספר כשורה נפרדת "?,?/?". */
+test('a scanned row that is only a lone symbol is explained in Hebrew and can be deleted from the rule editor, with undo', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; toast=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  const model = pdaModel(ctx, [], []);
+  model.id = 'm-extra-row';
+  vm.runInContext('DB', ctx).automata = [model];
+  const real = scannedRule({
+    raw_label_text: 'b,A / שלוף', zones: { left_text: 'b', middle_text: 'A', right_text: 'שלוף A' },
+    read_input: { value: 'b', confidence: 0.9 }, pop_value: { value: 'A', confidence: 0.9 },
+    stack_action: { type: 'POP', confidence: 0.9 }, push_value: { value: 'ε', confidence: 1 }, pop_symbol: { value: 'A', confidence: 0.9 }, scan_incomplete: true,
+  });
+  const lone = scannedRule({
+    raw_label_text: 'A', zones: { left_text: '', middle_text: '', right_text: 'A' },
+    read_input: { value: '?', confidence: 0.1 }, pop_value: { value: '?', confidence: 0.1 },
+    stack_action: { type: 'UNKNOWN', confidence: 0.1 }, push_value: { value: 'ε', confidence: 0.1 }, pop_symbol: { value: 'ε', confidence: 0.1 },
+    field_notes: ['This isolated A is a wrapped operand continuation of line_4_1, not an independent complete rule'], scan_incomplete: true,
+  });
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q3', is_start: true, confidence: 0.95 }, { id: 'q4', confidence: 0.95 }],
+    transitions: [scannedTransition('t34', 'q3', 'q4', [real, lone])] }, { atomic: true, scanSessionId: 'scan-extra-row' });
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.equal(t().rules.length, 2);
+
+  const hint = ctx.pdaLoneSymbolRowHint(ctx.pdaRuleToAi(t().rules[1]));
+  assert.match(hint, /רק את הסימן «A», בלי קלט ובלי ראש מחסנית/);
+  assert.match(hint, /לחץ «מחק את השורה»\. אם זה באמת כלל — מלא את השדות ושמור/, 'both ways out are offered; nothing is decided for the human');
+  assert.doesNotMatch(hint, /[A-Za-z]{4,}/, 'the explanation is Hebrew, not the model\'s English note');
+  assert.equal(ctx.pdaLoneSymbolRowHint(ctx.pdaRuleToAi(t().rules[0])), '', 'a full row gets no such hint');
+  assert.equal(ctx.pdaLoneSymbolRowHint({ scanEvidence: { raw_label_text: '?', zones: {} } }), '', 'an unreadable row is not a lone symbol');
+  assert.equal(ctx.pdaLoneSymbolRowHint({ raw_label_text: 'A' }), '', 'only scanned rows');
+
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__rowOpts=opts; }', ctx);
+  ctx.editPdaTransition(t().id, 1);
+  assert.equal(typeof ctx.__rowOpts.onDelete, 'function', 'the scanned rule can be deleted from its own editor');
+  ctx.__rowOpts.onDelete();
+  assert.equal(t().rules.length, 1);
+  assert.equal(t().rules[0].read, 'b', 'only the extra row is removed');
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(t().rules.length, 2, 'the deletion can be undone');
+
+  // A rule the student added by hand keeps its normal path: no delete button in the editor.
+  t().rules.push(ctx.makeRulePDA('c', 'A', 'none', ''));
+  ctx.editPdaTransition(t().id, 2);
+  assert.equal(ctx.__rowOpts.onDelete, null);
+});
