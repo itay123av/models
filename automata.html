@@ -252,6 +252,9 @@ body{
 .glyph-other{display:inline-flex;gap:4px;align-items:center}
 .glyph-other .fld{width:52px;padding:3px 6px;font-size:13px;min-height:0;text-align:center}
 .glyph-other b{font-size:12px;color:#7c2d12}
+.ai-notes{margin-top:6px;font-size:11px}
+.ai-notes summary{cursor:pointer;font-weight:700}
+.ai-notes div{margin-top:4px;line-height:1.4;overflow-wrap:anywhere}
 .ai-review-diag{margin-top:12px;font-size:11px;color:#78350f}
 .ai-review-diag summary{cursor:pointer;font-weight:800;color:#92400e}
 .ai-review-diag div{border-top:1px dashed #fcd34d;padding:5px 2px;line-height:1.35;overflow-wrap:anywhere}
@@ -1206,18 +1209,23 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
           `שמאל: ${esc(zones.left_text||'—')} · אמצע: ${esc(zones.middle_text||'—')} · ימין: ${esc(zones.right_text||'—')}`+
           (ai.inputReview?`<br><b>קלט אושר בידי אדם: «${esc(ai.inputReview.value)}»</b>${ai.inputReview.original!==ai.inputReview.value?` (הסריקה קראה «${esc(ai.inputReview.original)}»)`:''} — בדוק את שאר הכלל ושמור`:'')+
           (ai.actionReview?`<br><b>מילת הפעולה אושרה בידי אדם: ${esc(ai.actionReview.value)}</b> (הסריקה קראה «${ai.actionReview.original&&ai.actionReview.original.op==='pop'?'שלוף':'דחוף'}» בלי סימן) — בדוק את שאר הכלל ושמור`:'')+
-          (notes.length?`<br>הערות: ${notes.map(esc).join(' · ')}`:'');
-        wrap.insertBefore(evidence, wrap.firstChild); }
+          (notes.length?`<details class="ai-notes"><summary>פרטים טכניים מהסריקה · ${notes.length}</summary><div dir="auto">${notes.map(esc).join(' · ')}</div></details>`:'');
+        wrap.insertBefore(evidence, wrap.firstChild);
+        const rowHint=pdaLoneSymbolRowHint(ai);
+        if(rowHint){ const note=document.createElement('div'); note.className='ai-conf-note'; note.textContent=rowHint; wrap.insertBefore(note, wrap.firstChild); } }
       if(ai.cropped_image_segment_url){ const crop=document.createElement('div'); crop.className='ai-crop';
         crop.innerHTML=`<div class="ai-crop-lbl">ראיית התמונה שנשמרה</div><img src="${esc(ai.cropped_image_segment_url)}" alt="ראיית סריקה" onerror="this.closest('.ai-crop').classList.add('noimg')"><div class="ai-crop-fallback">לא ניתן לטעון את התמונה</div>`;
         wrap.insertBefore(crop, wrap.firstChild); }
     }
   }
-  const SUBMIT=Symbol();
+  const SUBMIT=Symbol(), DELETE=Symbol();
   const dialogTitle=opts.title || (ai?'אישור מעבר — פוענח ע״י AI':'הוספת מעבר — אוטומט מחסנית');
+  /* שורה שהסריקה יצרה ואינה כלל בציור: מוחקים אותה מכאן, בלי לחפש את הפח בלוח הצד */
+  const deleteButton=typeof opts.onDelete==='function'?[{text:'מחק את השורה',value:DELETE,danger:true}]:[];
   _buildDialog({ title: dialogTitle, body:wrap,
-    buttons:[{text:'ביטול',value:null},{text: opts.confirmText || (ai?'שמור שינויים':'הוסף כלל'),value:SUBMIT,primary:true}], dismissValue:null })
+    buttons:[{text:'ביטול',value:null},...deleteButton,{text: opts.confirmText || (ai?'שמור שינויים':'הוסף כלל'),value:SUBMIT,primary:true}], dismissValue:null })
   .then(v=>{ armed=null;
+    if(v===DELETE){ opts.onDelete(); renderArmBanner(); if(onDone)onDone(false); return; }
     if(v!==SUBMIT){ renderGraph(); renderArmBanner(); if(onDone)onDone(false); return; }
     if(mode==='unknown'){
       toast('יש לבחור פעולה על המחסנית לפני השמירה','danger');
@@ -1265,6 +1273,17 @@ function promptTransitionPDA(from,to,ai,onDone,opts){
 /* דחוף/שלוף נכתבים תמיד עם סימן אחריהם, ולל״ש אף פעם לא. בסריקות הדף מ-29.9
    (10 ריצות), כשהסריקה החזירה דחוף/שלוף בלי סימן, ב-31 מתוך 40 המקרים היה כתוב
    בפועל לל״ש. לכן העורך מבקש להסתכל שוב על המילה — בלי לבחור במקום האדם. */
+/* שורה שבה הסריקה מצאה רק סימן בודד, בלי פסיק ובלי לוכסן. בדרך כלל זה הסימן
+   שאחרי דחוף/שלוף של הכלל שמעליה, שנכתב בשורה משלו ונספר כשורה נפרדת.
+   מסבירים בעברית ומציעים למחוק; ההחלטה נשארת של האדם. */
+function pdaLoneSymbolRowHint(ai){
+  const ev=ai&&ai.scanEvidence; if(!ev)return '';
+  const raw=String(ev.raw_label_text||'').trim(),zones=ev.zones||{};
+  const blank=v=>{ const t=String(v==null?'':v).trim(); return !t||t==='?'||t==='—'; };
+  if(!raw||raw==='?'||/[,،，/]/.test(raw)||[...raw.replace(/\s/g,'')].length>2)return '';
+  if(!blank(zones.left_text)||!blank(zones.middle_text))return '';
+  return `בשורה הזו הסריקה מצאה רק את הסימן «${raw}», בלי קלט ובלי ראש מחסנית. כנראה זה הסימן שנכתב מתחת לדחוף/שלוף של הכלל שמעליה, ולא כלל נפרד. בדוק בתמונה: אם כך — לחץ «מחק את השורה». אם זה באמת כלל — מלא את השדות ושמור.`;
+}
 function pdaMissingOperandHint(ai){
   if(!ai||!ai.scanEvidence)return '';
   const mode=String(ai.stack_action&&ai.stack_action.type||'').toUpperCase();
@@ -2848,6 +2867,8 @@ function editPdaTransition(id,ruleIndex){
     noConfidence:false,
     title:'עריכת מעבר — אוטומט מחסנית',
     confirmText:'שמור שינויים',
+    /* רק לכלל סרוק: כלל ידני נמחק מלוח הצד כרגיל. המחיקה מיידית, עם "בטל". */
+    onDelete:rules[idx].scanEvidence?()=>{ deletePdaRule(t.id,idx); scanImagesPrune(); }:null,
     onSave:rule=>{
       /* הקריאה הגולמית נשמרת גם אחרי תיקון ידני — כדי שתמיד יהיה אפשר
          לראות מה נקרא בפועל מהתמונה, לצד הערך המתוקן. */
