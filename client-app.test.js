@@ -565,6 +565,227 @@ test('a «בטל» offer ends when its message is replaced by another message', 
   assert.equal(vm.runInContext('UNDO', ctx), null, 'the offer is gone with its button, so Ctrl+Z no longer reaches it');
 });
 
+/* ── מעבר בין דטרמיניסטי ללא-דטרמיניסטי ─────────────────────────────── */
+
+function detHarness(model) {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; fitView=()=>{}; stopPlay=()=>{};', ctx);
+  const toasts = [], actions = [];
+  ctx.toast = (m, k) => toasts.push({ m, k: k || '' });
+  const realAction = ctx.toastAction;
+  ctx.toastAction = (...a) => { actions.push({ m: a[0], text: a[1], run: a[2], type: a[5] }); return realAction(...a); };
+  vm.runInContext('DB', ctx).automata = [model];
+  ctx.__setCurrent(model);
+  return { ctx, toasts, actions };
+}
+const st2 = () => [{ id: 'a', label: 'q0', x: 0, y: 0, isStart: true }, { id: 'b', label: 'q1', x: 99, y: 0, isAccept: true }];
+
+test('an existing model can be switched to non-deterministic and back, with «בטל»', () => {
+  const m = { id: 'm', name: 'סרוק', type: 'pda', ndet: false, tests: [], states: st2(),
+    transitions: [{ id: 't', from: 'a', to: 'b', rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }, { read: '', top: '⊥', op: 'none', push: [] }] }] };
+  const { ctx } = detHarness(m);
+  assert.equal(ctx.setDeterminism(true), true);
+  assert.equal(ctx.__getCurrent().ndet, true);
+  assert.equal(ctx.undoLast(), true, 'the switch can be undone');
+  assert.equal(ctx.__getCurrent().ndet, false);
+  ctx.setDeterminism(true);
+  assert.equal(ctx.setDeterminism(false), true, 'a PDA may go back to deterministic even with ε moves');
+  assert.equal(ctx.__getCurrent().ndet, false);
+});
+
+test('switching a finite automaton to deterministic is refused while it has ε transitions, and says where', () => {
+  const m = { id: 'm', name: 'n', type: 'dfa', ndet: true, tests: [], states: st2(), transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a', 'ε'] }] };
+  const { ctx, toasts } = detHarness(m);
+  assert.equal(ctx.setDeterminism(false), false);
+  assert.equal(ctx.__getCurrent().ndet, true);
+  assert.equal(toasts.at(-1).k, 'danger');
+  assert.match(toasts.at(-1).m, /q0 → q1/);
+  m.transitions[0].symbols = ['a'];
+  assert.equal(ctx.setDeterminism(false), true);
+  assert.equal(ctx.__getCurrent().ndet, false);
+});
+
+test('a Turing machine has no determinism switch', () => {
+  const { ctx } = detHarness({ id: 'm', name: 't', type: 'tm', tests: [], states: st2(), transitions: [] });
+  assert.equal(ctx.setDeterminism(true), false);
+  assert.ok(!ctx.__getCurrent().ndet);
+  const box = { innerHTML: 'x' };
+  ctx.__elements.detToggle = box;
+  ctx.renderDetToggle();
+  assert.equal(box.innerHTML, '', 'no switch is drawn');
+});
+
+test('the control panel shows the switch with the current choice pressed', () => {
+  const { ctx } = detHarness({ id: 'm', name: 'p', type: 'pda', ndet: true, tests: [], states: st2(), transitions: [] });
+  const box = { innerHTML: '' };
+  ctx.__elements.detToggle = box;
+  ctx.renderDetToggle();
+  assert.match(box.innerHTML, /aria-pressed="false"[^>]*>דטרמיניסטי</);
+  assert.match(box.innerHTML, /aria-pressed="true"[^>]*>לא-דטרמיניסטי</);
+});
+
+test('a run blocked for non-determinism offers a button that switches the model', () => {
+  for (const m of [
+    { id: 'm', name: 'p', type: 'pda', ndet: false, tests: [], states: st2(),
+      transitions: [{ id: 't', from: 'a', to: 'b', rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }] }, { id: 'u', from: 'a', to: 'a', rules: [{ read: '', top: '⊥', op: 'push', push: ['A'] }] }] },
+    { id: 'm', name: 'f', type: 'dfa', ndet: false, tests: [], states: st2(),
+      transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }, { id: 'u', from: 'a', to: 'a', symbols: ['a'] }] },
+    { id: 'm', name: 'e', type: 'dfa', ndet: false, tests: [], states: st2(), transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['ε'] }] },
+  ]) {
+    const { ctx, toasts, actions } = detHarness(m);
+    assert.equal(ctx.simReady(), false, m.name);
+    assert.ok(toasts.length, `${m.name}: the reason is still shown`);
+    const a = actions.at(-1);
+    assert.ok(a, `${m.name}: an action is offered`);
+    assert.equal(a.text, 'עבור ללא-דטרמיניסטי');
+    assert.equal(a.type, 'danger');
+    a.run();
+    assert.equal(ctx.__getCurrent().ndet, true, `${m.name}: the button switches`);
+    assert.equal(ctx.simReady(), true, `${m.name}: and now it runs`);
+  }
+});
+
+test('non-deterministic PDA: the rejection says why — stuck, input ended in a non-accepting state, or stack not back to ⊥', () => {
+  const ctx = loadClient();
+  const R = (read, top, op, push, popSym) => ({ read, top, op, push: push ? [push] : [], popSym });
+  ctx.__setCurrent({ type: 'pda', ndet: true, tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1' }, { id: 'c', label: 'q2' }, { id: 'd', label: 'q3', isAccept: true }],
+    transitions: [
+      { id: 't1', from: 'a', to: 'b', rules: [R('a', '', 'none')] },
+      { id: 't2', from: 'b', to: 'c', rules: [R('b', '', 'none')] },          // ab נגמרת ב-q2 שאינו מקבל
+      { id: 't3', from: 'a', to: 'd', rules: [R('c', '⊥', 'push', 'A')] },    // c נגמרת ב-q3 מקבל, אבל A נשאר במחסנית
+    ] });
+  const run = w => { const s = ctx.simInit(w); let g = 0; while (s.status === 'running' && g++ < 1000) ctx.simStepObj(s); return s; };
+
+  let s = run('ab');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /הקלט נגמר במצב לא מקבל \(q2\)/);
+  assert.doesNotMatch(s.reason, /נתקע/, 'ab was not stuck — it ended in q2');
+
+  s = run('c');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /המחסנית לא חזרה ל-⊥/);
+  assert.match(s.reason, /q3/);
+
+  s = run('b');
+  assert.equal(s.status, 'rejected');
+  assert.match(s.reason, /נתקע/);
+  assert.match(s.reason, /q0 על 'b'/, 'says where it got stuck');
+
+  s = run('abb');
+  assert.match(s.reason, /נתקע/);
+  assert.match(s.reason, /q2 על 'b'/);
+});
+
+test('the side panel hides scan IDs under a collapsed "פרטים טכניים"', () => {
+  const ctx = loadClient();
+  const inspector = { innerHTML: '' };
+  ctx.__elements.inspector = inspector;
+  ctx.__setCurrent({ type: 'pda', ndet: false, tests: [],
+    states: [{ id: 'a', label: 'q0', isStart: true, aiObservationIds: ['circle-1'] }, { id: 'b', label: 'q1' }],
+    transitions: [{ id: 't', from: 'a', to: 'b', aiTransitionId: 'arrow-7', connectorObservationId: 'conn-3', aiScanSession: 'scan-xyz',
+      rules: [{ read: 'a', top: '⊥', op: 'none', push: [] }] }] });
+  const outsideDetails = html => html.replace(/<details[\s\S]*?<\/details>/g, '');
+  vm.runInContext("sel={type:'transition',id:'t'}", ctx);
+  ctx.renderInspector();
+  assert.match(inspector.innerHTML, /<details class="tech-details"><summary>פרטים טכניים<\/summary>[\s\S]*arrow-7[\s\S]*<\/details>/);
+  assert.doesNotMatch(outsideDetails(inspector.innerHTML), /transition_id|connector_observation_id|scan_session_id|arrow-7/, 'nothing technical outside');
+  vm.runInContext("sel={type:'state',id:'a'}", ctx);
+  ctx.renderInspector();
+  assert.match(inspector.innerHTML, /<details class="tech-details">[\s\S]*circle-1/);
+  assert.doesNotMatch(outsideDetails(inspector.innerHTML), /observation|circle-1/);
+});
+
+/* ── פריסה: הגרף לא מתחת לפאנלים ───────────────────────────────────── */
+
+/* מסך בינוני (1000×650) עם לוח בקרה, לוח בדיקת סריקה, כרטיס מחסנית, סרט ומדריך —
+   המצב שבו צ'אט 3 ראה את כרטיס המחסנית מכסה את q0-q1 ואת לוח הבקרה מכסה את q3-q4. */
+function layoutHarness(panels) {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{};', ctx);
+  const W = 1000, H = 650;
+  const box = (left, top, width, height) => ({ getBoundingClientRect: () => ({ left, top, width, height, right: left + width, bottom: top + height }) });
+  const rects = panels || {
+    tabBar: [0, 0, 1000, 48], controlPanel: [748, 58, 238, 560], aiReviewPanel: [368, 64, 340, 273],
+    stackFloat: [16, 74, 300, 170], tapeFloat: [300, 530, 400, 102], guideFloat: [16, 594, 104, 38],
+  };
+  Object.entries(rects).forEach(([id, r]) => { ctx.__elements[id] = box(...r); });
+  ctx.__elements.canvasArea = Object.assign(box(0, 0, W, H), { clientWidth: W, clientHeight: H });
+  ctx.__elements.canvas = { setAttribute() {}, clientWidth: W };
+  ctx.getComputedStyle = () => ({ display: 'block' });
+  const fake = ctx.document.getElementById('__none__');   // פאנל שלא נרשם = לא מוצג
+  const PANELS = ['tabBar', 'controlPanel', 'aiReviewPanel', 'stackFloat', 'tapeFloat', 'guideFloat'];
+  ctx.document.getElementById = id => ctx.__elements[id] || (PANELS.includes(id) ? null : fake);
+  const hidden = () => {
+    const view = vm.runInContext('view', ctx), k = view.w / W, R = 40;
+    return ctx.__getCurrent().states.filter(s => {
+      const x = (s.x - view.x) / k, y = (s.y - view.y) / k, r = R / k;
+      return Object.values(rects).some(([l, t, w, h]) => x + r > l && x - r < l + w && y + r > t && y - r < t + h);
+    }).map(s => s.label);
+  };
+  return { ctx, hidden, rects };
+}
+function rowModel(n) {
+  const states = Array.from({ length: n }, (_, i) => ({ id: 's' + i, label: 'q' + i, x: 150 + i * 220, y: 300, isStart: i === 0, isAccept: i === n - 1 }));
+  const transitions = states.slice(1).map((s, i) => ({ id: 't' + i, from: 's' + i, to: s.id, rules: [{ read: 'a', top: '', op: 'none', push: [] }] }));
+  return { id: 'm', name: 'שורה', type: 'pda', tests: [], states, transitions };
+}
+
+test('fit view keeps every state out from under the floating panels, even when they leave only a narrow strip', () => {
+  const { ctx, hidden } = layoutHarness();
+  for (const n of [3, 7]) {
+    ctx.__setCurrent(rowModel(n));
+    ctx.fitView();
+    assert.deepEqual(hidden(), [], `${n} states: none under a panel`);
+  }
+});
+
+test('a panel that opens or grows over states refits the view, unless the user moved the view by hand', () => {
+  const { ctx, hidden, rects } = layoutHarness({ tabBar: [0, 0, 1000, 48], controlPanel: [748, 58, 238, 300] });
+  ctx.__setCurrent(rowModel(4));
+  ctx.fitView();
+  assert.deepEqual(hidden(), []);
+  // לוח הבדיקה נפתח מעל המצבים
+  rects.aiReviewPanel = [200, 64, 500, 520];
+  ctx.__elements.aiReviewPanel = { getBoundingClientRect: () => ({ left: 200, top: 64, width: 500, height: 520 }) };
+  assert.ok(hidden().length, 'the new panel covers states');
+  ctx.maybeRefit();
+  assert.deepEqual(hidden(), [], 'refit moved them into view');
+
+  // אחרי זום ידני — לא מזיזים את התצוגה של המשתמש
+  ctx.zoom(0.6);
+  const before = JSON.stringify(vm.runInContext('view', ctx));
+  ctx.maybeRefit();
+  assert.equal(JSON.stringify(vm.runInContext('view', ctx)), before, 'a hand-set view is left alone');
+});
+
+/* כיוון לולאה: למעלה כשפנוי; אחרת — הכיוון הרחוק ביותר מהחצים שנוגעים במצב */
+test('a self-loop is drawn away from the arrows that touch its state (it sat on the incoming arrow of q6)', () => {
+  const ctx = loadClient();
+  const dir = g => Math.atan2(g.ly - g.cy, g.lx - g.cx) * 180 / Math.PI;     // כיוון התווית מהמרכז
+  const angDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+  const model = { type: 'pda', ndet: true, tests: [],
+    states: [{ id: 'q0', label: 'q0', x: 400, y: 100, isStart: true }, { id: 'q6', label: 'q6', x: 400, y: 400, isAccept: true }],
+    transitions: [
+      { id: 'in', from: 'q0', to: 'q6', rules: [{ read: 'c', top: '⊥', op: 'none', push: [] }] },      // נכנס ל-q6 מלמעלה
+      { id: 'loop', from: 'q6', to: 'q6', rules: [{ read: 'c', top: 'A', op: 'pop', push: [], popSym: 'A' }] },
+    ] };
+  ctx.__setCurrent(model);
+  let g = ctx.edgeGeom(model.transitions[1]);
+  const incoming = Math.atan2(100 - 400, 400 - 400) * 180 / Math.PI;       // -90: מלמעלה
+  assert.ok(angDiff(dir(g), incoming) >= 60, `loop direction ${dir(g).toFixed(0)}° is away from the incoming arrow (${incoming}°)`);
+
+  // בלי חצים אחרים — הלולאה נשארת למעלה, כמו קודם
+  model.transitions = [model.transitions[1]];
+  g = ctx.edgeGeom(model.transitions[0]);
+  assert.ok(angDiff(dir(g), -90) < 1, 'a free top keeps the loop on top');
+
+  // מצב התחלתי: החץ הנכנס משמאל אינו מפריע ללולאה למעלה
+  model.states[1].isStart = true;
+  g = ctx.edgeGeom(model.transitions[0]);
+  assert.ok(angDiff(dir(g), -90) < 1);
+});
+
 /* ── נגישות ─────────────────────────────────────────────────────────── */
 
 /* כפתור/שדה מזויף מספיק ל-dialogKey: closest/matches לפי רשימת סלקטורים */
