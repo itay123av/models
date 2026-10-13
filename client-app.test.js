@@ -830,6 +830,24 @@ test('dialog keyboard: Enter on a focused button activates that button, not the 
   assert.equal(dismissed, 1);
 });
 
+test('dialog keyboard: Enter saves, even when a delete button comes before the save button (it deleted the scanned row)', () => {
+  const ctx = loadClient();
+  /* סדר הכפתורים בעורך כלל סרוק: ביטול, «מחק את השורה», «שמור שינויים».
+     querySelector מחזיר את הראשון בסדר המסמך שמתאים לאחד הסלקטורים. */
+  const mk = cls => ({ cls, clicks: 0, click() { this.clicks++; } });
+  const cancel = mk(['btn']), del = mk(['btn', 'btn-delete']), save = mk(['btn', 'btn-primary']);
+  const order = [cancel, del, save];
+  const dialog = buttons => ({ querySelector: sel => { const want = sel.split(',').map(x => x.trim().replace(/^\./, '')); return buttons.find(b => want.some(w => b.cls.includes(w))) || null; } });
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['input'])), dialog(order), () => {});
+  assert.equal(del.clicks, 0, 'Enter in a field does not delete');
+  assert.equal(save.clicks, 1, 'Enter in a field saves');
+
+  // חלון אישור מחיקה: אין כפתור ראשי אחר, ו-Enter מאשר את המחיקה כמו קודם
+  const confirmDel = mk(['btn', 'btn-delete']);
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['input'])), dialog([mk(['btn']), confirmDel]), () => {});
+  assert.equal(confirmDel.clicks, 1);
+});
+
 test('dialog keyboard: Tab stays inside the dialog', () => {
   const ctx = loadClient();
   let focused = '';
