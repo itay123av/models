@@ -1131,6 +1131,11 @@ test('12zb2. PDA label prompts carry the Hebrew cursive action-word guide; TM an
   assert.ok(guide.some(line => line.includes('לל״ש')) && guide.some(line => line.includes('ללא שינוי')));
   assert.ok(guide.some(line => /TWO RIGHTMOST glyphs/.test(line)), 'push vs pop is decided from the right end of the word');
   assert.ok(guide.some(line => /UNKNOWN/.test(line)), 'an unreadable word stays UNKNOWN instead of the closest word');
+  // The wording measured best (LABEL-GUIDE-REMEASURE-2026-10-10.md): the original decision order.
+  // On the 29.9 sheet it read 28/39 action words; the later "a missing tail is not evidence" wording read 19/39, a hybrid 21/39.
+  assert.ok(guide.some(line => /^Decision order: .*No tail → NONE form/.test(line)), 'no descending final-pe tail means the NONE form');
+  assert.equal(guide.some(line => /A faint or clipped tail is NOT evidence for NONE/.test(line)), false, 'the wording that measured worse is not brought back unmeasured');
+  assert.ok(guide.some(line => /POP {2}= the word "שלוף" \(sometimes with an operand/.test(line)));
   for (const [modelType, expected] of [['pda', true], ['tm', false], ['dfa', false], ['nfa', false]]) {
     const session = `scan-guide-${modelType}`;
     const topology = server.normalizeTopologyStageResult(mockedTopologyRaw(), session);
@@ -1141,6 +1146,12 @@ test('12zb2. PDA label prompts carry the Hebrew cursive action-word guide; TM an
     });
     assert.ok(prompts.length > 0);
     assert.equal(prompts.every(p => p.includes(guide[guide.length - 2])), expected, `${modelType} prompt guide presence`);
+    // The guide's POP line no longer repeats it, so the label prompt itself must keep the fail-closed operand rules.
+    if (modelType === 'pda') {
+      assert.ok(prompts.every(p => /POP symbol must be read separately and may not be silently copied from STACK_TOP/.test(p)));
+      assert.ok(prompts.every(p => /A missing ACTIVE operand must stay \? and must never be filled from stack_top/.test(p)));
+      assert.ok(prompts.every(p => /never derive POP symbol from STACK_TOP/.test(p)));
+    }
   }
 });
 
