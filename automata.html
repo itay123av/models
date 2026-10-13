@@ -3574,6 +3574,43 @@ function twoStagePlaceholderRule(reason,lineId,crop){
     cropped_image_segment_url:crop&&crop.image_url||'',read_input:{value:'?',confidence:0},pop_value:{value:'?',confidence:0},stack_action:{type:'UNKNOWN',confidence:0},
     push_value:{value:'?',confidence:0},pop_symbol:{value:'?',confidence:0},field_notes:[String(reason||'קריאת תווית חסרה')],scan_incomplete:true};
 }
+/* אופרנד גלוש יכול לקבל בטעות מזהה שורה מלא ב-Pass A. שיוך לוגי
+   מותר רק אם הקריאה היא סימן מבודד באזור הפעולה, הקריאה של כלל יחיד
+   כבר מכילה אותו אופרנד, ושתי הראיות ממופות לאותו הקשר מקורי.
+   אין מילוי שדות ואין פירוש של הערות באנגלית; כל הראיות נשמרות לביקורת. */
+function reconcileTwoStageWrappedOperands(rules){
+  const fragments=[],parents=new Map(),value=f=>String((f&&f.value)??'').trim();
+  for(const fragment of rules){
+    const glyph=String(fragment.raw_label_text||'').trim(),zones=fragment.zones||{},provenance=fragment.pixel_provenance;
+    if(Array.from(glyph).length!==1||['?','ε',',','/'].includes(glyph)||
+      String(zones.left_text||'').trim()||String(zones.middle_text||'').trim()||String(zones.right_text||'').trim()!==glyph||
+      !['','?'].includes(value(fragment.read_input))||!['','?'].includes(value(fragment.pop_value))||
+      String(fragment.stack_action&&fragment.stack_action.type||'').toUpperCase()!=='UNKNOWN'||!provenance)continue;
+    const f=normalizeScanBBox(provenance.original_bbox);
+    if(!f.valid||f.clamped||f.inverted)continue;
+    const candidates=rules.filter(parent=>{
+      if(parent===fragment||!parent.pixel_provenance||parent.pixel_provenance.evidence_crop_id!==provenance.evidence_crop_id)return false;
+      const type=String(parent.stack_action&&parent.stack_action.type||'').toUpperCase();
+      if(!['PUSH','POP'].includes(type)||value(type==='PUSH'?parent.push_value:parent.pop_symbol)!==glyph||
+        ['','?'].includes(value(parent.read_input))||['','?'].includes(value(parent.pop_value)))return false;
+      const p=normalizeScanBBox(parent.pixel_provenance.original_bbox),baseline=normalizeScanBBox(parent.pixel_provenance.aligned_line_bbox||parent.line_bbox);
+      if(!p.valid||p.clamped||p.inverted||!baseline.valid)return false;
+      const a=p.bbox,b=f.bbox,centerX=b.x+b.w/2,centerY=b.y+b.h/2;
+      return b.w<=a.w*.30&&centerX>=a.x+a.w*.60&&b.x+b.w<=a.x+a.w*1.1&&
+        centerY>a.y+a.h/2&&b.y>=baseline.bbox.y+baseline.bbox.h*.4&&
+        b.y<=a.y+a.h*1.6&&b.y+b.h<=a.y+a.h*1.65;
+    });
+    if(candidates.length!==1)continue;
+    parents.set(fragment,candidates[0]);
+    fragments.push({line_id:fragment.ai_line_id,parent_line_id:candidates[0].ai_line_id,
+      reason:'isolated-action-zone-operand-already-observed-in-one-parent',read:cloneScanValue(fragment)});
+  }
+  for(const [fragment,parent] of parents){
+    parent.scan_incomplete=true;
+    parent.field_notes=scanUniqueIssues([...(parent.field_notes||[]),'סימן מבודד שמתחת לפעולה שויך לוגית לכלל הזה; שיוך ההמשך ומספר הכללים דורשים אישור']);
+  }
+  return {rules:rules.filter(r=>!parents.has(r)),fragments};
+}
 function mergeTwoStageScan(passA,passB,crops,scanSessionId){
   const session=String(scanSessionId||passA&&passA.scan_session_id||passB&&passB.scan_session_id||''),topology=twoStageTopology(passA),audit=auditTwoStageTopology(passA,session);
   const planCrops=Array.isArray(crops)?crops:[],lineCrops=planCrops.filter(c=>c.kind==='line'),stateCrops=planCrops.filter(c=>c.kind==='state_label'),allCropKeys=new Map();
@@ -3744,7 +3781,10 @@ function mergeTwoStageScan(passA,passB,crops,scanSessionId){
       rules.push(read);
     });
     const visible=Number(connector.visible_line_count??connector.visible_rule_line_count),visibleValid=Number.isInteger(visible)&&visible>=0;
-    const globalReview=Boolean(issues.length),transitionBlock=Boolean(globalReview||audit.globalBlock||foreignPass||!visibleValid||visible!==hints.length||connectorConf==null||connectorConf<AI_LOW||
+    const logicalRows=!foreignPass&&visibleValid&&visible===hints.length&&rules.length===hints.length
+      ?reconcileTwoStageWrappedOperands(rules):{rules,fragments:[]};
+    const logicalVisible=visibleValid?visible-logicalRows.fragments.length:null;
+    const globalReview=Boolean(issues.length),transitionBlock=Boolean(logicalRows.fragments.length||globalReview||audit.globalBlock||foreignPass||!visibleValid||visible!==hints.length||connectorConf==null||connectorConf<AI_LOW||
       observationConf==null||observationConf<AI_LOW||connectorObservation&&connectorObservation.scan_incomplete||connectorIssues.length||!sourceState||!targetState||sourceState.scan_incomplete||targetState.scan_incomplete);
     if(!visibleValid)connectorIssues.push('connector חסר visible_line_count תקין');
     else if(visible!==hints.length)connectorIssues.push(`visible_line_count ${visible} אינו תואם ${hints.length} line_hints`);
@@ -3757,10 +3797,12 @@ function mergeTwoStageScan(passA,passB,crops,scanSessionId){
         'טופולוגיית המעבר או שלמות שורות התווית דורשת אישור']);
       rules.forEach(rule=>{rule.scan_incomplete=true;rule.field_notes=scanUniqueIssues([...(rule.field_notes||[]),...blockReason]);});
     }
-    transitions.push({transition_id:transitionId,connector_observation_id:connectorObsId,visible_rule_line_count:visibleValid?visible:null,
-      source_state:endpointField(sourceState,sourceObs),target_state:endpointField(targetState,targetObs),rules,scan_incomplete:transitionBlock,
+    transitions.push({transition_id:transitionId,connector_observation_id:connectorObsId,visible_rule_line_count:logicalVisible,
+      source_state:endpointField(sourceState,sourceObs),target_state:endpointField(targetState,targetObs),rules:logicalRows.rules,scan_incomplete:transitionBlock,
       field_notes:scanUniqueIssues(connectorIssues),global_scan_issue_count:globalReview?scanUniqueIssues(issues).length:0,topology_evidence:{connector:cloneScanValue(connector),connector_observation:cloneScanValue(connectorObservation),
-        raw_local_issues:rawConnectorIssueEvidence,local_issue_contradictions:cloneScanValue(connectorIssueAudit.contradictions)}});
+        raw_local_issues:rawConnectorIssueEvidence,local_issue_contradictions:cloneScanValue(connectorIssueAudit.contradictions),
+        logical_row_reconciliation:{physical_line_count:visibleValid?visible:null,logical_rule_count:logicalVisible,
+          wrapped_operand_fragments:cloneScanValue(logicalRows.fragments),review_only:Boolean(logicalRows.fragments.length)}}});
   });
   return {scan_session_id:session,states,transitions,scan_issues:scanUniqueIssues(issues),unresolved_label_reads:unresolved,
     two_stage_evidence:{pass_a:cloneScanValue(passA),pass_b:cloneScanValue(passB),crops:cloneScanValue(planCrops),topology_audit:cloneScanValue(audit),
