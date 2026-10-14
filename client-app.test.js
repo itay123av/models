@@ -883,12 +883,12 @@ test('self-check: Enter in a word field runs all the words and does not close th
   ctx.__setCurrent({ type: 'dfa', ndet: false, states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1', isAccept: true }],
     transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }], tests: [{ word: '', expect: true }, { word: 'b', expect: false }] });
   ctx.renderBatch();
-  assert.match(body.innerHTML, /class="fld bword"[^>]*onkeydown="batchWordKey\(event,0\)"/, 'the word field handles its own Enter');
+  assert.match(body.innerHTML, /class="fld bword"[^>]*onkeydown="batchFieldKey\(event,0,'word'\)"/, 'the word field handles its own Enter');
 
   let stopped = false, prevented = false;
   const e = { key: 'Enter', shiftKey: false, isComposing: false, target: { value: 'a' },
     preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } };
-  ctx.batchWordKey(e, 0);
+  ctx.batchFieldKey(e, 0, 'word');
   assert.equal(ctx.__getCurrent().tests[0].word, 'a', 'the typed word is saved before running');
   assert.equal(spans[0].textContent, '✓ מתקבלת', 'all words ran');
   assert.equal(spans[1].textContent, '✓ נדחית');
@@ -897,8 +897,26 @@ test('self-check: Enter in a word field runs all the words and does not close th
 
   // מקש אחר — לא מריץ
   spans[0].textContent = '';
-  ctx.batchWordKey({ key: 'a', target: { value: 'a' }, preventDefault() {}, stopPropagation() {} }, 0);
+  ctx.batchFieldKey({ key: 'a', target: { value: 'a' }, preventDefault() {}, stopPropagation() {} }, 0, 'word');
   assert.equal(spans[0].textContent, '');
+});
+
+test('self-check: Enter on the "מתקבלת/נדחית" select also runs all the words and keeps the dialog open', () => {
+  const ctx = loadClient();
+  vm.runInContext('save=()=>{};', ctx);
+  const body = { innerHTML: '' }, span = { textContent: '', className: '' };
+  Object.assign(ctx.__elements, { batchBody: body, 'bres-0': span, batchSummary: { textContent: '' } });
+  ctx.__setCurrent({ type: 'dfa', ndet: false, states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1', isAccept: true }],
+    transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }], tests: [{ word: 'b', expect: true }] });
+  ctx.renderBatch();
+  assert.match(body.innerHTML, /class="fld bexp"[^>]*onkeydown="batchFieldKey\(event,0,'expect'\)"/, 'the select handles its own Enter');
+  let stopped = false;
+  ctx.batchFieldKey({ key: 'Enter', shiftKey: false, isComposing: false, target: { value: 'false' },
+    preventDefault() {}, stopPropagation() { stopped = true; } }, 0, 'expect');
+  assert.equal(ctx.__getCurrent().tests[0].expect, false, 'the chosen expectation is saved before running');
+  assert.equal(span.textContent, '✓ נדחית', 'all words ran with it');
+  assert.equal(ctx.__elements.batchSummary.textContent, '1/1 עברו');
+  assert.ok(stopped, 'the Enter does not reach the dialog, so «סגור» is not pressed');
 });
 
 test('dialog keyboard: Tab stays inside the dialog', () => {

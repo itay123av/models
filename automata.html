@@ -5050,8 +5050,8 @@ function renderBatch(){
   const el=$('batchBody'); if(!el||!current) return;
   const rows=current.tests.map((t,i)=>`
     <div class="brow">
-      <input class="fld bword" value="${esc(t.word)}" placeholder="מילה (ריק = ε)" aria-label="מילת מבחן ${i+1}" onchange="setTest(${i},'word',this.value)" onkeydown="batchWordKey(event,${i})">
-      <select class="fld bexp" aria-label="תוצאה צפויה למילה ${i+1}" onchange="setTest(${i},'expect',this.value)">
+      <input class="fld bword" value="${esc(t.word)}" placeholder="מילה (ריק = ε)" aria-label="מילת מבחן ${i+1}" onchange="setTest(${i},'word',this.value)" onkeydown="batchFieldKey(event,${i},'word')">
+      <select class="fld bexp" aria-label="תוצאה צפויה למילה ${i+1}" onchange="setTest(${i},'expect',this.value)" onkeydown="batchFieldKey(event,${i},'expect')">
         <option value="true" ${t.expect?'selected':''}>מתקבלת</option>
         <option value="false" ${!t.expect?'selected':''}>נדחית</option>
       </select>
@@ -5065,11 +5065,11 @@ function renderBatch(){
     </div>${rows||'<div class="help-box">הוסף מילות מבחן עם התוצאה הצפויה, ובדוק שהאוטומט מזהה בדיוק את השפה.</div>'}`;
 }
 function setTest(i,k,v){ if(k==='expect') v=(v==='true'); current.tests[i][k]=v; save(); }
-/* Enter בשדה מילה מריץ את כל המילים ולא סוגר את החלון (החלטת המשתמש, 2026-10-14).
-   קודם הוא הגיע ל-dialogKey ולחץ על «סגור», הכפתור הראשי של החלון. המילה נשמרת
-   כאן לפני ההרצה: אירוע change של השדה מגיע רק אחרי ה-keydown. */
-function batchWordKey(e,i){ if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
-  e.preventDefault(); e.stopPropagation(); setTest(i,'word',e.target.value); runBatch(); }
+/* Enter בשדה מילה או בתיבת "מתקבלת/נדחית" מריץ את כל המילים ולא סוגר את החלון
+   (החלטת המשתמש, 2026-10-14). קודם הוא הגיע ל-dialogKey ולחץ על «סגור», הכפתור
+   הראשי של החלון. הערך נשמר כאן לפני ההרצה: אירוע change מגיע רק אחרי ה-keydown. */
+function batchFieldKey(e,i,k){ if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
+  e.preventDefault(); e.stopPropagation(); setTest(i,k,e.target.value); runBatch(); }
 function addTest(){ current.tests.push({word:'',expect:true}); save(); renderBatch(); }
 function delTest(i){ current.tests.splice(i,1); save(); renderBatch(); }
 function runBatch(){ if(!simReady())return; let pass=0;
