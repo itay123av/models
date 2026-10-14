@@ -3739,3 +3739,34 @@ test('the row-count question appears only on the last waiting rule, and not when
   assert.doesNotMatch(html, /וזה הכלל האחרון על החץ/);
   assert.match(html, ruleOkButton(ctx, 1));
 });
+
+/* החלטת המשתמש (2026-10-15): ε בביטחון נמוך באות הקלט הוא ספק קשה. בסריקת 06.10 שני הכללים של
+   q2→q1 נקראו "ε,S / דחוף A" ו-"ε,A / דחוף A", ולפי הייחוס כתוב שם a. */
+test('an input read as ε with low confidence gets no ✓ correct in the card; it goes to its dialog or the input-letter card', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const epsLow = top => ['ε', top, 'PUSH', 'A', { read_input: { value: 'ε', confidence: 0.6 } }];
+  arrowScan(ctx, [epsLow('S'), epsLow('A'), unreadableRow()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  for (const i of [0, 1]) {
+    assert.ok(ctx.scanRuleHardDoubts(t().rules[i]).includes('אות הקלט נקראה בביטחון נמוך'), `rule ${i}: a hard doubt`);
+    assert.doesNotMatch(arrowCard(ctx), ruleOkButton(ctx, i), `rule ${i}: no ✓ correct`);
+    const before = JSON.stringify(t());
+    assert.equal(ctx.approveScanRuleFromCard(t().id, i), false, `rule ${i}: the function refuses too`);
+    assert.equal(JSON.stringify(t()), before);
+  }
+
+  // The human answers in the input-letter card: a. Now each rule can be approved by itself.
+  const g = Array.from(ctx.inputGlyphGroups()).findIndex(x => x.symbol === 'ε');
+  assert.ok(g >= 0, 'the input-letter card asks about the ε');
+  assert.equal(ctx.applyInputGlyphReview(g, 'a', [true, true]), true);
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 0));
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 1));
+
+  // A real letter read with low confidence stays a soft doubt, as before.
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  arrowScan(ctx2, [['b', 'S', 'PUSH', 'A', { read_input: { value: 'b', confidence: 0.6 } }], unreadableRow(), unreadableRow()]);
+  assert.deepEqual(Array.from(ctx2.scanRuleHardDoubts(ctx2.__getCurrent().transitions[0].rules[0])), []);
+  assert.match(arrowCard(ctx2), ruleOkButton(ctx2, 0));
+});

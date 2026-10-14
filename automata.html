@@ -2844,7 +2844,9 @@ function scanRuleDoubtItems(r){
     if(ev.pixel_provenance&&ev.pixel_provenance.evidence_valid===false)add('התמונה שלצד הכלל אולי אינה של השורה הזו',true);
     const cf=ev.confidence||{},low=v=>v==null||!(v>=AI_LOW);
     /* ביטחון נמוך בשדה שאדם כבר ענה עליו בכרטיס (אות קלט / מילת פעולה) אינו ספק יותר */
-    if(!r.inputReview&&low(cf.read_input))add('אות הקלט נקראה בביטחון נמוך',false);
+    /* ε בביטחון נמוך הוא ספק קשה (החלטת המשתמש, 2026-10-15): אולי כתובה שם אות שלא נקראה,
+       כמו a ב-q2→q1 בסריקת 06.10. הכלל ממשיך לדיאלוג או לכרטיס אות הקלט. */
+    if(!r.inputReview&&low(cf.read_input))add('אות הקלט נקראה בביטחון נמוך',scanRuleInputSymbol(r)==='ε');
     if(low(cf.stack_top))add('ראש המחסנית נקרא בביטחון נמוך',false);
     if(!r.actionReview){
       const symbolConf=P.op==='push'?cf.push_symbol:(P.removeTop?cf.pop_symbol:1);
