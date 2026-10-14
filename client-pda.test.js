@@ -75,6 +75,44 @@ test('OCR frame preserves coloured pencil pixels exactly, including blue-cast ha
     'the test exercises the optional enhancement code as well as the raw OCR path');
 });
 
+test('label crops retain source resolution while topology frames are downscaled, including approved framing', async () => {
+  for (const framed of [false, true]) {
+    const ctx = loadClient(), draws = [];
+    ctx.FileReader = class { readAsDataURL() { this.result = 'source'; this.onload(); } };
+    ctx.Image = class {
+      set src(value) {
+        const size = value === 'source' ? { width: 3600, height: 4800 } : JSON.parse(value);
+        this.width = size.width; this.height = size.height; this.onload();
+      }
+    };
+    ctx.detectDocumentCrop = () => ({ applied: true, bbox: { x: 0.1, y: 0.125, w: 0.8, h: 0.75 } });
+    ctx.document.createElement = () => {
+      const canvas = { width: 0, height: 0 };
+      canvas.getContext = () => ({ fillRect() {},
+        drawImage(_image, ...args) { draws.push(args); },
+        getImageData: () => ({ data: new Uint8ClampedArray([100, 110, 120, 255]) }), putImageData() {} });
+      canvas.toDataURL = type => JSON.stringify({ width: canvas.width, height: canvas.height, type });
+      return canvas;
+    };
+    const frames = await ctx.downscaleImage({}, 2400, 0.92, { enableDocumentCrop: framed });
+    const expected = framed ? { width: 2880, height: 3600 } : { width: 3600, height: 4800 };
+    const label = JSON.parse(frames.label);
+    assert.equal(label.width, expected.width, 'OCR must not inherit the topology size limit');
+    assert.equal(label.height, expected.height);
+    assert.equal(label.type, 'image/png');
+    assert.equal(Math.max(...Object.values(frames.normalization.normalized_size)), 2400);
+    assert.ok(frames.images.every(url => JSON.parse(url).height === 2400));
+    assert.deepEqual(draws[3], framed ? [360, 600, 2880, 3600, 0, 0, 2880, 3600]
+      : [0, 0, 3600, 4800, 0, 0, 3600, 4800], 'label pixels are copied upright at 1:1');
+    const box = { x: 0.25, y: 0.25, w: 0.25, h: 0.25 };
+    const crop = await ctx.cropScanEvidenceDetailed(frames.label, { kind: 'line', source_bbox: box, line_bbox: box, padding: 0 });
+    assert.equal(JSON.parse(crop.image_url).width, expected.width / 4);
+    assert.equal(JSON.parse(crop.image_url).height, expected.height / 4);
+    assert.deepEqual(JSON.parse(JSON.stringify(crop.crop_bbox)), box, 'source resolution preserves normalized topology coordinates');
+    assert.deepEqual(JSON.parse(JSON.stringify(crop.original_size)), expected);
+  }
+});
+
 function pdaModel(ctx, transitions, states) {
   const model = {
     type: 'pda', ndet: false,
