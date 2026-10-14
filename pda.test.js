@@ -2674,6 +2674,36 @@ test('12zgb. one-pass accepting-state hallucination remains audit evidence but n
   assert.match(out.issues.join(' | '), /accepting-state border disagrees between independent passes/);
 });
 
+test('accepting audit can revise an uncertain false vote on the same circle while retaining its low-confidence review gate', () => {
+  const session='uncertain-border',first=mockedTopologyRaw(1),second=mockedTopologyRaw(1);
+  first.states[0].is_accepting={value:false,confidence:.57};
+  second.states[0].is_accepting={value:true,confidence:.78};
+  const initial=server.normalizeTopologyStageResult(first,session),before=JSON.stringify(initial);
+  const result=server.normalizeTopologyAuditStageResult(second,initial,[mockedTopologyTile()],session);
+  const state=result.topology.states[0],claim=result.topology_audit.state_flag_reconciliation.disagreements[0];
+  assert.equal(state.is_accepting.value,true,'uncertainty is not a confident negative vote');
+  assert.equal(state.is_accepting.confidence,.57,'the revision never raises the disputed flag confidence');
+  assert.equal(state.scan_incomplete,true);assert.equal(result.review_only,true);
+  assert.equal(claim.initial_value,false);assert.equal(claim.audited_value,true);assert.equal(claim.final_value,true);
+  assert.equal(claim.resolution,'audited-candidate-for-review');
+  assert.equal(JSON.stringify(initial),before,'the initial evidence remains unchanged');
+  assert.equal(result.topology_audit.initial_topology.states[0].is_accepting.value,false);
+});
+
+test('accepting audit cannot revise a confident negative, a weak audit, a shifted circle or a duplicate identity', () => {
+  for(const mode of ['confident-first','weak-audit','weak-circle','shifted-circle','duplicate-id']){
+    const session='protected-border-'+mode,first=mockedTopologyRaw(1),second=mockedTopologyRaw(1);
+    first.states[0].is_accepting={value:false,confidence:mode==='confident-first'?.95:.57};
+    second.states[0].is_accepting={value:true,confidence:mode==='weak-audit'?.6:.9};
+    if(mode==='weak-circle')second.states[0].confidence=.6;
+    if(mode==='shifted-circle')second.states[0].bbox=unitBox(.8,.8,.1,.1);
+    if(mode==='duplicate-id')second.states[1].observation_id=second.states[0].observation_id;
+    const result=server.normalizeTopologyAuditStageResult(second,server.normalizeTopologyStageResult(first,session),[mockedTopologyTile()],session);
+    assert.equal(result.topology.states[0].is_accepting.value,false,mode);
+    assert.equal(result.review_only,true,mode);
+  }
+});
+
 test('12zh. an unchanged clean topology audit can stay runnable', () => {
   const initial = server.normalizeTopologyStageResult(mockedTopologyRaw(1), 'scan-audit-same');
   const inventory = server.normalizeTopologyInventoryResult(mockedTopologyInventoryRaw(), 'scan-audit-same');

@@ -3819,8 +3819,9 @@ function applyTopologyLineGeometryAudit(topologyAuditEnvelope, auditValue, sessi
 /* Acceptance is a visual property of the circle border.  A second Vision pass
    is useful as an independent vote, but one pass must not turn an ordinary,
    repeatedly-traced pencil circle into a final double circle by itself.  Keep
-   both observations in the audit trail and expose accepting=true only when
-   both same-frame passes agree on the same physical state. */
+   both observations in the audit trail. A low-confidence false vote may be
+   revised by a confident, spatially matched audit, but the resulting true flag
+   retains the low confidence and remains an explicitly unapproved candidate. */
 function reconcileAuditedAcceptingFlags(initialTopology, auditedTopology) {
   const initialStates = Array.isArray(initialTopology && initialTopology.states)
     ? initialTopology.states : [];
@@ -3847,11 +3848,22 @@ function reconcileAuditedAcceptingFlags(initialTopology, auditedTopology) {
     const initialValue = Boolean(initial.is_accepting && initial.is_accepting.value);
     const auditedValue = Boolean(audited.is_accepting && audited.is_accepting.value);
     if (initialValue === auditedValue) return;
-    const finalValue = initialValue && auditedValue;
     const initialConfidence = Number(initial.is_accepting && initial.is_accepting.confidence);
     const auditedConfidence = Number(audited.is_accepting && audited.is_accepting.confidence);
+    const auditCircleConfidence = Number(audited.confidence);
+    const sameUniqueId = auditedId && String(initial.observation_id || '').trim() === auditedId &&
+      initialStates.filter(state => String(state.observation_id || '').trim() === auditedId).length === 1 &&
+      auditedStates.filter(state => String(state.observation_id || '').trim() === auditedId).length === 1;
+    const overlap = bboxIou(initial.bbox, audited.bbox);
+    const revisedCandidate = !initialValue && auditedValue && sameUniqueId && overlap >= 0.5 &&
+      Number.isFinite(initialConfidence) && initialConfidence >= 0 && initialConfidence < 0.75 &&
+      Number.isFinite(auditedConfidence) && auditedConfidence >= 0.75 && auditedConfidence <= 1 &&
+      Number.isFinite(auditCircleConfidence) && auditCircleConfidence >= 0.75 && auditCircleConfidence <= 1;
+    const finalValue = Boolean(revisedCandidate || initialValue && auditedValue);
     const message = `accepting-state border disagrees between independent passes for state "${auditedId || '?'}"; ` +
-      'structured accepting=false until the double border is confirmed';
+      (revisedCandidate
+        ? 'a confident spatially matched audit revised an uncertain false vote; accepting=true is a review-only candidate until the double border is confirmed'
+        : 'structured accepting=false until the double border is confirmed');
     disagreements.push({
       observation_id: auditedId,
       initial_value: initialValue,
@@ -3859,6 +3871,8 @@ function reconcileAuditedAcceptingFlags(initialTopology, auditedTopology) {
       final_value: finalValue,
       initial_confidence: Number.isFinite(initialConfidence) ? initialConfidence : null,
       audited_confidence: Number.isFinite(auditedConfidence) ? auditedConfidence : null,
+      bbox_iou: overlap,
+      resolution: revisedCandidate ? 'audited-candidate-for-review' : 'conflict-kept-non-accepting',
     });
     issues.push(message);
     audited.is_accepting = {
