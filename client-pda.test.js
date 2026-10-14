@@ -1573,6 +1573,58 @@ test('state topology requires separate start and accepting confidences and does 
   assert.equal(merged.states[0].state_topology_evidence.is_accepting.confidence, 0.4);
 });
 
+test('an audited accepting candidate blocks execution after merge and canvas import until its state is reviewed', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const session = 'accepting-candidate-review';
+  const states = [
+    topologyState('circle-start', 'q0', { is_start: true }),
+    topologyState('circle-candidate', 'q1', {
+      bbox: { x: 0.7, y: 0.1, w: 0.1, h: 0.1 },
+      is_accepting: { value: true, confidence: 0.57 }, is_accepting_confidence: null,
+      scan_incomplete: true,
+      issues: ['accepting-state border disagrees between independent passes'],
+    }),
+  ];
+  const connector = topologyConnector('arrow', 'connector', 'circle-start', 'circle-candidate', ['line']);
+  const passA = topologyPass(session, states, [connector], { review_only: true });
+  const crops = materializedCropManifest(ctx, passA, session);
+  const merged = ctx.mergeTwoStageScan(passA, labelsPass(session, passA.topology, crops), crops, session);
+  const mergedCandidate = merged.states.find(s => s.observation_id === 'circle-candidate');
+  assert.equal(mergedCandidate.is_accepting, true);
+  assert.equal(mergedCandidate.state_topology_evidence.is_accepting.confidence, 0.57);
+  assert.equal(mergedCandidate.scan_incomplete, true);
+
+  const model = pdaModel(ctx, [], []);
+  ctx.applyAiTransitionsToCanvas(merged, { atomic: true, scanSessionId: session, sessionEvidence: merged.two_stage_evidence });
+  const candidate = model.states.find(s => s.aiObservationIds.includes('circle-candidate'));
+  assert.equal(model.states.length, 2);
+  assert.equal(model.transitions.length, 1);
+  assert.equal(candidate.isAccept, true, 'the accepting candidate survives import');
+  assert.equal(candidate.aiLow, true, 'import retains the state review requirement');
+
+  // מאשרים דרך פעולות הלקוח את כל מה שאינו המצב שבמחלוקת.
+  model.states.filter(s => s !== candidate).forEach(s => ctx.markStateReviewed(s.id));
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__candidateReviewOpts=opts; }', ctx);
+  const transition = model.transitions[0];
+  ctx.editPdaTransition(transition.id, 0);
+  ctx.__candidateReviewOpts.onSave(ctx.makeRulePDA('a', 'A', 'push', 'B'));
+  ctx.markTransitionStructureReviewed(transition.id);
+  assert.equal(transition.rules.length, 1);
+  assert.equal(transition.rules[0].manuallyReviewed, true);
+  assert.equal(transition.aiLow, false);
+  assert.equal(transition.scanIncomplete, false);
+  assert.equal(model.states.filter(s => !s.manuallyReviewed).length, 1);
+  assert.equal(ctx.hasPendingAiExecutionReview(), true, 'the candidate alone still blocks execution');
+  assert.equal(ctx.simReady(), false);
+
+  ctx.markStateReviewed(candidate.id);
+  assert.equal(candidate.manuallyReviewed, true);
+  assert.equal(candidate.isAccept, true, 'human confirmation preserves the accepting flag');
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
+  assert.equal(ctx.simReady(), true, 'only confirmation of the remaining state releases execution');
+});
+
 test('state-label crop keeps the inner hint but captures the full circle with broad original-frame context', () => {
   const ctx = loadClient();
   const session = 'two-stage-state-inner-crop';

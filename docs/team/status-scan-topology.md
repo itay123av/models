@@ -1,6 +1,13 @@
 # סטטוס — scan-topology
 
-_עדכון: 2026-10-13. Codex פעיל בתחום, בתיקייה modeles-codex ובענף codex/scan-topology._
+_עדכון: 2026-10-14. Codex פעיל בתחום, בתיקייה modeles-codex ובענף codex/scan-topology._
+
+## חבילת 14.10 — בדיקת חסימה למועמד למצב מקבל
+
+- הבסיס מוזג עד `2df8e9f`, כולל חבילת 13.10 ו־`claude/app` עד `5e77649`; 329 בדיקות עברו לאחר המיזוג.
+- נוספה ב־`client-pda.test.js` בדיקה שמעבירה `is_accepting: {value:true, confidence:0.57}` עם `scan_incomplete:true` דרך `mergeTwoStageScan` והייבוא לקנבס. הדגל והביטחון נשמרים, ולאחר אישור שאר המצבים, הכלל ומבנה המעבר דרך פעולות הלקוח, `hasPendingAiExecutionReview()` נשאר true ו־`simReady()` נשאר false. רק `markStateReviewed` על המצב שבמחלוקת משחרר את שתי החסימות.
+- זו בדיקת שימור להתנהגות תקינה קיימת, לפי בקשת המשתמש; אין שינוי בקוד המוצר. הבדיקה עוברת על הקוד הנוכחי ונכשלת בעותק ניסוי שבו הוסרה בדיקת המצבים מתוך חסימת ההרצה. ראיית הכישלון: `test-evidence/scan-topology-oct14/mutation-result.txt` (מקומי, אינו בגיט).
+- `npm test`: **330 עברו, 0 נכשלו**. עלות API: **$0**. להעביר לצ'אט 1: **״תמזג את codex/scan-topology״**. התווית האנכית עדיין פתוחה כמפורט להלן.
 
 ## חבילת 13.10 — מוכנה למיזוג
 
