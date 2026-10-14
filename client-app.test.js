@@ -848,6 +848,59 @@ test('dialog keyboard: Enter saves, even when a delete button comes before the s
   assert.equal(confirmDel.clicks, 1);
 });
 
+test('dialog focus: a dialog whose only field is a select starts on the select, so Enter saves (it started on «ביטול» and cancelled)', () => {
+  const ctx = loadClient();
+  /* אלמנטים בסדר המסמך; querySelector מחזיר את הראשון שמתאים לאחד הסלקטורים (תג או מחלקה) */
+  const el = (tag, cls = []) => ({ tag, cls });
+  const dialog = items => ({ querySelector: sel => { const want = sel.split(',').map(x => x.trim());
+    return items.find(it => want.some(w => (w.startsWith('.') ? it.cls.includes(w.slice(1)) : it.tag === w))) || null; } });
+  const cancel = el('button', ['btn']), save = el('button', ['btn', 'btn-primary']), del = el('button', ['btn', 'btn-delete']);
+  const select = el('select', ['fld']), input = el('input', ['fld']);
+
+  // "מקור/יעד אחר…": רק select
+  assert.equal(ctx.dialogInitialFocus(dialog([select, cancel, save])), select, 'the select gets the focus');
+  // שדה טקסט קודם ל-select (כלל במכונת טיורינג)
+  assert.equal(ctx.dialogInitialFocus(dialog([input, select, cancel, save])), input, 'a text field still comes first');
+  assert.equal(ctx.dialogInitialFocus(dialog([select, input, cancel, save])), input);
+  // חלון אישור מחיקה: בלי שדות — הפוקוס נשאר על «ביטול», כמו היום
+  assert.equal(ctx.dialogInitialFocus(dialog([cancel, del])), cancel, 'a delete confirmation still starts on «ביטול»');
+
+  // ומשם: Enter על ה-select שומר, Enter על «ביטול» לא מוחק
+  const primary = { clicks: 0, click() { this.clicks++; } };
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['select'])), { querySelector: () => primary }, () => {});
+  assert.equal(primary.clicks, 1, 'Enter on the select presses «שמור»');
+  ctx.dialogKey(fakeKey('Enter', fakeTarget(['button'])), { querySelector: () => primary }, () => {});
+  assert.equal(primary.clicks, 1, 'Enter on «ביטול» does not press the delete button');
+});
+
+test('self-check: Enter in a word field runs all the words and does not close the dialog (it pressed «סגור»)', () => {
+  const ctx = loadClient();
+  vm.runInContext('save=()=>{};', ctx);
+  const body = { innerHTML: '' }, spans = {};
+  ctx.__elements.batchBody = body;
+  [0, 1].forEach(i => { spans[i] = { textContent: '', className: '' }; ctx.__elements['bres-' + i] = spans[i]; });
+  ctx.__elements.batchSummary = { textContent: '' };
+  ctx.__setCurrent({ type: 'dfa', ndet: false, states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1', isAccept: true }],
+    transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }], tests: [{ word: '', expect: true }, { word: 'b', expect: false }] });
+  ctx.renderBatch();
+  assert.match(body.innerHTML, /class="fld bword"[^>]*onkeydown="batchWordKey\(event,0\)"/, 'the word field handles its own Enter');
+
+  let stopped = false, prevented = false;
+  const e = { key: 'Enter', shiftKey: false, isComposing: false, target: { value: 'a' },
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } };
+  ctx.batchWordKey(e, 0);
+  assert.equal(ctx.__getCurrent().tests[0].word, 'a', 'the typed word is saved before running');
+  assert.equal(spans[0].textContent, '✓ מתקבלת', 'all words ran');
+  assert.equal(spans[1].textContent, '✓ נדחית');
+  assert.equal(ctx.__elements.batchSummary.textContent, '2/2 עברו');
+  assert.ok(prevented && stopped, 'the Enter does not reach the dialog, so «סגור» is not pressed');
+
+  // מקש אחר — לא מריץ
+  spans[0].textContent = '';
+  ctx.batchWordKey({ key: 'a', target: { value: 'a' }, preventDefault() {}, stopPropagation() {} }, 0);
+  assert.equal(spans[0].textContent, '');
+});
+
 test('dialog keyboard: Tab stays inside the dialog', () => {
   const ctx = loadClient();
   let focused = '';
