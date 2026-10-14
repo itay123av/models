@@ -1228,6 +1228,70 @@ test('merge rejects a local bbox shifted to the next row while preserving the mo
   assert.equal(wrapped.pixel_provenance.evidence_valid,true);
 });
 
+function wrappedOperandMergeFixture(ctx){
+  const session='wrapped-glyph',states=[topologyState('left','q0'),topologyState('right','q1')];
+  const connector=topologyConnector('arrow','ink','left','right',['baseline','fragment'],{
+    label_block_bbox:{x:.4,y:.25,w:.15,h:.12},line_hints:[
+      {line_id:'baseline',bbox:{x:.4,y:.25,w:.15,h:.03}},
+      {line_id:'fragment',bbox:{x:.4,y:.28,w:.15,h:.03}},
+    ]});
+  const passA=topologyPass(session,states,[connector]),crops=materializedCropManifest(ctx,passA,session);
+  const block=crops.find(c=>c.kind==='label_block'),passB=labelsPass(session,passA.topology,crops);
+  Object.assign(passB.label_reads[0],{evidence_crop_id:block.crop_id,
+    bbox:ctx.scanBBoxRelativeToCrop({x:.4,y:.25,w:.15,h:.06},block.crop_bbox),
+    stack_action:{type:'POP',confidence:.72},push_value:{value:'ε',confidence:.99},pop_symbol:{value:'Z',confidence:.62},
+    raw_label_text:'a,A / שלוף',zones:{left_text:'a',middle_text:'A',right_text:'שלוף'}});
+  Object.assign(passB.label_reads[1],{evidence_crop_id:block.crop_id,
+    bbox:ctx.scanBBoxRelativeToCrop({x:.505,y:.30,w:.025,h:.026},block.crop_bbox),
+    raw_label_text:'Z',zones:{left_text:'',middle_text:'',right_text:'Z'},
+    read_input:{value:'?',confidence:.2},pop_value:{value:'?',confidence:.2},
+    stack_action:{type:'UNKNOWN',confidence:.2},push_value:{value:'ε',confidence:.2},pop_symbol:{value:'ε',confidence:.2}});
+  return {session,passA,passB,crops};
+}
+
+test('topology merge keeps a wrapped operand as parent evidence instead of importing an empty extra rule', () => {
+  const ctx=loadClient(),f=wrappedOperandMergeFixture(ctx),before=JSON.stringify(f);
+  const merged=ctx.mergeTwoStageScan(f.passA,f.passB,f.crops,f.session),t=merged.transitions[0];
+  assert.equal(t.rules.length,1);assert.equal(t.rules[0].ai_line_id,'baseline');
+  assert.equal(t.visible_rule_line_count,1);assert.equal(t.rules[0].pop_symbol.value,'Z');
+  assert.equal(t.rules[0].pop_symbol.confidence,.62,'grouping never raises OCR confidence or fills fields');
+  assert.equal(t.scan_incomplete,true);assert.equal(t.rules[0].scan_incomplete,true);
+  const audit=t.topology_evidence.logical_row_reconciliation;
+  assert.equal(audit.physical_line_count,2);assert.equal(audit.wrapped_operand_fragments[0].line_id,'fragment');
+  assert.equal(audit.wrapped_operand_fragments[0].parent_line_id,'baseline');
+  assert.equal(audit.wrapped_operand_fragments[0].read.raw_label_text,'Z');
+  assert.equal(JSON.stringify(f),before,'neither pass nor the crop manifest is rewritten');
+  silenceClientUi(ctx);pdaModel(ctx,[],[]);
+  ctx.applyAiTransitionsToCanvas(merged,{atomic:true,scanSessionId:f.session,sessionEvidence:merged.two_stage_evidence});
+  const model=ctx.__getCurrent(),stored=model.transitions[0];
+  assert.equal(stored.rules.length,1);assert.equal(stored.visibleRuleLineCount,1);
+  assert.equal(stored.scanTopologyEvidence.logical_row_reconciliation.wrapped_operand_fragments.length,1);
+  assert.equal(ctx.hasPendingAiExecutionReview(),true);
+});
+
+test('topology merge preserves isolated incomplete rows when operand, ownership or geometry is not uniquely established', () => {
+  const ctx=loadClient();
+  for(const mode of ['different-symbol','input-present','left-zone','foreign-view','far','two-parents','count-mismatch','malformed']){
+    const f=wrappedOperandMergeFixture(ctx),child=f.passB.label_reads[1],parent=f.passB.label_reads[0];
+    if(mode==='different-symbol')parent.pop_symbol.value='Y';
+    if(mode==='input-present')child.read_input.value='b';
+    if(mode==='left-zone')child.zones.left_text='Z';
+    if(mode==='foreign-view')child.evidence_crop_id=f.crops.find(c=>c.kind==='state_label').crop_id;
+    if(mode==='far')child.bbox.y=.85;
+    if(mode==='malformed')child.bbox.x=-.2;
+    if(mode==='count-mismatch')f.passA.topology.connectors[0].visible_line_count=3;
+    if(mode==='two-parents'){
+      // Two plausible complete anchors must keep the fragment unresolved.
+      const rules=[{...parent,ai_line_id:'p1',pixel_provenance:{evidence_crop_id:'context',original_bbox:{x:.4,y:.25,w:.15,h:.06},aligned_line_bbox:{x:.4,y:.25,w:.15,h:.03}}},
+        {...parent,ai_line_id:'p2',pixel_provenance:{evidence_crop_id:'context',original_bbox:{x:.4,y:.26,w:.15,h:.06},aligned_line_bbox:{x:.4,y:.26,w:.15,h:.03}}},
+        {...child,ai_line_id:'fragment',pixel_provenance:{evidence_crop_id:'context',original_bbox:{x:.505,y:.30,w:.025,h:.026}}}];
+      assert.equal(ctx.reconcileTwoStageWrappedOperands(rules).rules.length,3,mode);continue;
+    }
+    const t=ctx.mergeTwoStageScan(f.passA,f.passB,f.crops,f.session).transitions[0];
+    assert.equal(t.rules.length,2,mode);assert.equal(t.topology_evidence.logical_row_reconciliation.wrapped_operand_fragments.length,0,mode);
+  }
+});
+
 test('context-read pixel provenance survives merge and rule import without moving the physical row', () => {
   const ctx=loadClient(),session='context-read';
   const states=[topologyState('s0','q0',{is_start:true}),topologyState('s1','q1',{is_accepting:true})];
