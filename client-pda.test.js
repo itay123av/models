@@ -3473,3 +3473,146 @@ test('any message that is not on the explicit harmless list is an open doubt, in
   assert.deepEqual(Array.from(ctx2.scanRuleOpenDoubts(t2.rules[1])), [], 'messages on the harmless list do not block');
   assert.equal(ctx2.arrowCanApproveAll(t2), true);
 });
+
+/* החלטת המשתמש (2026-10-14), אפשרות ב: "✓ נכון" לכל כלל בכרטיס החץ. רק לכלל שהספק בו
+   הוא הערות של הסריקה או ביטחון נמוך; "?", סימן חסר, סתירה שלא נענתה, תמונה זרה וזהות
+   כפולה/זרה ממשיכים בדיאלוג. */
+const CARD_REMARK = 'The right-side NONE abbreviation is faint; read as לל״ש.';
+const softRow = () => ['b', 'S', 'NONE', '', { stack_action: { type: 'NONE', confidence: 0.6 }, field_notes: [CARD_REMARK] }];
+const unreadableRow = () => ['?', 'A', 'NONE', '', { read_input: { value: '?', confidence: 0.2 }, zones: { left_text: '?', middle_text: 'A', right_text: 'לל״ש' } }];
+const ruleOkButton = (ctx, i) => new RegExp(`approveScanRuleFromCard\\('${ctx.__getCurrent().transitions[0].id}',${i}\\)"[^>]*>✓ נכון`);
+
+test('a rule whose only doubts are scan remarks or low confidence gets its own ✓ correct in the arrow card; it approves only that rule, with undo', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [unreadableRow(), softRow()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  const html = arrowCard(ctx);
+  assert.doesNotMatch(html, /approveArrowRows/, 'the arrow as a whole still has an open doubt');
+  assert.match(html, ruleOkButton(ctx, 1), 'the rule with a remark and low confidence can be approved from the card');
+  assert.doesNotMatch(html, ruleOkButton(ctx, 0), 'the unreadable rule cannot');
+  assert.match(html, /⚠ מילת הפעולה או הסימן שלה נקראו בביטחון נמוך · יש לסריקה הערה על השורה/, 'its reasons stay next to it');
+  assert.match(html, /<summary>מה כתוב בהערות \(1\)<\/summary>/);
+  assert.ok(html.includes(CARD_REMARK), 'the remark itself is shown in the card, not only counted');
+  assert.match(html, /השווה אותו לתמונה ולחץ «✓ נכון» לידו, או לחץ על הכלל כדי לתקן/);
+
+  const before0 = JSON.stringify(t().rules[0]);
+  assert.equal(ctx.approveScanRuleFromCard(t().id, 1), true);
+  const r = t().rules[1];
+  assert.equal(r.manuallyReviewed, true);
+  assert.equal(r.scanIncomplete, false);
+  assert.deepEqual({ read: r.read, top: r.top, op: r.op, push: Array.from(r.push) }, { read: 'b', top: 'S', op: 'none', push: [] }, 'the rule is kept exactly as read');
+  assert.equal(r.scanEvidence.raw_label_text, 'b,S / לל״ש', 'the evidence is kept');
+  assert.equal(r.cardReview.source, 'arrow-card-rule');
+  assert.ok(Array.from(r.cardReview.doubts).includes('יש לסריקה הערה על השורה'), 'the doubts the human approved over are recorded');
+  assert.equal(JSON.stringify(t().rules[0]), before0, 'the other rule did not change');
+  assert.equal(t().transitionScanIncomplete, true, 'one rule does not approve the row count');
+  assert.equal(ctx.hasPendingAiExecutionReview(), true);
+  assert.match(arrowCard(ctx), /✓ אושר/);
+  assert.doesNotMatch(arrowCard(ctx), ruleOkButton(ctx, 1));
+
+  assert.equal(ctx.undoLast(), true);
+  assert.ok(!t().rules[1].manuallyReviewed && t().rules[1].scanIncomplete, 'undo locks the rule again');
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 1));
+});
+
+test('✓ correct in the card saves the rule exactly as "save" in its dialog does with the fields untouched', () => {
+  const viaCard = loadClient(), viaDialog = loadClient();
+  silenceClientUi(viaCard); silenceClientUi(viaDialog);
+  arrowScan(viaCard, [unreadableRow(), softRow()]);
+  arrowScan(viaDialog, [unreadableRow(), softRow()]);
+  const a = viaCard.__getCurrent().transitions[0], b = viaDialog.__getCurrent().transitions[0];
+  assert.equal(viaCard.approveScanRuleFromCard(a.id, 1), true);
+  viaDialog.editPdaTransition(b.id, 1);
+  viaDialog.__walkOpts.onSave(viaDialog.makeRulePDA('b', 'S', 'none', ''));
+  const strip = r => { const c = JSON.parse(JSON.stringify(r)); delete c.cardReview; return c; };
+  assert.deepEqual(strip(viaCard.__getCurrent().transitions[0].rules[1]), strip(viaDialog.__getCurrent().transitions[0].rules[1]));
+  assert.equal(viaCard.__getCurrent().transitions[0].transitionScanIncomplete, viaDialog.__getCurrent().transitions[0].transitionScanIncomplete);
+});
+
+test('an unreadable symbol, a missing operand, an unanswered contradiction, foreign evidence or a doubtful identity keeps the rule in its dialog: no ✓ correct', () => {
+  const conflict = 'OCR alternatives disagree on INPUT: "a" versus "ε"; confidence cannot resolve this';
+  const cases = [
+    ['an unreadable symbol', unreadableRow()],
+    ['a missing operand', ['b', 'A', 'POP', '?', { pop_symbol: { value: '?', confidence: 0.3 }, zones: { left_text: 'b', middle_text: 'A', right_text: 'שלוף' } }]],
+    ['a contradiction in the input letter', ['b', 'A', 'NONE', '', { zones: { left_text: 'c', middle_text: 'A', right_text: 'לל״ש' } }]],
+    ['two OCR readings', ['a', 'S', 'PUSH', 'A', { read_input: { value: 'a', confidence: 0.99 }, field_notes: [conflict],
+      ocr_alternatives: { primary: { read_input: { value: 'a', confidence: 0.99 } }, retry: { read_input: { value: 'ε', confidence: 0.9 } }, conflicts: [conflict] } }]],
+    ['foreign evidence, flag only', ['a', 'S', 'PUSH', 'A', { field_notes: [], pixel_provenance: { evidence_crop_id: 'crop:other', evidence_valid: false } }]],
+    ['foreign evidence message', ['a', 'S', 'PUSH', 'A', { field_notes: ['מקור ראיית התווית זר או כפול; לא שויך לכלל'] }]],
+    ['a duplicate identity', ['a', 'S', 'PUSH', 'A', { field_notes: ['primary: duplicate label_reads identity'] }]],
+    ['a foreign identity', ['a', 'S', 'PUSH', 'A', { field_notes: ['retry: foreign label_reads identity'] }]],
+  ];
+  for (const [name, row] of cases) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [softRow(), row]);
+    const t = ctx.__getCurrent().transitions[0];
+    assert.ok(ctx.scanRuleHardDoubts(t.rules[1]).length > 0, `${name}: ${ctx.scanRuleOpenDoubts(t.rules[1]).join(' · ')}`);
+    const html = arrowCard(ctx);
+    assert.match(html, ruleOkButton(ctx, 0), `${name}: the rule next to it, with only a remark, can still be approved`);
+    assert.doesNotMatch(html, ruleOkButton(ctx, 1), `${name}: no ✓ correct on this rule`);
+    const before = JSON.stringify(t);
+    assert.equal(ctx.approveScanRuleFromCard(t.id, 1), false, `${name}: the function refuses too`);
+    assert.equal(JSON.stringify(t), before, `${name}: nothing changed`);
+  }
+});
+
+test('two readings of the input letter that the human answered in the one-step card no longer keep the rule in its dialog; a stack-top disagreement still does', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const onInput = 'OCR alternatives disagree on INPUT: "a" versus "ε"; confidence cannot resolve this';
+  const sameLetter = () => ['a', 'A', 'PUSH', 'A', { read_input: { value: 'a', confidence: 0.7 } }];
+  arrowScan(ctx, [unreadableRow(), ['a', 'S', 'PUSH', 'A', { read_input: { value: 'a', confidence: 0.7 }, field_notes: [onInput],
+    ocr_alternatives: { primary: {}, retry: {}, conflicts: [onInput] } }], sameLetter()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.doesNotMatch(arrowCard(ctx), ruleOkButton(ctx, 1), 'not answered yet');
+  const g = Array.from(ctx.inputGlyphGroups()).findIndex(x => x.symbol === 'a');
+  assert.ok(g >= 0, 'the input letter is asked in the one-step card');
+  assert.equal(ctx.applyInputGlyphReview(g, 'a', [true, true]), true);
+  assert.deepEqual(Array.from(ctx.scanRuleHardDoubts(t().rules[1])), []);
+  assert.ok(ctx.scanRuleOpenDoubts(t().rules[1]).includes('יש שתי קריאות שונות של השורה'), 'it is still a doubt, so the whole arrow is not approved in one click');
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 1), 'answered in the card: the rule itself can be approved');
+
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  const onTop = 'OCR alternatives disagree on STACK_TOP: "S" versus "A"; confidence cannot resolve this';
+  arrowScan(ctx2, [unreadableRow(), ['a', 'S', 'PUSH', 'A', { read_input: { value: 'a', confidence: 0.7 }, field_notes: [onTop],
+    ocr_alternatives: { primary: {}, retry: {}, conflicts: [onTop] } }], sameLetter()]);
+  const g2 = Array.from(ctx2.inputGlyphGroups()).findIndex(x => x.symbol === 'a');
+  assert.equal(ctx2.applyInputGlyphReview(g2, 'a', [true, true]), true);
+  assert.ok(ctx2.scanRuleHardDoubts(ctx2.__getCurrent().transitions[0].rules[1]).length > 0, 'the input card does not answer the stack top');
+  assert.doesNotMatch(arrowCard(ctx2), ruleOkButton(ctx2, 1));
+});
+
+test('a doubtful endpoint comes before ✓ correct on single rules', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [unreadableRow(), softRow()], { target_state: { id: 'q2', confidence: 0.5 } });
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.doesNotMatch(arrowCard(ctx), /approveScanRuleFromCard/);
+  assert.equal(ctx.approveScanRuleFromCard(t().id, 1), false);
+  ctx.confirmTransitionEndpoint(t().id, 'to');
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 1));
+});
+
+test('rules already checked by a human wait for the row count without a stale ⚠, and the arrow can then be finished', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  // The scan counted 3 rows on the arrow but returned 2 rules: every rule also waits for the row count.
+  arrowScan(ctx, [unreadableRow(), softRow()], { visible_rule_line_count: 3 });
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.ok(t().rules.every(r => r.lineCountReview));
+  // Both rules are checked in their dialogs (✓ correct in the card saves the same way, see above).
+  ctx.editPdaTransition(t().id, 1);
+  ctx.__walkOpts.onSave(ctx.makeRulePDA('b', 'S', 'none', ''));
+  ctx.editPdaTransition(t().id, 0);
+  ctx.__walkOpts.onSave(ctx.makeRulePDA('b', 'A', 'none', ''));
+  assert.ok(t().rules.every(r => r.contentReviewed && !r.manuallyReviewed), 'both contents were checked; the row count is still open');
+  assert.deepEqual(Array.from(t().rules, r => ctx.scanRuleOpenDoubts(r).length), [0, 0], 'no ⚠ on a rule the human already checked');
+  const html = arrowCard(ctx);
+  assert.doesNotMatch(html, /⚠/);
+  assert.match(html, new RegExp(`approveArrowRows\\('${t().id}'\\)`), 'what is left is the row count, in one click');
+  assert.equal(ctx.approveArrowRows(t().id), true);
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
+});

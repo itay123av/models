@@ -255,8 +255,13 @@ body{
 .arrow-shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:6px}
 .arrow-shots .glyph-shot-img:only-child{grid-column:1 / -1}
 .arrow-rules{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-.arrow-rule{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;width:100%;text-align:right;border:1px solid #fcd34d;background:#fff;color:#78350f;border-radius:8px;padding:5px 8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
-.arrow-rule:hover{background:#fef3c7}
+.arrow-rule{display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center;width:100%;border:1px solid #fcd34d;background:#fff;color:#78350f;border-radius:8px;padding:3px 6px}
+.arrow-rule:has(.arrow-rule-open:hover){background:#fef3c7}
+.arrow-rule-open{flex:1 1 170px;min-width:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;text-align:right;border:none;background:none;color:inherit;padding:2px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.arrow-rule .arrow-rule-ok{flex:0 0 auto;padding:3px 10px;font-size:12px;min-height:0;border-color:var(--green);color:#15803d}
+.arrow-rule-remarks{flex-basis:100%;font-size:11px;color:#57534e;padding:0 2px 2px}
+.arrow-rule-remarks summary{cursor:pointer;font-weight:700;color:#9a3412}
+.arrow-rule-remarks div{margin-top:2px;overflow-wrap:anywhere}
 .arrow-rule.doubt{border-color:#ea580c;background:#fff7ed}
 .arrow-rule.ok{border-color:#86efac;color:#166534}
 .arrow-rule-note{font-size:11px;font-weight:700;color:#c2410c}
@@ -2798,37 +2803,66 @@ const SCAN_HARMLESS_ISSUES=new Set([
   'label ink read from same-transition context; primary row localization requires review',
   'התווית נקראה מתמונת ההקשר של אותו חץ; מיקום השורה דורש ביקורת',
 ]);
-function scanRuleOpenDoubts(r){
-  if(!r||r.manuallyReviewed)return [];
+/* הערה של הסריקה שמדברת על זהות השורה, על מקור התמונה או על שתי קריאות סותרות.
+   היא לא "הערה" רגילה: הכלל ממשיך בדיאלוג שלו, ולא מאושר מכרטיס החץ. */
+const SCAN_HARD_REMARK=/identity|foreign|duplicate|disagree|conflict|זר או כפול|לא שויך/i;
+/* סתירה בין שתי קריאות של שדה שאדם כבר ענה עליו בכרטיס בצעד אחד */
+function scanOcrConflictAnswered(r,text){
+  const s=String(text);
+  if(/disagree on INPUT:/.test(s))return Boolean(r.inputReview);
+  if(/disagree on (ACTION|ACTION_SYMBOL):/.test(s))return Boolean(r.actionReview);
+  return false;
+}
+/* הודעות הסריקה על השורה שאינן ברשימת הלא-מזיקות ואינן סתירה מוכרת — מוצגות בכרטיס */
+function scanRuleRemarks(r){
+  return scanUniqueIssues(r&&r.aiIssues||[]).map(String)
+    .filter(x=>!SCAN_HARMLESS_ISSUES.has(x)&&!INPUT_GLYPH_ISSUE.test(x)&&!TOP_FIELD_ISSUE.test(x)&&!ACTION_WORD_ISSUE.test(x));
+}
+/* כל ספק פתוח בכלל סרוק, עם סוגו. hard: נבדק רק בדיאלוג של הכלל (או בכרטיס בצעד
+   אחד). השאר — הערות של הסריקה וביטחון נמוך — אפשר לאשר מכרטיס החץ, כלל אחר כלל.
+   כלל שאדם כבר שמר בדיאלוג (contentReviewed) ומחכה רק למצבים או למספר השורות —
+   אין בו ספק על התוכן. */
+function scanRuleDoubtItems(r){
+  if(!r||r.manuallyReviewed||r.contentReviewed)return [];
   const P=pdaRuleParts(r),out=[],ev=r.scanEvidence||null,issues=scanUniqueIssues(r.aiIssues||[]).map(String);
-  if(P.invalidAction)out.push('הפעולה לא זוהתה');
-  if(P.missingPush||P.push.includes('?'))out.push('חסר הסימן שאחרי דחוף');
-  if(P.removeTop&&(!P.popSym||P.popSym==='?'))out.push('חסר הסימן שאחרי שלוף');
-  if(P.read==='?'||P.guard==='?')out.push('יש סימן לא קריא (?)');
+  const add=(text,hard)=>out.push({text,hard:Boolean(hard)});
+  if(P.invalidAction)add('הפעולה לא זוהתה',true);
+  if(P.missingPush||P.push.includes('?'))add('חסר הסימן שאחרי דחוף',true);
+  if(P.removeTop&&(!P.popSym||P.popSym==='?'))add('חסר הסימן שאחרי שלוף',true);
+  if(P.read==='?'||P.guard==='?')add('יש סימן לא קריא (?)',true);
   const covered=[PDA_ISSUE.PUSH_SYMBOL_MISSING,PDA_ISSUE.POP_SYMBOL_MISSING,PDA_ISSUE.UNREADABLE_FIELD,PDA_ISSUE.UNKNOWN_ACTION];
-  pdaRuleSemanticIssues(r).forEach(x=>{ if(!covered.includes(x.code))out.push(x.text); });
+  pdaRuleSemanticIssues(r).forEach(x=>{ if(!covered.includes(x.code))add(x.text,true); });
   if(ev){
     /* תמיד ספק, גם בלי הודעה: שתי קריאות שונות, או תמונה שאולי אינה של השורה */
     const alts=ev.ocr_alternatives;
-    if(Array.isArray(alts)?alts.length:Boolean(alts&&(typeof alts!=='object'||Object.keys(alts).length)))out.push('יש שתי קריאות שונות של השורה');
-    if(ev.pixel_provenance&&ev.pixel_provenance.evidence_valid===false)out.push('התמונה שלצד הכלל אולי אינה של השורה הזו');
+    if(Array.isArray(alts)?alts.length:Boolean(alts&&(typeof alts!=='object'||Object.keys(alts).length))){
+      const conflicts=alts&&Array.isArray(alts.conflicts)?alts.conflicts:[];
+      add('יש שתי קריאות שונות של השורה',!(conflicts.length&&conflicts.every(x=>scanOcrConflictAnswered(r,x))));
+    }
+    if(ev.pixel_provenance&&ev.pixel_provenance.evidence_valid===false)add('התמונה שלצד הכלל אולי אינה של השורה הזו',true);
     const cf=ev.confidence||{},low=v=>v==null||!(v>=AI_LOW);
     /* ביטחון נמוך בשדה שאדם כבר ענה עליו בכרטיס (אות קלט / מילת פעולה) אינו ספק יותר */
-    if(!r.inputReview&&low(cf.read_input))out.push('אות הקלט נקראה בביטחון נמוך');
-    if(low(cf.stack_top))out.push('ראש המחסנית נקרא בביטחון נמוך');
+    if(!r.inputReview&&low(cf.read_input))add('אות הקלט נקראה בביטחון נמוך',false);
+    if(low(cf.stack_top))add('ראש המחסנית נקרא בביטחון נמוך',false);
     if(!r.actionReview){
       const symbolConf=P.op==='push'?cf.push_symbol:(P.removeTop?cf.pop_symbol:1);
-      if(low(cf.action)||low(symbolConf))out.push('מילת הפעולה או הסימן שלה נקראו בביטחון נמוך');
+      if(low(cf.action)||low(symbolConf))add('מילת הפעולה או הסימן שלה נקראו בביטחון נמוך',false);
     }
   }
   /* סתירות שהלקוח מזהה — ניסוח מדויק. כשאדם עונה בכרטיס, ההודעות האלה נמחקות. */
-  if(issues.some(x=>INPUT_GLYPH_ISSUE.test(x)))out.push('סתירה בקריאת אות הקלט');
-  if(issues.some(x=>TOP_FIELD_ISSUE.test(x)))out.push('סתירה בקריאת ראש המחסנית');
-  if(issues.some(x=>ACTION_WORD_ISSUE.test(x)))out.push('סתירה בקריאת מילת הפעולה');
-  const other=issues.filter(x=>!SCAN_HARMLESS_ISSUES.has(x)&&!INPUT_GLYPH_ISSUE.test(x)&&!TOP_FIELD_ISSUE.test(x)&&!ACTION_WORD_ISSUE.test(x));
-  if(other.length)out.push(other.length===1?'יש לסריקה הערה על השורה — פתח את הכלל כדי לראות':`יש לסריקה ${other.length} הערות על השורה — פתח את הכלל כדי לראות`);
-  return [...new Set(out)];
+  if(issues.some(x=>INPUT_GLYPH_ISSUE.test(x)))add('סתירה בקריאת אות הקלט',true);
+  if(issues.some(x=>TOP_FIELD_ISSUE.test(x)))add('סתירה בקריאת ראש המחסנית',true);
+  if(issues.some(x=>ACTION_WORD_ISSUE.test(x)))add('סתירה בקריאת מילת הפעולה',true);
+  const other=scanRuleRemarks(r),hardOther=other.filter(x=>SCAN_HARD_REMARK.test(x)&&!scanOcrConflictAnswered(r,x));
+  if(hardOther.length)add('יש לסריקה הערה על השורה שצריך לבדוק בדיאלוג (זהות, מקור התמונה או שתי קריאות)',true);
+  const soft=other.length-hardOther.length;
+  if(soft)add(soft===1?'יש לסריקה הערה על השורה':`יש לסריקה ${soft} הערות על השורה`,false);
+  const seen=new Map();
+  out.forEach(x=>seen.set(x.text,{text:x.text,hard:Boolean(seen.has(x.text)&&seen.get(x.text).hard)||x.hard}));
+  return [...seen.values()];
 }
+function scanRuleOpenDoubts(r){ return scanRuleDoubtItems(r).map(x=>x.text); }
+function scanRuleHardDoubts(r){ return scanRuleDoubtItems(r).filter(x=>x.hard).map(x=>x.text); }
 function arrowEndpointPending(t){
   const ep={source:Boolean(t.endpointReview&&t.endpointReview.source),target:Boolean(t.endpointReview&&t.endpointReview.target)};
   (t.rules||[]).forEach(r=>{ if(r.endpointReview&&r.endpointReview.source)ep.source=true; if(r.endpointReview&&r.endpointReview.target)ep.target=true; });
@@ -2859,6 +2893,27 @@ function approveArrowRows(id){
   offerUndo(`אושר החץ ${title}: ${approved===1?'כלל אחד':approved+' כללים'}, ${rows===1?'שורה אחת':rows+' שורות'}.`,restoreModelPoint(point));
   return true;
 }
+/* ── אישור כלל בודד מכרטיס החץ (החלטת המשתמש, 2026-10-14) ───────────────
+   כשיש על החץ כלל עם ספק, "✓ הכול נכון" לא מוצע. אבל כלל שהספק בו הוא רק
+   הערות של הסריקה או ביטחון נמוך מקבל "✓ נכון" משלו, ליד הסיבות וההערות,
+   מתחת לתמונת התווית. זו בדיוק השמירה של "שמור שינויים" בדיאלוג בלי לשנות שדה,
+   ורק לכלל הזה. כלל עם "?", סימן חסר, סתירה שלא נענתה בכרטיס, תמונה זרה או
+   זהות כפולה/זרה ממשיך בדיאלוג. מצב מקור/יעד מפוקפק — קודם. יש "בטל". */
+function scanRuleCardApprovable(t,r){
+  if(!t||!r||!r.scanEvidence||r.op===undefined||r.contentReviewed||!scanRulePending(r))return false;
+  const ep=arrowEndpointPending(t); if(ep.source||ep.target)return false;
+  return scanRuleHardDoubts(r).length===0;
+}
+function scanRuleUnchangedCopy(r){ const P=pdaRuleParts(r); return makeRulePDA(P.read,P.guard,P.op,P.push,P.popSym); }
+function approveScanRuleFromCard(id,idx){
+  const t=trById(id),r=t&&(t.rules||[])[idx]; if(!r||!current||current.type!=='pda')return false;
+  if(!scanRuleCardApprovable(t,r)){ toast('בכלל הזה יש ספק שנבדק בדיאלוג — לחץ על הכלל','danger'); return false; }
+  const point=modelUndoPoint(),text=pdaRuleLineText(r);
+  commitScannedPdaRule(t,idx,scanRuleUnchangedCopy(r),{quiet:true,
+    extra:{cardReview:{reviewedAt:new Date().toISOString(),doubts:scanRuleOpenDoubts(r),source:'arrow-card-rule'}}});
+  offerUndo(`אושר הכלל ${text}.`,restoreModelPoint(point));
+  return true;
+}
 /* תמונות הראיה של החץ, בלי כפילויות (כמה שורות חולקות את אותה תמונת תווית) */
 function arrowEvidenceImages(t){
   const seen=new Set(),out=[];
@@ -2887,7 +2942,9 @@ function aiTransitionCardHtml(it){
     if(ep.target)chips.push(`<button class="chip ai-review-ok" onclick="confirmTransitionEndpoint('${t.id}','to')">✓ היעד ${esc(to?to.label:'?')} נכון</button>`,
       `<button class="chip" onclick="chooseTransitionEndpoint('${t.id}','to')">יעד אחר…</button>`);
   }else if(anyDoubt){
-    lines.push('כלל שמסומן ⚠ צריך תיקון או אישור משלו לפני שמאשרים את החץ: לחץ עליו.');
+    lines.push(rules.some(r=>scanRuleCardApprovable(t,r))
+      ?'כלל שמסומן ⚠ צריך תיקון או אישור משלו לפני שמאשרים את החץ: השווה אותו לתמונה ולחץ «✓ נכון» לידו, או לחץ על הכלל כדי לתקן.'
+      :'כלל שמסומן ⚠ צריך תיקון או אישור משלו לפני שמאשרים את החץ: לחץ עליו.');
   }else if(it.pendingRules){
     lines.push(`השווה לתמונה: על החץ יש בדיוק ${it.ruleCount===1?'שורה אחת, והיא נקראה':it.ruleCount+' שורות, וכולן נקראו'} נכון?`);
     chips.push(`<button class="chip ai-review-ok" onclick="approveArrowRows('${t.id}')">✓ הכול נכון</button>`,
@@ -2904,7 +2961,12 @@ function aiTransitionCardHtml(it){
   const ruleLines=rules.map((r,i)=>{
     const d=doubts[i],state=d.length?'doubt':(scanRulePending(r)?'':'ok');
     const note=d.length?`⚠ ${d.join(' · ')}`:(state==='ok'?'✓ אושר':'');
-    return `<button type="button" class="arrow-rule${state?' '+state:''}" onclick="editPdaTransition('${t.id}',${i})" title="פתח את הכלל לעריכה"><span dir="auto">${esc(pdaRuleLineText(r))}</span>${note?`<span class="arrow-rule-note">${esc(note)}</span>`:''}</button>`;
+    /* "✓ נכון" לכלל בודד — רק כש"✓ הכול נכון" לא מוצע לחץ כולו */
+    const ok=anyDoubt&&scanRuleCardApprovable(t,r),remarks=d.length?scanRuleRemarks(r):[];
+    return `<div class="arrow-rule${state?' '+state:''}"><button type="button" class="arrow-rule-open" onclick="editPdaTransition('${t.id}',${i})" title="פתח את הכלל לעריכה"><span dir="auto">${esc(pdaRuleLineText(r))}</span>${note?`<span class="arrow-rule-note">${esc(note)}</span>`:''}</button>`
+      +(ok?`<button type="button" class="chip ai-review-ok arrow-rule-ok" onclick="approveScanRuleFromCard('${t.id}',${i})" title="הכלל נכון כמו שהוא כתוב בתמונה — מאשר רק אותו">✓ נכון</button>`:'')
+      +(remarks.length?`<details class="arrow-rule-remarks"><summary>מה כתוב בהערות (${remarks.length})</summary>${remarks.map(x=>`<div dir="auto">${esc(x)}</div>`).join('')}</details>`:'')
+      +'</div>';
   }).join('');
   return `<div class="ai-review-item ai-review-card arrow-card" title="${esc(it.sub)}">
     <button class="ai-review-link" onclick="focusAiIssue('${t.id}','transition')"><span class="ai-review-main">${esc(it.title)}</span></button>
@@ -2997,32 +3059,39 @@ function editPdaTransition(id,ruleIndex){
     confirmText:'שמור שינויים',
     /* רק לכלל סרוק: כלל ידני נמחק מלוח הצד כרגיל. המחיקה מיידית, עם "בטל". */
     onDelete:rules[idx].scanEvidence?()=>{ deletePdaRule(t.id,idx); scanImagesPrune(); }:null,
-    onSave:rule=>{
-      /* הקריאה הגולמית נשמרת גם אחרי תיקון ידני — כדי שתמיד יהיה אפשר
-         לראות מה נקרא בפועל מהתמונה, לצד הערך המתוקן. */
-      const prev=rules[idx]||{}, prevRaw=prev.raw_label_text;
-      const P=pdaRuleParts(rule), incomplete=P.invalidAction||P.missingPush||(P.removeTop&&!P.popSym)||[P.read,P.guard,...P.push,P.popSym].some(v=>v==='?');
-      const endpointReview=Object.assign({},prev.endpointReview||{}), endpointPending=Boolean(endpointReview.source||endpointReview.target),lineCountReview=Boolean(prev.lineCountReview);
-      rules[idx]=Object.assign(rule,{aiLow:incomplete||endpointPending,aiIssues:incomplete?['נשאר שדה חסר או לא־קריא ונדרש אישור נוסף']:[],
-        aiConfidence:incomplete?0.5:1,semanticBlocked:pdaRuleBlocked(rule),scanIncomplete:incomplete||endpointPending||lineCountReview,
-        scanIncompleteBase:incomplete||lineCountReview,scanIncompleteCore:incomplete,lineCountReview,endpointReview,manuallyReviewed:!incomplete&&!endpointPending&&!lineCountReview,contentReviewed:!incomplete});
-      if(endpointReview.source)rules[idx].aiIssues.push('מצב מקור');
-      if(endpointReview.target)rules[idx].aiIssues.push('מצב יעד');
-      if(lineCountReview)rules[idx].aiIssues.push('מספר שורות התווית דורש אישור');
-      refreshRuleScanReview(rules[idx]);
-      if(prevRaw) rules[idx].raw_label_text=prevRaw;
-      if(prev.scanEvidence) rules[idx].scanEvidence=prev.scanEvidence;
-      if(prev.inputReview) rules[idx].inputReview=prev.inputReview;
-      if(prev.actionReview) rules[idx].actionReview=prev.actionReview;
-      if(prev.cropped_image_segment_url) rules[idx].cropped_image_segment_url=prev.cropped_image_segment_url;
-      if(prev.aiLineId) rules[idx].aiLineId=prev.aiLineId;
-      if(prev.aiTransitionId) rules[idx].aiTransitionId=prev.aiTransitionId;
-      if(prev.aiScanSession) rules[idx].aiScanSession=prev.aiScanSession;
-      recomputeAiTransition(t);
-      save(); renderAll(); toast('המעבר עודכן','success');
-      scanImagesPrune();
-    }
+    onSave:rule=>commitScannedPdaRule(t,idx,rule)
   });
+}
+/* שמירת כלל אחרי בדיקה של אדם: "שמור שינויים" בדיאלוג, או "✓ נכון" בכרטיס החץ
+   (אז rule הוא אותו כלל בלי שינוי בשדות). */
+function commitScannedPdaRule(t,idx,rule,opts){
+  opts=opts||{};
+  const rules=t.rules||[];
+  /* הקריאה הגולמית נשמרת גם אחרי תיקון ידני — כדי שתמיד יהיה אפשר
+     לראות מה נקרא בפועל מהתמונה, לצד הערך המתוקן. */
+  const prev=rules[idx]||{}, prevRaw=prev.raw_label_text;
+  const P=pdaRuleParts(rule), incomplete=P.invalidAction||P.missingPush||(P.removeTop&&!P.popSym)||[P.read,P.guard,...P.push,P.popSym].some(v=>v==='?');
+  const endpointReview=Object.assign({},prev.endpointReview||{}), endpointPending=Boolean(endpointReview.source||endpointReview.target),lineCountReview=Boolean(prev.lineCountReview);
+  rules[idx]=Object.assign(rule,{aiLow:incomplete||endpointPending,aiIssues:incomplete?['נשאר שדה חסר או לא־קריא ונדרש אישור נוסף']:[],
+    aiConfidence:incomplete?0.5:1,semanticBlocked:pdaRuleBlocked(rule),scanIncomplete:incomplete||endpointPending||lineCountReview,
+    scanIncompleteBase:incomplete||lineCountReview,scanIncompleteCore:incomplete,lineCountReview,endpointReview,manuallyReviewed:!incomplete&&!endpointPending&&!lineCountReview,contentReviewed:!incomplete});
+  if(endpointReview.source)rules[idx].aiIssues.push('מצב מקור');
+  if(endpointReview.target)rules[idx].aiIssues.push('מצב יעד');
+  if(lineCountReview)rules[idx].aiIssues.push('מספר שורות התווית דורש אישור');
+  refreshRuleScanReview(rules[idx]);
+  if(prevRaw) rules[idx].raw_label_text=prevRaw;
+  if(prev.scanEvidence) rules[idx].scanEvidence=prev.scanEvidence;
+  if(prev.inputReview) rules[idx].inputReview=prev.inputReview;
+  if(prev.actionReview) rules[idx].actionReview=prev.actionReview;
+  if(prev.cropped_image_segment_url) rules[idx].cropped_image_segment_url=prev.cropped_image_segment_url;
+  if(prev.aiLineId) rules[idx].aiLineId=prev.aiLineId;
+  if(prev.aiTransitionId) rules[idx].aiTransitionId=prev.aiTransitionId;
+  if(prev.aiScanSession) rules[idx].aiScanSession=prev.aiScanSession;
+  if(opts.extra) Object.assign(rules[idx],opts.extra);
+  recomputeAiTransition(t);
+  save(); renderAll(); if(!opts.quiet) toast('המעבר עודכן','success');
+  scanImagesPrune();
+  return rules[idx];
 }
 function resolveUnresolvedStateObservation(index){
   const list=current&&current.unresolvedStateObservations||[], item=list[index]; if(!item)return;
