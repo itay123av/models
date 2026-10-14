@@ -3279,9 +3279,14 @@ function downscaleImage(file,maxDim,quality,opts){
         let w=sw,h=sh; const k=Math.min(1,(maxDim||1568)/Math.max(w,h));
         w=Math.max(1,Math.round(w*k)); h=Math.max(1,Math.round(h*k));
         const make=(mode)=>{
-          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          // Keep OCR at source resolution. Scaling the whole page first loses
+          // thin separators that enlarging a later label crop cannot recover.
+          // Both sizes cover the same upright source rectangle, so normalized
+          // topology boxes still map to the label frame (also after opt-in framing).
+          const frameWidth=mode==='label'?sw:w,frameHeight=mode==='label'?sh:h;
+          const c=document.createElement('canvas'); c.width=frameWidth; c.height=frameHeight;
           const ctx=c.getContext('2d',{willReadFrequently:!!mode});
-          ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(im,sx,sy,sw,sh,0,0,w,h);
+          ctx.fillStyle='#fff'; ctx.fillRect(0,0,frameWidth,frameHeight); ctx.drawImage(im,sx,sy,sw,sh,0,0,frameWidth,frameHeight);
           // OCR always gets original-colour pixels. A blue cast from lighting
           // also affects black pencil: classifying pixels by B-R used to erase
           // entire labels/circles on the left of real notebook photographs.
@@ -4056,10 +4061,9 @@ async function runTwoStageDiagramScan(imgData,modelType,fetchImpl,opts){
   opts=opts||{};const signal=opts.signal,onStage=typeof opts.onStage==='function'?opts.onStage:()=>{};
   const session='scan-'+uid(),suppliedImages=Array.isArray(imgData&&imgData.images)?imgData.images:[],roles=['enhanced_same_frame','ink_same_frame','original_same_frame'];
   const imageNormalization=cloneScanValue(imgData&&imgData.normalization||{applied:false,bbox:{x:0,y:0,w:1,h:1},reason:'legacy or pre-normalized input'});
-  /* Contract invariant: crop from the exact data URL sent to Pass A under
-     original_same_frame.  The currently generated frames already share their
-     orientation; constructing the three slots here also keeps legacy callers
-     on that same invariant without assuming a separate preview is equivalent. */
+  /* Frames share the same upright source rectangle and normalized coordinates.
+     Topology uses its resized views; label crops retain source resolution.
+     Legacy callers without a label frame use original_same_frame. */
   const originalSameFrame=suppliedImages[2]||(imgData&&imgData.preview)||suppliedImages[0]||'';
   const enhancedSameFrame=suppliedImages[0]||originalSameFrame,inkSameFrame=suppliedImages[1]||enhancedSameFrame;
   const labelSameFrame=String(imgData&&imgData.label||'')||originalSameFrame;
@@ -4104,9 +4108,8 @@ async function runTwoStageDiagramScan(imgData,modelType,fetchImpl,opts){
   const passA=finalPassAFromTopologyAudit(initialPassA,topologyAuditResponse,session,topologyAuditTiles);
   const topologyAuditFailed=Boolean(topologyAuditResponse&&topologyAuditResponse.topology_audit&&topologyAuditResponse.topology_audit.failed);
   const plan=buildTwoStageCropSpecs(passA,session);
-  /* Use the label-specific aligned frame: blue ruling is removed while neutral
-     pencil strokes are strengthened.  Legacy callers without that fourth frame
-     still fall back to the original-colour frame. */
+  /* Crop original-colour, source-resolution pixels from the aligned label frame.
+     Legacy callers without it fall back to the original-colour topology frame. */
   plan.specs.forEach(spec=>{spec.image_role=imgData&&imgData.label?'label_same_frame_crop':'original_same_frame_crop';});
   const crops=topologyAuditFailed?[]:await materializeTwoStageCrops(labelSameFrame,plan);
   if(signal&&signal.aborted){const e=new Error('scan aborted');e.name='AbortError';throw e;}
