@@ -3616,3 +3616,74 @@ test('rules already checked by a human wait for the row count without a stale �
   assert.equal(ctx.approveArrowRows(t().id), true);
   assert.equal(ctx.hasPendingAiExecutionReview(), false);
 });
+
+/* החלטת המשתמש (2026-10-15): "✓ נכון" על הכלל האחרון של החץ שואל במפורש אם אין עוד שורות.
+   בלי תשובה — לא מאושר כלום. "אין עוד שורות" מאשר גם את מספר השורות; "יש עוד שורה" — כמו היום. */
+const lastRuleArrow = () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [unreadableRow(), softRow()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  ctx.editPdaTransition(t().id, 0);
+  ctx.__walkOpts.onSave(ctx.makeRulePDA('b', 'A', 'none', ''));   // the unreadable row is fixed in its dialog
+  return { ctx, t };
+};
+
+test('✓ on the last rule of an arrow asks explicitly whether there are no more rows, with no default', () => {
+  const { ctx, t } = lastRuleArrow();
+  const id = t().id, html = arrowCard(ctx);
+  assert.match(html, /וזה הכלל האחרון על החץ — אין עוד שורות\?/);
+  assert.match(html, new RegExp(`approveScanRuleFromCard\\('${id}',1,'last'\\)"[^>]*>✓ נכון, אין עוד שורות`));
+  assert.match(html, new RegExp(`approveScanRuleFromCard\\('${id}',1,'more'\\)"[^>]*>✓ נכון, יש עוד שורה`));
+  assert.doesNotMatch(html, ruleOkButton(ctx, 1), 'no plain ✓ that would leave the question unanswered');
+
+  const before = JSON.stringify(t());
+  assert.equal(ctx.approveScanRuleFromCard(id, 1), false, 'without an answer nothing is approved');
+  assert.equal(JSON.stringify(t()), before, 'nothing changed');
+
+  assert.equal(ctx.approveScanRuleFromCard(id, 1, 'last'), true);
+  assert.ok(t().rules.every(r => r.manuallyReviewed), 'the rule is approved');
+  assert.equal(t().transitionScanIncomplete, false, 'and the row count, in the same click');
+  assert.equal(t().rules[1].cardReview.lastRule, true);
+  assert.equal(t().rules[1].cardReview.rows, 2);
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
+  assert.equal(Array.from(ctx.collectAiReviewItems()).some(x => x.kind === 'transition'), false, 'the arrow is done');
+
+  assert.equal(ctx.undoLast(), true);
+  assert.equal(t().transitionScanIncomplete, true, 'undo reopens the row count');
+  assert.ok(!t().rules[1].manuallyReviewed && t().rules[1].scanIncomplete, 'and the rule');
+  assert.ok(t().rules[0].manuallyReviewed, 'the rule fixed earlier in its dialog stays as it was');
+});
+
+test('"there is another row" on the last rule approves only that rule and opens adding the row, as today', () => {
+  const { ctx, t } = lastRuleArrow();
+  vm.runInContext('globalThis.__added=[]; promptTransitionPDA=(f,to,ai,d,opts)=>{ globalThis.__added.push([f,to,ai||null,opts||null]); }', ctx);
+  assert.equal(ctx.approveScanRuleFromCard(t().id, 1, 'more'), true);
+  assert.equal(t().rules[1].manuallyReviewed, true);
+  assert.equal(t().rules[1].cardReview.lastRule, false);
+  assert.equal(t().transitionScanIncomplete, true, 'the row count stays open');
+  assert.equal(ctx.__added.length, 1, 'the add-row dialog opens');
+  assert.deepEqual(Array.from(ctx.__added[0]).slice(0, 4), [t().from, t().to, null, null], 'an empty new rule on the same arrow');
+  assert.match(arrowCard(ctx), /על החץ בציור יש בדיוק 2 שורות\?/, 'the row-count question is still asked, as before');
+});
+
+test('the row-count question appears only on the last waiting rule, and not when the row count is already settled', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [softRow(), softRow(), unreadableRow()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  let html = arrowCard(ctx);
+  assert.doesNotMatch(html, /וזה הכלל האחרון על החץ/, 'two rules are still waiting');
+  assert.equal(ctx.approveScanRuleFromCard(t().id, 0), true, 'a rule that is not the last is approved as before');
+  ctx.editPdaTransition(t().id, 2);
+  ctx.__walkOpts.onSave(ctx.makeRulePDA('b', 'A', 'none', ''));
+  html = arrowCard(ctx);
+  assert.match(html, /וזה הכלל האחרון על החץ — אין עוד שורות\?/);
+  assert.doesNotMatch(html, /approveScanRuleFromCard\('[^']+',0/, 'only on the waiting rule');
+
+  // The row count is confirmed elsewhere first: the last rule gets the plain ✓.
+  ctx.markTransitionStructureReviewed(t().id);
+  html = arrowCard(ctx);
+  assert.doesNotMatch(html, /וזה הכלל האחרון על החץ/);
+  assert.match(html, ruleOkButton(ctx, 1));
+});

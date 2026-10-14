@@ -259,6 +259,8 @@ body{
 .arrow-rule:has(.arrow-rule-open:hover){background:#fef3c7}
 .arrow-rule-open{flex:1 1 170px;min-width:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;text-align:right;border:none;background:none;color:inherit;padding:2px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .arrow-rule .arrow-rule-ok{flex:0 0 auto;padding:3px 10px;font-size:12px;min-height:0;border-color:var(--green);color:#15803d}
+.arrow-rule-q{flex-basis:100%;font-size:11.5px;font-weight:800;color:#7c2d12;padding:0 2px}
+.arrow-rule .arrow-rule-more{flex:0 0 auto;padding:3px 10px;font-size:12px;min-height:0}
 .arrow-rule-remarks{flex-basis:100%;font-size:11px;color:#57534e;padding:0 2px 2px}
 .arrow-rule-remarks summary{cursor:pointer;font-weight:700;color:#9a3412}
 .arrow-rule-remarks div{margin-top:2px;overflow-wrap:anywhere}
@@ -2905,13 +2907,31 @@ function scanRuleCardApprovable(t,r){
   return scanRuleHardDoubts(r).length===0;
 }
 function scanRuleUnchangedCopy(r){ const P=pdaRuleParts(r); return makeRulePDA(P.read,P.guard,P.op,P.push,P.popSym); }
-function approveScanRuleFromCard(id,idx){
+/* הכלל האחרון שמחכה על החץ, כשמספר השורות עוד לא אושר (החלטת המשתמש, 2026-10-15):
+   "✓ נכון" שואל אז במפורש "וזה הכלל האחרון על החץ — אין עוד שורות?", ואין ברירת
+   מחדל — בלי תשובה לא מאושר כלום. "אין עוד שורות" מאשר גם את מספר השורות;
+   "יש עוד שורה" מאשר רק את הכלל ופותח הוספת שורה, כמו היום. */
+function scanRuleIsLastOnArrow(t,r){
+  if(!t||!r||!(t.transitionScanIncomplete||(t.rules||[]).some(x=>x.lineCountReview)))return false;
+  return (t.rules||[]).every(x=>x===r||!scanRulePending(x)||x.contentReviewed);
+}
+function approveScanRuleFromCard(id,idx,rows){
   const t=trById(id),r=t&&(t.rules||[])[idx]; if(!r||!current||current.type!=='pda')return false;
   if(!scanRuleCardApprovable(t,r)){ toast('בכלל הזה יש ספק שנבדק בדיאלוג — לחץ על הכלל','danger'); return false; }
-  const point=modelUndoPoint(),text=pdaRuleLineText(r);
+  const last=scanRuleIsLastOnArrow(t,r);
+  if(last&&rows!=='last'&&rows!=='more'){ toast('ענה קודם: זה הכלל האחרון על החץ, או שיש עוד שורה?','danger'); return false; }
+  const point=modelUndoPoint(),text=pdaRuleLineText(r),count=t.rules.length;
   commitScannedPdaRule(t,idx,scanRuleUnchangedCopy(r),{quiet:true,
-    extra:{cardReview:{reviewedAt:new Date().toISOString(),doubts:scanRuleOpenDoubts(r),source:'arrow-card-rule'}}});
-  offerUndo(`אושר הכלל ${text}.`,restoreModelPoint(point));
+    extra:{cardReview:{reviewedAt:new Date().toISOString(),doubts:scanRuleOpenDoubts(r),source:'arrow-card-rule',
+      ...(last?{lastRule:rows==='last',rows:count}:{})}}});
+  if(last&&rows==='last'){
+    markTransitionStructureReviewed(id);   /* מספר השורות אושר במפורש */
+    settleContentReviewedRules(trById(id));
+  }
+  offerUndo(last&&rows==='last'
+    ?`אושר הכלל ${text}, וגם שעל החץ ${count===1?'שורה אחת':count+' שורות'} בלבד.`
+    :`אושר הכלל ${text}.`,restoreModelPoint(point));
+  if(last&&rows==='more')addMissingScanRow(id);
   return true;
 }
 /* תמונות הראיה של החץ, בלי כפילויות (כמה שורות חולקות את אותה תמונת תווית) */
@@ -2964,7 +2984,11 @@ function aiTransitionCardHtml(it){
     /* "✓ נכון" לכלל בודד — רק כש"✓ הכול נכון" לא מוצע לחץ כולו */
     const ok=anyDoubt&&scanRuleCardApprovable(t,r),remarks=d.length?scanRuleRemarks(r):[];
     return `<div class="arrow-rule${state?' '+state:''}"><button type="button" class="arrow-rule-open" onclick="editPdaTransition('${t.id}',${i})" title="פתח את הכלל לעריכה"><span dir="auto">${esc(pdaRuleLineText(r))}</span>${note?`<span class="arrow-rule-note">${esc(note)}</span>`:''}</button>`
-      +(ok?`<button type="button" class="chip ai-review-ok arrow-rule-ok" onclick="approveScanRuleFromCard('${t.id}',${i})" title="הכלל נכון כמו שהוא כתוב בתמונה — מאשר רק אותו">✓ נכון</button>`:'')
+      +(ok&&scanRuleIsLastOnArrow(t,r)
+        ?`<span class="arrow-rule-q">וזה הכלל האחרון על החץ — אין עוד שורות?</span>`
+          +`<button type="button" class="chip ai-review-ok arrow-rule-ok" onclick="approveScanRuleFromCard('${t.id}',${i},'last')" title="הכלל נכון, ועל החץ בציור אין שורות נוספות">✓ נכון, אין עוד שורות</button>`
+          +`<button type="button" class="chip arrow-rule-more" onclick="approveScanRuleFromCard('${t.id}',${i},'more')" title="הכלל נכון, ובציור יש על החץ שורה שלא נקראה">✓ נכון, יש עוד שורה</button>`
+        :(ok?`<button type="button" class="chip ai-review-ok arrow-rule-ok" onclick="approveScanRuleFromCard('${t.id}',${i})" title="הכלל נכון כמו שהוא כתוב בתמונה — מאשר רק אותו">✓ נכון</button>`:''))
       +(remarks.length?`<details class="arrow-rule-remarks"><summary>מה כתוב בהערות (${remarks.length})</summary>${remarks.map(x=>`<div dir="auto">${esc(x)}</div>`).join('')}</details>`:'')
       +'</div>';
   }).join('');
