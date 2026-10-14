@@ -901,6 +901,16 @@ test('self-check: Enter in a word field runs all the words and does not close th
   assert.equal(spans[0].textContent, '');
 });
 
+test('self-check: a late change event from a deleted row does not throw', () => {
+  const ctx = loadClient();
+  vm.runInContext('save=()=>{};', ctx);
+  ctx.__setCurrent({ type: 'dfa', states: [], transitions: [], tests: [{ word: 'a', expect: true }] });
+  /* שדה שהיה בפוקוס נמחק בציור מחדש, ואירוע ה-change שלו מגיע עם מספר שורה שכבר אינו קיים */
+  assert.doesNotThrow(() => ctx.setTest(5, 'word', 'x'));
+  assert.equal(ctx.__getCurrent().tests.length, 1, 'nothing is added or changed');
+  assert.equal(ctx.__getCurrent().tests[0].word, 'a');
+});
+
 test('self-check: Enter on the "מתקבלת/נדחית" select also runs all the words and keeps the dialog open', () => {
   const ctx = loadClient();
   vm.runInContext('save=()=>{};', ctx);

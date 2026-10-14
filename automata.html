@@ -5064,7 +5064,8 @@ function renderBatch(){
       <span class="bsum" id="batchSummary" role="status"></span>
     </div>${rows||'<div class="help-box">הוסף מילות מבחן עם התוצאה הצפויה, ובדוק שהאוטומט מזהה בדיוק את השפה.</div>'}`;
 }
-function setTest(i,k,v){ if(k==='expect') v=(v==='true'); current.tests[i][k]=v; save(); }
+/* שורה שכבר נמחקה (change מאוחר של שדה שהוסר בציור מחדש) — לא עושים כלום */
+function setTest(i,k,v){ const t=current&&current.tests[i]; if(!t)return; if(k==='expect') v=(v==='true'); t[k]=v; save(); }
 /* Enter בשדה מילה או בתיבת "מתקבלת/נדחית" מריץ את כל המילים ולא סוגר את החלון
    (החלטת המשתמש, 2026-10-14). קודם הוא הגיע ל-dialogKey ולחץ על «סגור», הכפתור
    הראשי של החלון. הערך נשמר כאן לפני ההרצה: אירוע change מגיע רק אחרי ה-keydown. */
