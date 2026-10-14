@@ -3808,3 +3808,31 @@ test('an input read as ε with low confidence gets no ✓ correct in the card; i
   assert.deepEqual(Array.from(ctx2.scanRuleHardDoubts(ctx2.__getCurrent().transitions[0].rules[0])), []);
   assert.match(arrowCard(ctx2), ruleOkButton(ctx2, 0));
 });
+
+/* החלטת המשתמש (2026-10-15): כל ε שנקרא בקלט הוא ספק קשה, בלי קשר לביטחון. בסריקת 06.10
+   q2→q1 נקרא "ε,S / דחוף A" בביטחון 0.78, ולפי הייחוס כתוב a. */
+test('an input read as ε is a hard doubt even with high confidence: no ✓ correct and no all-correct for its arrow', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [['ε', 'S', 'PUSH', 'A', { read_input: { value: 'ε', confidence: 0.78 } }], softRow(), unreadableRow()]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.ok(ctx.scanRuleHardDoubts(t().rules[0]).includes('נקרא ε בקלט — ודא שלא כתובה שם אות'), ctx.scanRuleOpenDoubts(t().rules[0]).join(' · '));
+  assert.doesNotMatch(arrowCard(ctx), ruleOkButton(ctx, 0), 'no ✓ correct');
+  assert.match(arrowCard(ctx), ruleOkButton(ctx, 1), 'the rule next to it is not affected');
+  const before = JSON.stringify(t());
+  assert.equal(ctx.approveScanRuleFromCard(t().id, 0), false, 'the function refuses too');
+  assert.equal(JSON.stringify(t()), before);
+
+  // Even at 0.99, alone on its arrow, the whole-arrow button is not offered either.
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  arrowScan(ctx2, [['ε', 'S', 'NONE', '', { read_input: { value: 'ε', confidence: 0.99 } }]]);
+  const t2 = ctx2.__getCurrent().transitions[0];
+  assert.equal(ctx2.arrowCanApproveAll(t2), false);
+  assert.doesNotMatch(arrowCard(ctx2), /approveArrowRows|approveScanRuleFromCard/);
+
+  // The human confirms in the rule's dialog (here: it really is ε): the doubt is closed.
+  ctx2.editPdaTransition(t2.id, 0);
+  ctx2.__walkOpts.onSave(ctx2.makeRulePDA('ε', 'S', 'none', ''));
+  assert.deepEqual(Array.from(ctx2.scanRuleOpenDoubts(ctx2.__getCurrent().transitions[0].rules[0])), []);
+});

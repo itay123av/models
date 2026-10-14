@@ -2832,6 +2832,9 @@ function scanRuleDoubtItems(r){
   if(P.missingPush||P.push.includes('?'))add('חסר הסימן שאחרי דחוף',true);
   if(P.removeTop&&(!P.popSym||P.popSym==='?'))add('חסר הסימן שאחרי שלוף',true);
   if(P.read==='?'||P.guard==='?')add('יש סימן לא קריא (?)',true);
+  /* כל ε שנקרא הוא ספק קשה, בלי קשר לביטחון (החלטת המשתמש, 2026-10-15): גם בביטחון 0.78
+     נקרא ε ב-q2→q1 בסריקת 06.10, ושם כתוב a. אדם מאשר בדיאלוג או בכרטיס אות הקלט. */
+  if(!r.inputReview&&scanRuleInputSymbol(r)==='ε')add('נקרא ε בקלט — ודא שלא כתובה שם אות',true);
   const covered=[PDA_ISSUE.PUSH_SYMBOL_MISSING,PDA_ISSUE.POP_SYMBOL_MISSING,PDA_ISSUE.UNREADABLE_FIELD,PDA_ISSUE.UNKNOWN_ACTION];
   pdaRuleSemanticIssues(r).forEach(x=>{ if(!covered.includes(x.code))add(x.text,true); });
   if(ev){
