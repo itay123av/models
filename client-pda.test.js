@@ -3341,3 +3341,71 @@ test('answers from the one-step cards close the field doubt, and a doubtful endp
   assert.match(arrowCard(ctx2), /על החץ יש בדיוק שורה אחת, והיא נקראה נכון\?/);
   assert.equal(ctx2.approveArrowRows(t2().id), true);
 });
+
+/* מצאה צ'אט 1 (2026-10-13): שלושה ספקות ש"הכול נכון" לא זיהה. הכלל ההפוך: כל הודעה
+   שאינה ברשימה מפורשת של הודעות לא מזיקות היא ספק, ו-ocr_alternatives / evidence_valid=false תמיד. */
+function expectBlocked(ctx, name, reason) {
+  const t = ctx.__getCurrent().transitions[0];
+  assert.ok(ctx.scanRuleOpenDoubts(t.rules[1]).length > 0, `${name}: the rule has an open doubt`);
+  if (reason) assert.ok(ctx.scanRuleOpenDoubts(t.rules[1]).some(x => reason.test(x)), `${name}: ${ctx.scanRuleOpenDoubts(t.rules[1]).join(' · ')}`);
+  assert.equal(ctx.arrowCanApproveAll(t), false, `${name}: the arrow cannot be approved in one click`);
+  assert.doesNotMatch(arrowCard(ctx), /approveArrowRows/, `${name}: no all-correct button`);
+  const before = JSON.stringify(t);
+  assert.equal(ctx.approveArrowRows(t.id), false, `${name}: the function refuses too`);
+  assert.equal(JSON.stringify(t), before, `${name}: nothing changed`);
+}
+
+test('two disagreeing OCR readings block one-click approval even when the chosen reading has confidence 0.99', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const conflict = 'OCR alternatives disagree on INPUT: "a" versus "ε"; confidence cannot resolve this';
+  arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+    read_input: { value: 'a', confidence: 0.99 }, issues: [conflict], field_notes: [conflict],
+    ocr_alternatives: { primary: { read_input: { value: 'a', confidence: 0.99 } }, retry: { read_input: { value: 'ε', confidence: 0.9 } }, conflicts: [conflict] },
+  }]]);
+  expectBlocked(ctx, 'OCR alternatives', /יש שתי קריאות שונות של השורה/);
+});
+
+test('a duplicate or foreign observation identity blocks one-click approval', () => {
+  for (const problem of ['primary: duplicate label_reads identity', 'retry: foreign label_reads identity']) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+      read_input: { value: 'a', confidence: 0.99 }, issues: [problem], field_notes: [problem],
+    }]]);
+    expectBlocked(ctx, problem, /הערה על השורה/);
+  }
+});
+
+test('evidence that may belong to another row blocks one-click approval, with or without its message', () => {
+  for (const withMessage of [true, false]) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+      read_input: { value: 'a', confidence: 0.99 },
+      field_notes: withMessage ? ['מקור ראיית התווית זר או כפול; לא שויך לכלל'] : [],
+      pixel_provenance: { evidence_crop_id: 'crop:other', evidence_valid: false },
+    }]]);
+    expectBlocked(ctx, withMessage ? 'foreign evidence with message' : 'foreign evidence, flag only', /התמונה שלצד הכלל אולי אינה של השורה הזו/);
+  }
+});
+
+test('any message that is not on the explicit harmless list is an open doubt, including one the server adds in the future', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+    read_input: { value: 'a', confidence: 0.99 }, field_notes: ['some warning the server will add next year'],
+  }]]);
+  expectBlocked(ctx, 'unknown message', /יש לסריקה הערה על השורה/);
+
+  // Only harmless messages (blanket review lock, label read from the arrow's own image, row count): no doubt.
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  arrowScan(ctx2, [['b', 'A', 'NONE', ''], ['b', 'S', 'NONE', '', {
+    field_notes: ['label ink read from same-transition context; primary row localization requires review', 'topology contract is review-only',
+      'טופולוגיית המעבר או שלמות שורות התווית דורשת אישור', 'קיימות אזהרות כלליות בסריקה; פירוט מלא מופיע במסך ביקורת הסריקה'],
+  }]]);
+  const t2 = ctx2.__getCurrent().transitions[0];
+  assert.deepEqual(Array.from(ctx2.scanRuleOpenDoubts(t2.rules[1])), [], 'messages on the harmless list do not block');
+  assert.equal(ctx2.arrowCanApproveAll(t2), true);
+});

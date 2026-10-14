@@ -2775,9 +2775,26 @@ function addMissingScanRow(id){ const t=trById(id); if(t)promptTransitionPDA(t.f
    (ביטחון נמוך, "?", סתירה בקריאה, סימן חסר) מתוקן או מאושר קודם בעצמו,
    בדיאלוג שלו. שום דבר לא מאושר לבד, ויש "בטל". */
 const TOP_FIELD_ISSUE=/^(ראש המחסנית בטקסט הגולמי|ראיית האזור האמצעי|לא נמצא סימן STACK_TOP|חסר STACK_TOP|STACK_TOP מסוג ε)/;
+/* הכלל ההפוך (החלטת המשתמש, 2026-10-14): כל הודעה ב-aiIssues שאינה ברשימה הזאת
+   היא ספק פתוח — גם הערה חופשית של המודל, וגם אזהרה שהשרת יוסיף בעתיד.
+   ברשימה רק הודעות מהקוד שלנו, שאינן אומרות דבר על התוכן של השורה הזאת: */
+const SCAN_HARMLESS_ISSUES=new Set([
+  AI_SCAN_REVIEW_MSG,                                                // הנעילה הגורפת של כל כלל סרוק
+  'topology contract is review-only',                                // גורף: כל שורה בסריקה דו-שלבית
+  'קיימות אזהרות כלליות בסריקה; פירוט מלא מופיע במסך ביקורת הסריקה',   // הפניה לאבחון הכללי של הסריקה
+  'טופולוגיית המעבר או שלמות שורות התווית דורשת אישור',               // מספר השורות — בדיוק מה ש"הכול נכון" מאשר
+  'מספר שורות התווית דורש אישור',                                     // אותו דבר, אחרי עריכה בדיאלוג
+  'מצב מקור','מצב יעד',                                              // נבדק בנפרד (arrowEndpointPending)
+  'קלט שנקרא','ראש מחסנית','פעולת מחסנית','מה לדחוף','מה לשלוף',      // ביטחון נמוך בשדה — נבדק כאן לפי המספרים
+  'one or more field confidences are below review threshold',        // אותו דבר, מהשרת
+  /* השורה נקראה מתמונת התווית של אותו חץ — אותה תמונה שהכרטיס מציג, ואישור ברמת
+     החץ אינו תלוי בסדר השורות. שיוך שגוי באמת מסומן evidence_valid=false (למטה). */
+  'label ink read from same-transition context; primary row localization requires review',
+  'התווית נקראה מתמונת ההקשר של אותו חץ; מיקום השורה דורש ביקורת',
+]);
 function scanRuleOpenDoubts(r){
   if(!r||r.manuallyReviewed)return [];
-  const P=pdaRuleParts(r),out=[],ev=r.scanEvidence||null,issues=(r.aiIssues||[]).map(String);
+  const P=pdaRuleParts(r),out=[],ev=r.scanEvidence||null,issues=scanUniqueIssues(r.aiIssues||[]).map(String);
   if(P.invalidAction)out.push('הפעולה לא זוהתה');
   if(P.missingPush||P.push.includes('?'))out.push('חסר הסימן שאחרי דחוף');
   if(P.removeTop&&(!P.popSym||P.popSym==='?'))out.push('חסר הסימן שאחרי שלוף');
@@ -2785,20 +2802,25 @@ function scanRuleOpenDoubts(r){
   const covered=[PDA_ISSUE.PUSH_SYMBOL_MISSING,PDA_ISSUE.POP_SYMBOL_MISSING,PDA_ISSUE.UNREADABLE_FIELD,PDA_ISSUE.UNKNOWN_ACTION];
   pdaRuleSemanticIssues(r).forEach(x=>{ if(!covered.includes(x.code))out.push(x.text); });
   if(ev){
+    /* תמיד ספק, גם בלי הודעה: שתי קריאות שונות, או תמונה שאולי אינה של השורה */
+    const alts=ev.ocr_alternatives;
+    if(Array.isArray(alts)?alts.length:Boolean(alts&&(typeof alts!=='object'||Object.keys(alts).length)))out.push('יש שתי קריאות שונות של השורה');
+    if(ev.pixel_provenance&&ev.pixel_provenance.evidence_valid===false)out.push('התמונה שלצד הכלל אולי אינה של השורה הזו');
     const cf=ev.confidence||{},low=v=>v==null||!(v>=AI_LOW);
-    /* שדה שאדם כבר ענה עליו בכרטיס (אות קלט / מילת פעולה) אינו ספק יותר */
-    if(!r.inputReview){
-      if(issues.some(x=>INPUT_GLYPH_ISSUE.test(x)))out.push('סתירה בקריאת אות הקלט');
-      else if(low(cf.read_input))out.push('אות הקלט נקראה בביטחון נמוך');
-    }
-    if(issues.some(x=>TOP_FIELD_ISSUE.test(x)))out.push('סתירה בקריאת ראש המחסנית');
-    else if(low(cf.stack_top))out.push('ראש המחסנית נקרא בביטחון נמוך');
+    /* ביטחון נמוך בשדה שאדם כבר ענה עליו בכרטיס (אות קלט / מילת פעולה) אינו ספק יותר */
+    if(!r.inputReview&&low(cf.read_input))out.push('אות הקלט נקראה בביטחון נמוך');
+    if(low(cf.stack_top))out.push('ראש המחסנית נקרא בביטחון נמוך');
     if(!r.actionReview){
       const symbolConf=P.op==='push'?cf.push_symbol:(P.removeTop?cf.pop_symbol:1);
-      if(issues.some(x=>ACTION_WORD_ISSUE.test(x)))out.push('סתירה בקריאת מילת הפעולה');
-      else if(low(cf.action)||low(symbolConf))out.push('מילת הפעולה או הסימן שלה נקראו בביטחון נמוך');
+      if(low(cf.action)||low(symbolConf))out.push('מילת הפעולה או הסימן שלה נקראו בביטחון נמוך');
     }
   }
+  /* סתירות שהלקוח מזהה — ניסוח מדויק. כשאדם עונה בכרטיס, ההודעות האלה נמחקות. */
+  if(issues.some(x=>INPUT_GLYPH_ISSUE.test(x)))out.push('סתירה בקריאת אות הקלט');
+  if(issues.some(x=>TOP_FIELD_ISSUE.test(x)))out.push('סתירה בקריאת ראש המחסנית');
+  if(issues.some(x=>ACTION_WORD_ISSUE.test(x)))out.push('סתירה בקריאת מילת הפעולה');
+  const other=issues.filter(x=>!SCAN_HARMLESS_ISSUES.has(x)&&!INPUT_GLYPH_ISSUE.test(x)&&!TOP_FIELD_ISSUE.test(x)&&!ACTION_WORD_ISSUE.test(x));
+  if(other.length)out.push(other.length===1?'יש לסריקה הערה על השורה — פתח את הכלל כדי לראות':`יש לסריקה ${other.length} הערות על השורה — פתח את הכלל כדי לראות`);
   return [...new Set(out)];
 }
 function arrowEndpointPending(t){
