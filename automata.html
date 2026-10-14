@@ -252,6 +252,15 @@ body{
 .glyph-other{display:inline-flex;gap:4px;align-items:center}
 .glyph-other .fld{width:52px;padding:3px 6px;font-size:13px;min-height:0;text-align:center}
 .glyph-other b{font-size:12px;color:#7c2d12}
+.arrow-shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:6px}
+.arrow-shots .glyph-shot-img:only-child{grid-column:1 / -1}
+.arrow-rules{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.arrow-rule{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;width:100%;text-align:right;border:1px solid #fcd34d;background:#fff;color:#78350f;border-radius:8px;padding:5px 8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.arrow-rule:hover{background:#fef3c7}
+.arrow-rule.doubt{border-color:#ea580c;background:#fff7ed}
+.arrow-rule.ok{border-color:#86efac;color:#166534}
+.arrow-rule-note{font-size:11px;font-weight:700;color:#c2410c}
+.arrow-rule.ok .arrow-rule-note{color:#15803d}
 .ai-notes{margin-top:6px;font-size:11px}
 .ai-notes summary{cursor:pointer;font-weight:700}
 .ai-notes div{margin-top:4px;line-height:1.4;overflow-wrap:anywhere}
@@ -2765,22 +2774,125 @@ function chooseTransitionEndpoint(id,field){
 }
 /* בציור יש על החץ שורה שהסריקה לא קראה: מוסיפים אותה ידנית; שאלת מספר השורות נשארת עד "✓ כן" */
 function addMissingScanRow(id){ const t=trById(id); if(t)promptTransitionPDA(t.from,t.to); }
+/* ── אישור חץ שלם בלחיצה אחת ─────────────────────────────────────────────
+   כרטיס החץ מציג את תמונת התווית, ולצדה את הכללים שנקראו. "✓ הכול נכון"
+   מאשר את כל השורות של החץ וגם את מספר השורות — במקום לפתוח ולשמור כל
+   כלל בנפרד. הכפתור מופיע רק כשבאף כלל של החץ אין ספק פתוח. כלל עם ספק
+   (ביטחון נמוך, "?", סתירה בקריאה, סימן חסר) מתוקן או מאושר קודם בעצמו,
+   בדיאלוג שלו. שום דבר לא מאושר לבד, ויש "בטל". */
+const TOP_FIELD_ISSUE=/^(ראש המחסנית בטקסט הגולמי|ראיית האזור האמצעי|לא נמצא סימן STACK_TOP|חסר STACK_TOP|STACK_TOP מסוג ε)/;
+/* הכלל ההפוך (החלטת המשתמש, 2026-10-14): כל הודעה ב-aiIssues שאינה ברשימה הזאת
+   היא ספק פתוח — גם הערה חופשית של המודל, וגם אזהרה שהשרת יוסיף בעתיד.
+   ברשימה רק הודעות מהקוד שלנו, שאינן אומרות דבר על התוכן של השורה הזאת: */
+const SCAN_HARMLESS_ISSUES=new Set([
+  AI_SCAN_REVIEW_MSG,                                                // הנעילה הגורפת של כל כלל סרוק
+  'topology contract is review-only',                                // גורף: כל שורה בסריקה דו-שלבית
+  'קיימות אזהרות כלליות בסריקה; פירוט מלא מופיע במסך ביקורת הסריקה',   // הפניה לאבחון הכללי של הסריקה
+  'טופולוגיית המעבר או שלמות שורות התווית דורשת אישור',               // מספר השורות — בדיוק מה ש"הכול נכון" מאשר
+  'מספר שורות התווית דורש אישור',                                     // אותו דבר, אחרי עריכה בדיאלוג
+  'מצב מקור','מצב יעד',                                              // נבדק בנפרד (arrowEndpointPending)
+  'קלט שנקרא','ראש מחסנית','פעולת מחסנית','מה לדחוף','מה לשלוף',      // ביטחון נמוך בשדה — נבדק כאן לפי המספרים
+  'one or more field confidences are below review threshold',        // אותו דבר, מהשרת
+  /* השורה נקראה מתמונת התווית של אותו חץ — אותה תמונה שהכרטיס מציג, ואישור ברמת
+     החץ אינו תלוי בסדר השורות. שיוך שגוי באמת מסומן evidence_valid=false (למטה). */
+  'label ink read from same-transition context; primary row localization requires review',
+  'התווית נקראה מתמונת ההקשר של אותו חץ; מיקום השורה דורש ביקורת',
+]);
+function scanRuleOpenDoubts(r){
+  if(!r||r.manuallyReviewed)return [];
+  const P=pdaRuleParts(r),out=[],ev=r.scanEvidence||null,issues=scanUniqueIssues(r.aiIssues||[]).map(String);
+  if(P.invalidAction)out.push('הפעולה לא זוהתה');
+  if(P.missingPush||P.push.includes('?'))out.push('חסר הסימן שאחרי דחוף');
+  if(P.removeTop&&(!P.popSym||P.popSym==='?'))out.push('חסר הסימן שאחרי שלוף');
+  if(P.read==='?'||P.guard==='?')out.push('יש סימן לא קריא (?)');
+  const covered=[PDA_ISSUE.PUSH_SYMBOL_MISSING,PDA_ISSUE.POP_SYMBOL_MISSING,PDA_ISSUE.UNREADABLE_FIELD,PDA_ISSUE.UNKNOWN_ACTION];
+  pdaRuleSemanticIssues(r).forEach(x=>{ if(!covered.includes(x.code))out.push(x.text); });
+  if(ev){
+    /* תמיד ספק, גם בלי הודעה: שתי קריאות שונות, או תמונה שאולי אינה של השורה */
+    const alts=ev.ocr_alternatives;
+    if(Array.isArray(alts)?alts.length:Boolean(alts&&(typeof alts!=='object'||Object.keys(alts).length)))out.push('יש שתי קריאות שונות של השורה');
+    if(ev.pixel_provenance&&ev.pixel_provenance.evidence_valid===false)out.push('התמונה שלצד הכלל אולי אינה של השורה הזו');
+    const cf=ev.confidence||{},low=v=>v==null||!(v>=AI_LOW);
+    /* ביטחון נמוך בשדה שאדם כבר ענה עליו בכרטיס (אות קלט / מילת פעולה) אינו ספק יותר */
+    if(!r.inputReview&&low(cf.read_input))out.push('אות הקלט נקראה בביטחון נמוך');
+    if(low(cf.stack_top))out.push('ראש המחסנית נקרא בביטחון נמוך');
+    if(!r.actionReview){
+      const symbolConf=P.op==='push'?cf.push_symbol:(P.removeTop?cf.pop_symbol:1);
+      if(low(cf.action)||low(symbolConf))out.push('מילת הפעולה או הסימן שלה נקראו בביטחון נמוך');
+    }
+  }
+  /* סתירות שהלקוח מזהה — ניסוח מדויק. כשאדם עונה בכרטיס, ההודעות האלה נמחקות. */
+  if(issues.some(x=>INPUT_GLYPH_ISSUE.test(x)))out.push('סתירה בקריאת אות הקלט');
+  if(issues.some(x=>TOP_FIELD_ISSUE.test(x)))out.push('סתירה בקריאת ראש המחסנית');
+  if(issues.some(x=>ACTION_WORD_ISSUE.test(x)))out.push('סתירה בקריאת מילת הפעולה');
+  const other=issues.filter(x=>!SCAN_HARMLESS_ISSUES.has(x)&&!INPUT_GLYPH_ISSUE.test(x)&&!TOP_FIELD_ISSUE.test(x)&&!ACTION_WORD_ISSUE.test(x));
+  if(other.length)out.push(other.length===1?'יש לסריקה הערה על השורה — פתח את הכלל כדי לראות':`יש לסריקה ${other.length} הערות על השורה — פתח את הכלל כדי לראות`);
+  return [...new Set(out)];
+}
+function arrowEndpointPending(t){
+  const ep={source:Boolean(t.endpointReview&&t.endpointReview.source),target:Boolean(t.endpointReview&&t.endpointReview.target)};
+  (t.rules||[]).forEach(r=>{ if(r.endpointReview&&r.endpointReview.source)ep.source=true; if(r.endpointReview&&r.endpointReview.target)ep.target=true; });
+  return ep;
+}
+/* אפשר לאשר את החץ כולו רק כשאין ספק במצבים שלו ובאף כלל שלו, ויש מה לאשר */
+function arrowCanApproveAll(t){
+  if(!t||!(t.rules||[]).length)return false;
+  const ep=arrowEndpointPending(t);
+  if(ep.source||ep.target)return false;
+  if(t.rules.some(r=>scanRuleOpenDoubts(r).length))return false;
+  return t.rules.some(scanRulePending);
+}
+function approveArrowRows(id){
+  const t=trById(id); if(!t||!current||current.type!=='pda')return false;
+  if(!arrowCanApproveAll(t)){ toast('יש על החץ כלל או מצב עם ספק — תקן או אשר אותו קודם','danger'); return false; }
+  const point=modelUndoPoint(),at=new Date().toISOString(),rows=t.rules.length; let approved=0;
+  t.rules.forEach(r=>{
+    if(!scanRulePending(r))return;
+    Object.assign(r,{aiLow:false,aiIssues:[],aiConfidence:1,scanIncomplete:false,scanIncompleteBase:false,scanIncompleteCore:false,lineCountReview:false,
+      manuallyReviewed:true,contentReviewed:true,arrowReview:{reviewedAt:at,rows,source:'arrow-card'}});
+    r.semanticBlocked=pdaRuleBlocked(r);
+    approved++;
+  });
+  const from=stById(t.from),to=stById(t.to),title=`${from?from.label:'?'} ${isSelfLoopTransition(t)?'↺':'→'} ${to?to.label:'?'}`;
+  markTransitionStructureReviewed(id);   /* גם מספר השורות אושר; שומר ומצייר */
+  scanImagesPrune();
+  offerUndo(`אושר החץ ${title}: ${approved===1?'כלל אחד':approved+' כללים'}, ${rows===1?'שורה אחת':rows+' שורות'}.`,restoreModelPoint(point));
+  return true;
+}
+/* תמונות הראיה של החץ, בלי כפילויות (כמה שורות חולקות את אותה תמונת תווית) */
+function arrowEvidenceImages(t){
+  const seen=new Set(),out=[];
+  (t.rules||[]).forEach(r=>{ const url=scanShotUrl(r); if(url&&!seen.has(url)){ seen.add(url); out.push(url); } });
+  return out;
+}
+function openArrowShot(id,index){
+  const t=trById(id),url=t&&arrowEvidenceImages(t)[index]; if(!url)return;
+  const from=stById(t.from),to=stById(t.to),body=document.createElement('div');
+  body.innerHTML=`<div class="glyph-big"><img src="${esc(url)}" alt="תמונת התווית"></div>`;
+  _buildDialog({title:`${from?from.label:'?'} ${isSelfLoopTransition(t)?'↺':'→'} ${to?to.label:'?'} · תמונת התווית`,body,buttons:[{text:'סגור',value:null,primary:true}],dismissValue:null});
+}
+function pdaRuleLineText(r){ const P=pdaRuleParts(r); return `קלט ${P.read||'ε'} · בראש ${P.guard||'ε'} · ${pdaActionText(r)}`; }
 /* כרטיס קצר בעברית לחץ סרוק. ההערות הטכניות (באנגלית) נשארות ב-title ובדיאלוג. */
 function aiTransitionCardHtml(it){
   const t=trById(it.id); if(!t)return '';
-  const from=stById(t.from),to=stById(t.to),ep=it.endpointPending||{},lines=[],chips=[];
+  const from=stById(t.from),to=stById(t.to),ep=it.endpointPending||{},lines=[],chips=[],rules=t.rules||[];
+  const doubts=rules.map(scanRuleOpenDoubts),anyDoubt=doubts.some(d=>d.length);
   if(it.pendingRules)lines.push(it.pendingRules===1
-    ?(it.ruleCount===1?'הכלל מחכה לאישור — לחץ על החץ כדי לפתוח אותו.':`כלל אחד מתוך ${it.ruleCount} מחכה לאישור — לחץ על החץ כדי לפתוח אותו.`)
-    :`${it.pendingRules} מתוך ${it.ruleCount} כללים מחכים לאישור — לחץ על החץ כדי לפתוח את הראשון.`);
-  if(it.semantic&&it.semantic.length)lines.push('בעיה בכלל: '+it.semantic.join(', '));
+    ?(it.ruleCount===1?'הכלל מחכה לאישור.':`כלל אחד מתוך ${it.ruleCount} מחכה לאישור.`)
+    :`${it.pendingRules} מתוך ${it.ruleCount} כללים מחכים לאישור.`);
   if(ep.source||ep.target){
     lines.push('לא ודאי שהחץ מחבר את המצבים הנכונים. השווה לציור: אשר, או בחר מצב אחר.');
     if(ep.source)chips.push(`<button class="chip ai-review-ok" onclick="confirmTransitionEndpoint('${t.id}','from')">✓ המקור ${esc(from?from.label:'?')} נכון</button>`,
       `<button class="chip" onclick="chooseTransitionEndpoint('${t.id}','from')">מקור אחר…</button>`);
     if(ep.target)chips.push(`<button class="chip ai-review-ok" onclick="confirmTransitionEndpoint('${t.id}','to')">✓ היעד ${esc(to?to.label:'?')} נכון</button>`,
       `<button class="chip" onclick="chooseTransitionEndpoint('${t.id}','to')">יעד אחר…</button>`);
-  }
-  if(it.rowsPending&&!it.pendingRules&&!ep.source&&!ep.target){
+  }else if(anyDoubt){
+    lines.push('כלל שמסומן ⚠ צריך תיקון או אישור משלו לפני שמאשרים את החץ: לחץ עליו.');
+  }else if(it.pendingRules){
+    lines.push(`השווה לתמונה: על החץ יש בדיוק ${it.ruleCount===1?'שורה אחת, והיא נקראה':it.ruleCount+' שורות, וכולן נקראו'} נכון?`);
+    chips.push(`<button class="chip ai-review-ok" onclick="approveArrowRows('${t.id}')">✓ הכול נכון</button>`,
+      `<button class="chip" onclick="addMissingScanRow('${t.id}')">יש עוד שורה</button>`);
+  }else if(it.rowsPending){
     if(!it.ruleCount){ lines.push('על החץ לא נקרא אף כלל. הוסף את הכללים שכתובים עליו בציור.');
       chips.push(`<button class="chip" onclick="addMissingScanRow('${t.id}')">הוסף כלל</button>`); }
     else{ lines.push(`${it.ruleCount===1?'הכלל אושר':'כל הכללים אושרו'}. על החץ בציור יש בדיוק ${it.ruleCount===1?'שורה אחת':it.ruleCount+' שורות'}?`);
@@ -2788,8 +2900,16 @@ function aiTransitionCardHtml(it){
         `<button class="chip" onclick="addMissingScanRow('${t.id}')">יש עוד שורה</button>`); }
   }
   if(!lines.length)lines.push('המעבר מחכה לאישור — לחץ עליו כדי לבדוק.');
-  return `<div class="ai-review-item ai-review-card" title="${esc(it.sub)}">
+  const shots=arrowEvidenceImages(t).map((url,i)=>`<button type="button" class="glyph-shot-img" onclick="openArrowShot('${t.id}',${i})" title="הגדל"><img src="${esc(url)}" alt="תמונת התווית"></button>`).join('');
+  const ruleLines=rules.map((r,i)=>{
+    const d=doubts[i],state=d.length?'doubt':(scanRulePending(r)?'':'ok');
+    const note=d.length?`⚠ ${d.join(' · ')}`:(state==='ok'?'✓ אושר':'');
+    return `<button type="button" class="arrow-rule${state?' '+state:''}" onclick="editPdaTransition('${t.id}',${i})" title="פתח את הכלל לעריכה"><span dir="auto">${esc(pdaRuleLineText(r))}</span>${note?`<span class="arrow-rule-note">${esc(note)}</span>`:''}</button>`;
+  }).join('');
+  return `<div class="ai-review-item ai-review-card arrow-card" title="${esc(it.sub)}">
     <button class="ai-review-link" onclick="focusAiIssue('${t.id}','transition')"><span class="ai-review-main">${esc(it.title)}</span></button>
+    ${shots?`<div class="arrow-shots">${shots}</div>`:(rules.some(r=>r.scanEvidence)?'<div class="ai-review-sub">אין תמונה שמורה — השווה לדף.</div>':'')}
+    ${ruleLines?`<div class="arrow-rules">${ruleLines}</div>`:''}
     ${lines.map(l=>`<div class="ai-review-sub">${esc(l)}</div>`).join('')}
     ${chips.length?`<div class="ai-review-chips">${chips.join('')}</div>`:''}</div>`;
 }

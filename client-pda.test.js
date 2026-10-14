@@ -3302,3 +3302,174 @@ test('a scanned row that is only a lone symbol is explained in Hebrew and can be
   ctx.editPdaTransition(t().id, 2);
   assert.equal(ctx.__rowOpts.onDelete, null);
 });
+
+/* אישור חץ שלם בלחיצה אחת: תמונת התווית, הכללים שנקראו, ו"✓ הכול נכון". */
+function arrowScan(ctx, rows, over = {}) {
+  // rows: [read, top, action, symbol, fieldOverrides]
+  const word = { PUSH: 'דחוף', POP: 'שלוף', NONE: 'לל״ש' };
+  const rules = rows.map(([read, top, action, symbol, extra]) => scannedRule(Object.assign({
+    raw_label_text: `${read},${top} / ${action === 'NONE' ? word.NONE : `${symbol} ${word[action]}`}`,
+    zones: { left_text: read, middle_text: top, right_text: action === 'NONE' ? word.NONE : `${symbol} ${word[action]}` },
+    read_input: { value: read, confidence: 0.9 }, pop_value: { value: top, confidence: 0.9 },
+    stack_action: { type: action, confidence: 0.9 },
+    push_value: { value: action === 'PUSH' ? symbol : 'ε', confidence: 0.9 }, pop_symbol: { value: action === 'POP' ? symbol : 'ε', confidence: 0.9 },
+    cropped_image_segment_url: 'data:image/png;base64,QkxPQ0s=', pixel_provenance: { evidence_crop_id: 'crop:block', evidence_valid: true },
+    field_notes: ['label ink read from same-transition context; primary row localization requires review'], scan_incomplete: true,
+  }, extra || {})));
+  const model = pdaModel(ctx, [], []);
+  model.id = 'm-arrow';
+  vm.runInContext('DB', ctx).automata = [model];
+  ctx.applyAiTransitionsToCanvas({ states: [{ id: 'q1', is_start: true, confidence: 0.95 }, { id: 'q2', confidence: 0.95 }],
+    transitions: [scannedTransition('t12', 'q1', 'q2', rules, Object.assign({ scan_incomplete: true }, over))] }, { atomic: true, scanSessionId: 'scan-arrow' });
+  vm.runInContext('promptTransitionPDA=(f,t,ai,d,opts)=>{ globalThis.__walkOpts=opts; }', ctx);
+  return model;
+}
+const arrowCard = ctx => ctx.aiTransitionCardHtml(Array.from(ctx.collectAiReviewItems()).find(x => x.kind === 'transition'));
+
+test('an arrow without open doubts is approved in one click: all its rows and its row count, with undo', () => {
+  const ctx = loadClient();
+  vm.runInContext('renderAll=()=>{}; renderGraph=()=>{}; renderInspector=()=>{}; renderTabs=()=>{}; toast=()=>{}; fitView=()=>{}; stopPlay=()=>{}', ctx);
+  arrowScan(ctx, [['b', 'A', 'NONE', ''], ['b', 'S', 'NONE', '']]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.equal(t().transitionScanIncomplete, true);
+  assert.ok(t().rules.every(r => r.scanIncomplete && !r.manuallyReviewed), 'both rows start locked');
+
+  const html = arrowCard(ctx);
+  assert.equal((html.match(/<img src="data:image\/png/g) || []).length, 1, 'the label image is shown once, though both rows share it');
+  assert.match(html, /קלט b · בראש A · ללא שינוי/);
+  assert.match(html, /קלט b · בראש S · ללא שינוי/);
+  assert.match(html, /השווה לתמונה: על החץ יש בדיוק 2 שורות, וכולן נקראו נכון\?/);
+  assert.match(html, new RegExp(`approveArrowRows\\('${t().id}'\\)">✓ הכול נכון`));
+  assert.doesNotMatch(html, /⚠/, 'no rule is marked doubtful');
+
+  assert.equal(ctx.approveArrowRows(t().id), true);
+  assert.ok(t().rules.every(r => r.manuallyReviewed && !r.scanIncomplete && !r.aiLow), 'both rows are approved');
+  assert.ok(t().rules.every(r => r.arrowReview && r.arrowReview.rows === 2 && r.scanEvidence.raw_label_text.startsWith('b,')), 'the approval is recorded and the evidence is kept');
+  assert.equal(t().transitionScanIncomplete, false, 'the row count is confirmed too');
+  assert.equal(ctx.hasPendingAiExecutionReview(), false);
+
+  assert.equal(ctx.undoLast(), true);
+  assert.ok(t().rules.every(r => r.scanIncomplete && !r.manuallyReviewed), 'undo locks the rows again');
+  assert.equal(t().transitionScanIncomplete, true);
+});
+
+test('a rule with an open doubt keeps the arrow out of one-click approval until it is fixed or approved by itself', () => {
+  const cases = [
+    ['low confidence', ['b', 'A', 'POP', 'A', { stack_action: { type: 'POP', confidence: 0.6 } }], /מילת הפעולה או הסימן שלה נקראו בביטחון נמוך/],
+    ['an unreadable symbol', ['?', 'A', 'NONE', '', { read_input: { value: '?', confidence: 0.2 }, zones: { left_text: '?', middle_text: 'A', right_text: 'לל״ש' } }], /יש סימן לא קריא \(\?\)/],
+    ['a missing operand', ['b', 'A', 'POP', '?', { pop_symbol: { value: '?', confidence: 0.3 }, zones: { left_text: 'b', middle_text: 'A', right_text: 'שלוף' } }], /חסר הסימן שאחרי שלוף/],
+    ['a contradiction', ['b', 'A', 'NONE', '', { zones: { left_text: 'c', middle_text: 'A', right_text: 'לל״ש' } }], /סתירה בקריאת אות הקלט/],
+  ];
+  for (const [name, doubtful, reason] of cases) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [['b', 'S', 'NONE', ''], doubtful]);
+    const t = () => ctx.__getCurrent().transitions[0];
+    const html = arrowCard(ctx);
+    assert.match(html, reason, name);
+    assert.match(html, /כלל שמסומן ⚠ צריך תיקון או אישור משלו/, name);
+    assert.doesNotMatch(html, /approveArrowRows/, `${name}: no all-correct button`);
+    const before = JSON.stringify(t());
+    assert.equal(ctx.approveArrowRows(t().id), false, `${name}: the function refuses too`);
+    assert.equal(JSON.stringify(t()), before, `${name}: nothing changed`);
+
+    // The human opens that rule, fixes it and saves: now only the clean row is left, and the button appears.
+    ctx.editPdaTransition(t().id, 1);
+    ctx.__walkOpts.onSave(ctx.makeRulePDA('b', 'A', 'none', ''));
+    assert.match(arrowCard(ctx), /approveArrowRows/, `${name}: after the fix the arrow can be approved`);
+    assert.match(arrowCard(ctx), /✓ אושר/, `${name}: the fixed rule shows as approved`);
+    assert.equal(ctx.approveArrowRows(t().id), true);
+    assert.ok(t().rules.every(r => r.manuallyReviewed), name);
+  }
+});
+
+test('answers from the one-step cards close the field doubt, and a doubtful endpoint still blocks one-click approval', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  // Both inputs were read ε with low confidence: an input-letter doubt on both rows.
+  arrowScan(ctx, [['ε', 'S', 'PUSH', 'A', { read_input: { value: 'ε', confidence: 0.7 } }], ['ε', 'A', 'PUSH', 'A', { read_input: { value: 'ε', confidence: 0.7 } }]]);
+  const t = () => ctx.__getCurrent().transitions[0];
+  assert.match(arrowCard(ctx), /אות הקלט נקראה בביטחון נמוך/);
+  assert.equal(ctx.arrowCanApproveAll(t()), false);
+  assert.equal(ctx.applyInputGlyphReview(0, 'a', [true, true]), true);
+  assert.equal(ctx.arrowCanApproveAll(t()), true, 'the human answered the input letter, so that doubt is closed');
+  assert.match(arrowCard(ctx), /קלט a · בראש S · דחוף A/);
+
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  arrowScan(ctx2, [['b', 'A', 'NONE', '']], { source_state: { id: 'q1', confidence: 0.5 } });
+  const t2 = () => ctx2.__getCurrent().transitions[0];
+  assert.doesNotMatch(arrowCard(ctx2), /approveArrowRows/, 'a doubtful source state comes first');
+  assert.equal(ctx2.approveArrowRows(t2().id), false);
+  ctx2.confirmTransitionEndpoint(t2().id, 'from');
+  assert.match(arrowCard(ctx2), /על החץ יש בדיוק שורה אחת, והיא נקראה נכון\?/);
+  assert.equal(ctx2.approveArrowRows(t2().id), true);
+});
+
+/* מצאה צ'אט 1 (2026-10-13): שלושה ספקות ש"הכול נכון" לא זיהה. הכלל ההפוך: כל הודעה
+   שאינה ברשימה מפורשת של הודעות לא מזיקות היא ספק, ו-ocr_alternatives / evidence_valid=false תמיד. */
+function expectBlocked(ctx, name, reason) {
+  const t = ctx.__getCurrent().transitions[0];
+  assert.ok(ctx.scanRuleOpenDoubts(t.rules[1]).length > 0, `${name}: the rule has an open doubt`);
+  if (reason) assert.ok(ctx.scanRuleOpenDoubts(t.rules[1]).some(x => reason.test(x)), `${name}: ${ctx.scanRuleOpenDoubts(t.rules[1]).join(' · ')}`);
+  assert.equal(ctx.arrowCanApproveAll(t), false, `${name}: the arrow cannot be approved in one click`);
+  assert.doesNotMatch(arrowCard(ctx), /approveArrowRows/, `${name}: no all-correct button`);
+  const before = JSON.stringify(t);
+  assert.equal(ctx.approveArrowRows(t.id), false, `${name}: the function refuses too`);
+  assert.equal(JSON.stringify(t), before, `${name}: nothing changed`);
+}
+
+test('two disagreeing OCR readings block one-click approval even when the chosen reading has confidence 0.99', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  const conflict = 'OCR alternatives disagree on INPUT: "a" versus "ε"; confidence cannot resolve this';
+  arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+    read_input: { value: 'a', confidence: 0.99 }, issues: [conflict], field_notes: [conflict],
+    ocr_alternatives: { primary: { read_input: { value: 'a', confidence: 0.99 } }, retry: { read_input: { value: 'ε', confidence: 0.9 } }, conflicts: [conflict] },
+  }]]);
+  expectBlocked(ctx, 'OCR alternatives', /יש שתי קריאות שונות של השורה/);
+});
+
+test('a duplicate or foreign observation identity blocks one-click approval', () => {
+  for (const problem of ['primary: duplicate label_reads identity', 'retry: foreign label_reads identity']) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+      read_input: { value: 'a', confidence: 0.99 }, issues: [problem], field_notes: [problem],
+    }]]);
+    expectBlocked(ctx, problem, /הערה על השורה/);
+  }
+});
+
+test('evidence that may belong to another row blocks one-click approval, with or without its message', () => {
+  for (const withMessage of [true, false]) {
+    const ctx = loadClient();
+    silenceClientUi(ctx);
+    arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+      read_input: { value: 'a', confidence: 0.99 },
+      field_notes: withMessage ? ['מקור ראיית התווית זר או כפול; לא שויך לכלל'] : [],
+      pixel_provenance: { evidence_crop_id: 'crop:other', evidence_valid: false },
+    }]]);
+    expectBlocked(ctx, withMessage ? 'foreign evidence with message' : 'foreign evidence, flag only', /התמונה שלצד הכלל אולי אינה של השורה הזו/);
+  }
+});
+
+test('any message that is not on the explicit harmless list is an open doubt, including one the server adds in the future', () => {
+  const ctx = loadClient();
+  silenceClientUi(ctx);
+  arrowScan(ctx, [['b', 'A', 'NONE', ''], ['a', 'S', 'PUSH', 'A', {
+    read_input: { value: 'a', confidence: 0.99 }, field_notes: ['some warning the server will add next year'],
+  }]]);
+  expectBlocked(ctx, 'unknown message', /יש לסריקה הערה על השורה/);
+
+  // Only harmless messages (blanket review lock, label read from the arrow's own image, row count): no doubt.
+  const ctx2 = loadClient();
+  silenceClientUi(ctx2);
+  arrowScan(ctx2, [['b', 'A', 'NONE', ''], ['b', 'S', 'NONE', '', {
+    field_notes: ['label ink read from same-transition context; primary row localization requires review', 'topology contract is review-only',
+      'טופולוגיית המעבר או שלמות שורות התווית דורשת אישור', 'קיימות אזהרות כלליות בסריקה; פירוט מלא מופיע במסך ביקורת הסריקה'],
+  }]]);
+  const t2 = ctx2.__getCurrent().transitions[0];
+  assert.deepEqual(Array.from(ctx2.scanRuleOpenDoubts(t2.rules[1])), [], 'messages on the harmless list do not block');
+  assert.equal(ctx2.arrowCanApproveAll(t2), true);
+});
