@@ -873,6 +873,34 @@ test('dialog focus: a dialog whose only field is a select starts on the select, 
   assert.equal(primary.clicks, 1, 'Enter on «ביטול» does not press the delete button');
 });
 
+test('self-check: Enter in a word field runs all the words and does not close the dialog (it pressed «סגור»)', () => {
+  const ctx = loadClient();
+  vm.runInContext('save=()=>{};', ctx);
+  const body = { innerHTML: '' }, spans = {};
+  ctx.__elements.batchBody = body;
+  [0, 1].forEach(i => { spans[i] = { textContent: '', className: '' }; ctx.__elements['bres-' + i] = spans[i]; });
+  ctx.__elements.batchSummary = { textContent: '' };
+  ctx.__setCurrent({ type: 'dfa', ndet: false, states: [{ id: 'a', label: 'q0', isStart: true }, { id: 'b', label: 'q1', isAccept: true }],
+    transitions: [{ id: 't', from: 'a', to: 'b', symbols: ['a'] }], tests: [{ word: '', expect: true }, { word: 'b', expect: false }] });
+  ctx.renderBatch();
+  assert.match(body.innerHTML, /class="fld bword"[^>]*onkeydown="batchWordKey\(event,0\)"/, 'the word field handles its own Enter');
+
+  let stopped = false, prevented = false;
+  const e = { key: 'Enter', shiftKey: false, isComposing: false, target: { value: 'a' },
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } };
+  ctx.batchWordKey(e, 0);
+  assert.equal(ctx.__getCurrent().tests[0].word, 'a', 'the typed word is saved before running');
+  assert.equal(spans[0].textContent, '✓ מתקבלת', 'all words ran');
+  assert.equal(spans[1].textContent, '✓ נדחית');
+  assert.equal(ctx.__elements.batchSummary.textContent, '2/2 עברו');
+  assert.ok(prevented && stopped, 'the Enter does not reach the dialog, so «סגור» is not pressed');
+
+  // מקש אחר — לא מריץ
+  spans[0].textContent = '';
+  ctx.batchWordKey({ key: 'a', target: { value: 'a' }, preventDefault() {}, stopPropagation() {} }, 0);
+  assert.equal(spans[0].textContent, '');
+});
+
 test('dialog keyboard: Tab stays inside the dialog', () => {
   const ctx = loadClient();
   let focused = '';
