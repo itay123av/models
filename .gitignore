@@ -1,3 +1,6 @@
 ﻿.env
+.env.local
 .secrets/
 *.log
+# Local scan diagnostics contain user photographs and large request evidence.
+test-evidence/scan-*/

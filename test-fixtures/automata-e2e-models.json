@@ -1,0 +1,90 @@
+{
+  "automata": [
+    {
+      "name": "E2E NFA ends with ab",
+      "type": "dfa",
+      "ndet": true,
+      "alphabet": ["a", "b"],
+      "states": [
+        {"id": "nfa-q0", "label": "q0", "x": 240, "y": 300, "isStart": true, "isAccept": false},
+        {"id": "nfa-q1", "label": "q1", "x": 500, "y": 300, "isStart": false, "isAccept": false},
+        {"id": "nfa-q2", "label": "q2", "x": 760, "y": 300, "isStart": false, "isAccept": true}
+      ],
+      "transitions": [
+        {"id": "nfa-t0", "from": "nfa-q0", "to": "nfa-q0", "symbols": ["a", "b"]},
+        {"id": "nfa-t1", "from": "nfa-q0", "to": "nfa-q1", "symbols": ["a"]},
+        {"id": "nfa-t2", "from": "nfa-q1", "to": "nfa-q2", "symbols": ["b"]}
+      ],
+      "tests": [
+        {"word": "ab", "expect": true},
+        {"word": "bbab", "expect": true},
+        {"word": "abb", "expect": false}
+      ]
+    },
+    {
+      "name": "E2E PDA a^n b^n",
+      "type": "pda",
+      "ndet": false,
+      "alphabet": ["a", "b"],
+      "states": [
+        {"id": "pda-q0", "label": "q0", "x": 350, "y": 300, "isStart": true, "isAccept": true},
+        {"id": "pda-q1", "label": "q1", "x": 680, "y": 300, "isStart": false, "isAccept": true}
+      ],
+      "transitions": [
+        {"id": "pda-t0", "from": "pda-q0", "to": "pda-q0", "rules": [{"read": "a", "pop": "", "push": "A"}]},
+        {"id": "pda-t1", "from": "pda-q0", "to": "pda-q1", "rules": [{"read": "b", "pop": "A", "push": ""}]},
+        {"id": "pda-t2", "from": "pda-q1", "to": "pda-q1", "rules": [{"read": "b", "pop": "A", "push": ""}]}
+      ],
+      "tests": [
+        {"word": "aabb", "expect": true},
+        {"word": "aab", "expect": false},
+        {"word": "abb", "expect": false}
+      ]
+    },
+    {
+      "name": "E2E NPDA even palindrome",
+      "type": "pda",
+      "ndet": true,
+      "alphabet": ["a", "b"],
+      "states": [
+        {"id": "npda-q0", "label": "q0", "x": 350, "y": 300, "isStart": true, "isAccept": false},
+        {"id": "npda-q1", "label": "q1", "x": 680, "y": 300, "isStart": false, "isAccept": true}
+      ],
+      "transitions": [
+        {"id": "npda-t0", "from": "npda-q0", "to": "npda-q0", "rules": [
+          {"read": "a", "top": "", "op": "push", "push": ["a"]},
+          {"read": "b", "top": "", "op": "push", "push": ["b"]}
+        ]},
+        {"id": "npda-t1", "from": "npda-q0", "to": "npda-q1", "rules": [{"read": "", "top": "", "op": "none", "push": []}]},
+        {"id": "npda-t2", "from": "npda-q1", "to": "npda-q1", "rules": [
+          {"read": "a", "top": "a", "op": "pop", "push": [], "popSym": "a"},
+          {"read": "b", "top": "b", "op": "pop", "push": [], "popSym": "b"}
+        ]}
+      ],
+      "tests": [
+        {"word": "abba", "expect": true},
+        {"word": "abab", "expect": false}
+      ]
+    },
+    {
+      "name": "E2E TM complement bits",
+      "type": "tm",
+      "alphabet": ["0", "1"],
+      "states": [
+        {"id": "tm-q0", "label": "q0", "x": 350, "y": 300, "isStart": true, "isAccept": false},
+        {"id": "tm-q1", "label": "q1", "x": 700, "y": 300, "isStart": false, "isAccept": true}
+      ],
+      "transitions": [
+        {"id": "tm-t0", "from": "tm-q0", "to": "tm-q0", "rules": [
+          {"read": "0", "write": "1", "move": "R"},
+          {"read": "1", "write": "0", "move": "R"}
+        ]},
+        {"id": "tm-t1", "from": "tm-q0", "to": "tm-q1", "rules": [{"read": "&", "write": "&", "move": "R"}]}
+      ],
+      "tests": [
+        {"word": "1011", "expect": true},
+        {"word": "000", "expect": true}
+      ]
+    }
+  ]
+}

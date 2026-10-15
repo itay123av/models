@@ -1,0 +1,40 @@
+{
+  "fixture_id": "pda-q0-q6-handwritten-2026-08-24",
+  "description": "Ground truth for the handwritten PDA used during scanner development.",
+  "photograph": {
+    "filename": "WhatsApp Image 2026-08-24 at 16.43.17.jpeg",
+    "start_marker_visible": false,
+    "note": "q0 is the intended initial state in the supplied specification, but this photograph has no separate incoming start arrow. A visual scanner must not invent that marker from the state name."
+  },
+  "expected": {
+    "state_count": 7,
+    "connector_count": 10,
+    "rule_count": 14,
+    "start_state": "q0",
+    "accepting_states": ["q6"],
+    "self_loops": ["q1", "q5"]
+  },
+  "states": ["q0", "q1", "q2", "q3", "q4", "q5", "q6"],
+  "transitions": [
+    { "from": "q0", "to": "q1", "rules": [{ "input": "a", "stack_top": "⊥", "action": "NONE", "symbol": "" }] },
+    { "from": "q1", "to": "q1", "rules": [{ "input": "a", "stack_top": "⊥", "action": "NONE", "symbol": "" }] },
+    { "from": "q1", "to": "q2", "rules": [{ "input": "b", "stack_top": "⊥", "action": "NONE", "symbol": "" }] },
+    { "from": "q2", "to": "q3", "rules": [
+      { "input": "b", "stack_top": "⊥", "action": "PUSH", "symbol": "S" },
+      { "input": "b", "stack_top": "S", "action": "PUSH", "symbol": "A" },
+      { "input": "b", "stack_top": "A", "action": "PUSH", "symbol": "A" }
+    ] },
+    { "from": "q3", "to": "q4", "rules": [
+      { "input": "b", "stack_top": "S", "action": "NONE", "symbol": "" },
+      { "input": "b", "stack_top": "A", "action": "NONE", "symbol": "" }
+    ] },
+    { "from": "q4", "to": "q2", "rules": [
+      { "input": "b", "stack_top": "S", "action": "NONE", "symbol": "" },
+      { "input": "b", "stack_top": "A", "action": "NONE", "symbol": "" }
+    ] },
+    { "from": "q2", "to": "q5", "rules": [{ "input": "c", "stack_top": "A", "action": "POP", "symbol": "A" }] },
+    { "from": "q5", "to": "q5", "rules": [{ "input": "c", "stack_top": "A", "action": "POP", "symbol": "A" }] },
+    { "from": "q5", "to": "q6", "rules": [{ "input": "c", "stack_top": "S", "action": "POP", "symbol": "S" }] },
+    { "from": "q2", "to": "q6", "rules": [{ "input": "c", "stack_top": "S", "action": "POP", "symbol": "S" }] }
+  ]
+}

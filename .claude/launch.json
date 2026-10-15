@@ -5,7 +5,8 @@
       "name": "modeles",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
-      "port": 8790
+      "port": 8790,
+      "autoPort": true
     }
   ]
 }

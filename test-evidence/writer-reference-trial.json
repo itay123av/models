@@ -1,0 +1,22 @@
+{
+  "target_source_id": "august-24-reviewed-handwritten-photo",
+  "targets": [
+    {"file":"scan-guard-contract/crop-7-label_block.png","from":"state_1","to":"state_2","row_count":1},
+    {"file":"scan-guard-contract/crop-27-label_block.png","from":"state_6","to":"state_7","row_count":1},
+    {"file":"scan-guard-contract/crop-29-label_block.png","from":"state_6","to":"state_6","row_count":1}
+  ],
+  "references": [
+    {"file":"scan-sept29-live-verify/local-recheck-1790780273617/0-label_block.png",
+     "source_id":"september-29-separate-handwritten-photo",
+     "review_note":"Inputs a,a confirmed by user; visually reviewed PUSH A and middle S,A in the original crop. Not model-derived reference labels.",
+     "rows":[{"input":"a","stack_top":"S","action_text":"דחוף","action_symbol":"A"},{"input":"a","stack_top":"A","action_text":"דחוף","action_symbol":"A"}]},
+    {"file":"scan-sept29-live-verify/local-recheck-1790780345814/0-label_block.png",
+     "source_id":"september-29-separate-handwritten-photo",
+     "review_note":"Inputs b,b confirmed by user; visibly reviewed no-change shorthand and middle A,S. Reference is confined to its two complete rows, not the clipped neighboring label.",
+     "rows":[{"input":"b","stack_top":"A","action_text":"לל״ש","action_symbol":""},{"input":"b","stack_top":"S","action_text":"לל״ש","action_symbol":""}]},
+    {"file":"scan-sept29-live-verify/local-recheck-1790780420481/0-label_block.png",
+     "source_id":"september-29-separate-handwritten-photo",
+     "review_note":"Visually reviewed loop label b,A / A שלוף in original crop; POP operand is separately visible to the left of the word. No claim that the user explicitly confirmed this row.",
+     "rows":[{"input":"b","stack_top":"A","action_text":"שלוף","action_symbol":"A"}]}
+  ]
+}
